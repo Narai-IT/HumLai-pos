@@ -33,6 +33,13 @@ import './index.css';
 
 const MENU_ITEMS = [];
 
+// รหัสสาขานำหน้าเลขบิล — ตัดช่องว่าง/อักขระพิเศษ เป็นตัวพิมพ์ใหญ่ (เช่น "xum" → "XUM")
+// กันเลขบิลชนกันข้ามสาขา (แต่ละสาขานับเลขของตัวเองแยกกัน)
+const branchPrefix = (b) => {
+  const p = String(b || '').trim().toUpperCase().replace(/\s+/g, '').replace(/[^0-9A-Zก-๙]/g, '');
+  return p || 'POS';
+};
+
 
 function App() {
   const navigate = useNavigate();
@@ -219,7 +226,8 @@ function App() {
   }, [flushPendingOrders]);
 
   const [orders, setOrders] = useState([]);
-  const [maxOrderNum, setMaxOrderNum] = useState(0);
+  // เลขบิลล่าสุดแยกตามสาขา (RecordedBy) — { [สาขา]: เลขสูงสุด } เพื่อให้แต่ละสาขานับต่อของตัวเอง
+  const [branchMaxMap, setBranchMaxMap] = useState({});
   const [liveMenu, setLiveMenu] = useState([...MENU_ITEMS]);
   const [categories, setCategories] = useState([
     { slug: 'food', name: 'อาหาร', nameEn: 'Food', icon: '🍲' },
@@ -326,14 +334,19 @@ function App() {
       });
       const sortedOrders = Object.values(groupedOrders).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       setOrders(sortedOrders);
-      let currentMax = 0;
+      // หาเลขบิลสูงสุดแยกตามสาขา (RecordedBy) — บิลเก่าที่ไม่มี RecordedBy รวมเป็นสาขาว่าง
+      const branchMaxes = {};
       data.orders.forEach(row => {
-        if (row.OrderNumber) {
-          const val = parseInt(row.OrderNumber.replace(/\D/g, ''), 10);
-          if (!isNaN(val) && val > currentMax) currentMax = val;
-        }
+        if (!row.OrderNumber) return;
+        const by = String(row.RecordedBy || '').trim();
+        const val = parseInt(String(row.OrderNumber).replace(/\D/g, ''), 10);
+        if (!isNaN(val)) branchMaxes[by] = Math.max(branchMaxes[by] || 0, val);
       });
-      setMaxOrderNum(prev => Math.max(prev, currentMax));
+      setBranchMaxMap(prev => {
+        const merged = { ...prev };
+        Object.keys(branchMaxes).forEach(k => { merged[k] = Math.max(merged[k] || 0, branchMaxes[k]); });
+        return merged;
+      });
     }
     if (data.menu && Array.isArray(data.menu) && changed('menu', data.menu)) {
       // flatten per-item popupConfig JSON onto each menu item for the wizard
@@ -687,9 +700,9 @@ function App() {
       localStorage.setItem('shift_sales', JSON.stringify(updated));
       return updated;
     });
-    const nextNum = maxOrderNum + 1;
-    setMaxOrderNum(nextNum);
-    const newOrderNumber = `#${String(nextNum).padStart(3, '0')}`;
+    const nextNum = (branchMaxMap[branch] || 0) + 1;
+    setBranchMaxMap(prev => ({ ...prev, [branch]: nextNum }));
+    const newOrderNumber = `${branchPrefix(branch)}-#${String(nextNum).padStart(3, '0')}`;
     const timestamp = getThaiTimeISO();
 
     const count = localStorage.getItem('customer_count_' + tableNumber) || '';
@@ -1271,7 +1284,7 @@ function App() {
             tableOrderItems={checkoutItems}
             total={checkoutTotal}
             lang={lang}
-            orderNumber={`#${String(maxOrderNum + 1).padStart(3, '0')}`}
+            orderNumber={`${branchPrefix(branch)}-#${String((branchMaxMap[branch] || 0) + 1).padStart(3, '0')}`}
             onClose={() => setIsCheckoutOpen(false)}
             onComplete={handleCheckoutComplete}
             settings={checkoutSettings}
