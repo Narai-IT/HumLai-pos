@@ -159,8 +159,12 @@ function App() {
     setShiftModalMode(null);
   };
 
+  // เวลาที่ล็อกอินเข้าระบบ — ใช้เช็ก auto-logout เมื่อครบ 8 ชั่วโมง
+  const loginAtRef = React.useRef(null);
+
   const handleLogin = (user) => {
     setCurrentUser(user);
+    loginAtRef.current = Date.now();
     // ไม่บันทึกลง localStorage — ปิด/รีเฟรชโปรแกรมแล้วต้องล็อกอินใหม่เสมอ
     // เข้าสู่ระบบใหม่ → ไปที่หน้าสั่งอาหารทันที
     setTableNumber('1');
@@ -169,10 +173,27 @@ function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    loginAtRef.current = null;
     try { localStorage.removeItem('current_user'); } catch {}
     setTableNumber('1');
     navigate('/', { replace: true });
   };
+
+  // อยู่ในระบบเกิน 8 ชั่วโมง → ล็อกเอาต์อัตโนมัติ
+  // เช็กทุก 1 นาที + เช็กซ้ำตอนแท็บกลับมาโฟกัส (กัน browser หน่วง timer ตอนพับจอ)
+  React.useEffect(() => {
+    if (!currentUser) return;
+    const SESSION_MAX_MS = 8 * 60 * 60 * 1000;
+    const check = () => {
+      if (loginAtRef.current && Date.now() - loginAtRef.current >= SESSION_MAX_MS) {
+        handleLogout();
+        setSaveAlert({ type: 'error', msg: '⏰ อยู่ในระบบครบ 8 ชั่วโมงแล้ว ระบบล็อกเอาต์อัตโนมัติ — กรุณาล็อกอินใหม่' });
+      }
+    };
+    const id = setInterval(check, 60 * 1000);
+    document.addEventListener('visibilitychange', check);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', check); };
+  }, [currentUser]);
 
 
 
