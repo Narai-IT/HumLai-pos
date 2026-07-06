@@ -56,10 +56,12 @@ function App() {
   const [users, setUsers] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cached_users') || '[]'); } catch { return []; }
   });
-  // ค่าเริ่มต้น = ยังไม่ล็อกอิน (โชว์หน้า login) — จำสถานะที่เคยล็อกอินไว้ใน localStorage
-  const [currentUser, setCurrentUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('current_user') || 'null'); } catch { return null; }
-  });
+  // ให้ล็อกอินใหม่ทุกครั้งที่เปิดโปรแกรม — ไม่กู้สถานะล็อกอินเดิมจาก localStorage
+  const [currentUser, setCurrentUser] = useState(null);
+  // ล้าง key เก่าที่เคยจำล็อกอินไว้ (เผื่อเครื่องที่อัปเดตมาจากเวอร์ชันก่อน)
+  React.useEffect(() => {
+    try { localStorage.removeItem('current_user'); } catch {}
+  }, []);
 
   // สิทธิ์แอดมิน: รองรับ flag isAdmin จากชีต และเผื่อ user ชื่อ admin
   const isAdmin = !!(currentUser && (currentUser.isAdmin === true || currentUser.isAdmin === 'TRUE' || String(currentUser.username || '').toLowerCase() === 'admin'));
@@ -159,7 +161,7 @@ function App() {
 
   const handleLogin = (user) => {
     setCurrentUser(user);
-    try { localStorage.setItem('current_user', JSON.stringify(user)); } catch {}
+    // ไม่บันทึกลง localStorage — ปิด/รีเฟรชโปรแกรมแล้วต้องล็อกอินใหม่เสมอ
     // เข้าสู่ระบบใหม่ → ไปที่หน้าสั่งอาหารทันที
     setTableNumber('1');
     navigate('/index', { replace: true });
