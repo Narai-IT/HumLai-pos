@@ -1113,6 +1113,16 @@ function App() {
                     {isRefreshing ? (lang === 'th' ? 'กำลังโหลด...' : 'Loading...') : (lang === 'th' ? 'รีเฟรช' : 'Refresh')}
                   </button>
 
+                  {/* ปุ่มเข้าหลังบ้าน — เห็นเฉพาะแอดมินเท่านั้น */}
+                  {isAdmin && (
+                    <button
+                      className="pos-header-btn"
+                      onClick={() => navigate('/admin')}
+                      style={{ background: 'rgba(250,204,21,0.15)', border: '1px solid rgba(250,204,21,0.35)', color: '#facc15' }}
+                    >
+                      ⚙️ {lang === 'th' ? 'จัดการหลังบ้าน' : 'Admin Panel'}
+                    </button>
+                  )}
                   <button className="pos-header-btn" onClick={() => setLang(lang === 'th' ? 'en' : 'th')}>
                     <Globe size={14} /> {lang === 'th' ? 'TH' : 'EN'}
                   </button>
