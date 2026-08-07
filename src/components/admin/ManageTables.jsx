@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import './Admin.css';
 
 export const DEFAULT_TABLES = [
-  ...Array.from({ length: 10 }, (_, i) => ({ id: `dine_${i + 1}`, name: `${i + 1}`, zone: 'DineIn', priceTier: 'normal', seats: 4, active: true })),
+  ...Array.from({ length: 16 }, (_, i) => ({ id: `dine_${i + 1}`, name: `${i + 1}`, zone: 'DineIn', priceTier: 'normal', seats: 4, active: true })),
   { id: 'th_1', name: 'Takehome 1', zone: 'Takehome', priceTier: 'takehome', seats: 0, active: true },
   { id: 'th_2', name: 'Takehome 2', zone: 'Takehome', priceTier: 'takehome', seats: 0, active: true },
   { id: 'th_3', name: 'Takehome 3', zone: 'Takehome', priceTier: 'takehome', seats: 0, active: true },

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './TableSelection.css';
 
@@ -33,7 +33,7 @@ const TableSelection = ({
 
   const dineInTables = configuredTables.length > 0
     ? configuredTables.filter(t => t.zone === 'DineIn' || !t.zone).map(t => t.name)
-    : Array.from({ length: 10 }, (_, i) => i + 1);
+    : Array.from({ length: 16 }, (_, i) => i + 1);
 
   const takehomeTables = configuredTables.length > 0
     ? configuredTables.filter(t => t.zone === 'Takehome').map(t => t.name)
@@ -190,7 +190,7 @@ const TableSelection = ({
         )}
 
         <div style={{ opacity: shiftOpen ? 1 : 0.45, pointerEvents: shiftOpen ? 'auto' : 'none' }}>
-          {/* 🪑 โต๊ะทานที่ร้าน (1-10) */}
+          {/* 🪑 โต๊ะทานที่ร้าน (1-16) */}
           <div style={{ marginBottom: '1.25rem', textAlign: 'left' }}>
             <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               🪑 {lang === 'th' ? 'โต๊ะทานที่ร้าน (ราคาปกติ)' : 'Dine-in Tables'}
@@ -206,7 +206,7 @@ const TableSelection = ({
               🛍️ {lang === 'th' ? 'ห่อกลับบ้าน (ราคา Takehome)' : 'Take Home'}
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
-              {takehomeTables.map(num => renderTableButton(num, num.replace('Takehome ', 'ห่อ '))) }
+              {takehomeTables.map(num => renderTableButton(num, String(num).replace('Takehome ', 'ห่อ '))) }
             </div>
           </div>
 
