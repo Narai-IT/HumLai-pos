@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="studioLight" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </radialGradient>
+    <radialGradient id="ballGrad1" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#9a3412" />
+    </radialGradient>
+    <radialGradient id="ballGrad2" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef9c3" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#7c2d12" />
+    </radialGradient>
+  </defs>
+
+  <!-- Studio Dark Slate Tabletop Background -->
+  <rect width="400" height="300" fill="url(#studioLight)" />
+  
+  <!-- Studio Vignette / Lighting -->
+  <ellipse cx="200" cy="150" rx="180" ry="120" fill="#ffffff" opacity="0.04" />
+
+  <!-- Food Photo Visuals -->
+  
+        <ellipse cx="200" cy="235" rx="120" ry="40" fill="#000000" opacity="0.4" filter="blur(8px)"/>
+        <ellipse cx="200" cy="225" rx="115" ry="35" fill="#f8fafc" />
+        <!-- Pan-fried Chive Dumplings -->
+        <g filter="drop-shadow(0 8px 6px rgba(0,0,0,0.4))">
+          <rect x="110" y="190" width="38" height="35" rx="6" fill="#15803d" stroke="#b45309" stroke-width="2" />
+          <rect x="155" y="185" width="40" height="36" rx="6" fill="#166534" stroke="#b45309" stroke-width="2" />
+          <rect x="202" y="190" width="38" height="35" rx="6" fill="#15803d" stroke="#b45309" stroke-width="2" />
+          <rect x="245" y="195" width="36" height="32" rx="6" fill="#166534" stroke="#b45309" stroke-width="2" />
+          <!-- Crispy edges -->
+          <rect x="112" y="192" width="34" height="12" fill="#d97706" opacity="0.8" />
+          <rect x="157" y="187" width="36" height="12" fill="#d97706" opacity="0.8" />
+        </g>
+        <!-- Dipping sauce bowl -->
+        <circle cx="290" cy="165" r="20" fill="#18181b" />
+        <circle cx="290" cy="165" r="16" fill="#09090b" />
+      
+
+  <!-- Dark Slate Banner with Dish Title -->
+  <rect x="0" y="248" width="400" height="52" fill="rgba(15, 23, 42, 0.88)" />
+  <text x="200" y="280" font-family="'Kanit', 'Sukhumvit Set', sans-serif" font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">
+    กุ่ยช่าย(8 ชิ้น)
+  </text>
+</svg>

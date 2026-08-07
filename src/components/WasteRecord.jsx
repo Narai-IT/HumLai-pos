@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Trash2, RefreshCw, X, Save, ChevronLeft, Clock, Building2 } from 'lucide-react';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 const WASTE_UNITS = ['จาน', 'แก้ว', 'ขวด', 'ชิ้น', 'ถ้วย', 'ที่', 'กรัม', 'รายการ'];
 

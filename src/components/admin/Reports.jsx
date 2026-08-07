@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download } from 'lucide-react';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 const TABS = [
   { key: 'daily',   label: 'สรุปประจำวัน',       icon: <TrendingUp size={15} /> },
@@ -86,9 +86,9 @@ const exportXLSX = (sheets, filenameBase) => {
 };
 
 // ─── Styles ─────────────────────────────────────────────────
-const card   = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '1rem 1.25rem' };
-const th_    = { padding: '0.65rem 0.9rem', textAlign: 'left', color: 'rgba(255,255,255,0.45)', fontWeight: 600, fontSize: '0.78rem', borderBottom: '1px solid rgba(255,255,255,0.07)', whiteSpace: 'nowrap' };
-const td_    = { padding: '0.65rem 0.9rem', fontSize: '0.875rem', borderBottom: '1px solid rgba(255,255,255,0.04)' };
+const card   = { background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: '1rem 1.25rem' };
+const th_    = { padding: '0.65rem 0.9rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.78rem', borderBottom: '1px solid rgba(0,0,0,0.08)', whiteSpace: 'nowrap' };
+const td_    = { padding: '0.65rem 0.9rem', fontSize: '0.875rem', borderBottom: '1px solid rgba(0,0,0,0.04)' };
 
 const branchOf = (u) => String(u?.branch || u?.id || u?.username || '').trim();
 
@@ -309,14 +309,14 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   const TAB_EXPORT = { daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, cancel: exportCancel, shift: exportShift };
 
   return (
-    <div style={{ color: 'white', fontFamily: 'inherit' }}>
+    <div style={{ color: 'var(--text-main)', fontFamily: 'inherit' }}>
       {/* Page header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <BarChart2 size={26} color="#a78bfa" /> รายงาน
+            <BarChart2 size={26} color="var(--accent-hover)" /> รายงาน
           </h1>
-          <p style={{ margin: '0.3rem 0 0', color: 'rgba(255,255,255,0.45)', fontSize: '0.9rem' }}>วิเคราะห์ยอดขายและกิจกรรมร้าน</p>
+          <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>วิเคราะห์ยอดขายและกิจกรรมร้าน</p>
         </div>
         {data && (
           <button onClick={exportAll} style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.35)', borderRadius: 10, color: '#22c55e', cursor: 'pointer', padding: '0.6rem 1.1rem', fontWeight: 700, fontSize: '0.875rem', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -329,16 +329,16 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
       <div style={{ ...card, marginBottom: '1.25rem', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.75rem' }}>
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           {PRESETS.map(p => (
-            <button key={p.label} onClick={() => { setFrom(p.from); setTo(p.to); }} style={{ padding: '0.35rem 0.8rem', borderRadius: 20, border: '1px solid', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit', background: from === p.from && to === p.to ? 'rgba(124,58,237,0.25)' : 'rgba(255,255,255,0.05)', borderColor: from === p.from && to === p.to ? '#7c3aed' : 'rgba(255,255,255,0.12)', color: from === p.from && to === p.to ? '#a78bfa' : 'rgba(255,255,255,0.6)' }}>
+            <button key={p.label} onClick={() => { setFrom(p.from); setTo(p.to); }} style={{ padding: '0.35rem 0.8rem', borderRadius: 20, border: '1px solid', cursor: 'pointer', fontSize: '0.8rem', fontFamily: 'inherit', background: from === p.from && to === p.to ? 'rgba(234,179,8,0.18)' : 'rgba(0,0,0,0.02)', borderColor: from === p.from && to === p.to ? 'var(--accent)' : 'rgba(0,0,0,0.12)', color: from === p.from && to === p.to ? 'var(--text-main)' : 'var(--text-muted)' }}>
               {p.label}
             </button>
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginLeft: 'auto', flexWrap: 'wrap' }}>
-          <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'white', padding: '0.4rem 0.65rem', fontFamily: 'inherit', fontSize: '0.85rem', outline: 'none' }} />
-          <span style={{ color: 'rgba(255,255,255,0.4)' }}>—</span>
-          <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'white', padding: '0.4rem 0.65rem', fontFamily: 'inherit', fontSize: '0.85rem', outline: 'none' }} />
-          <button onClick={() => load(from, to)} disabled={loading} style={{ background: '#7c3aed', border: 'none', borderRadius: 8, color: 'white', cursor: loading ? 'not-allowed' : 'pointer', padding: '0.45rem 1rem', fontWeight: 700, fontSize: '0.85rem', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, color: 'var(--text-main)', padding: '0.4rem 0.65rem', fontFamily: 'inherit', fontSize: '0.85rem', outline: 'none' }} />
+          <span style={{ color: 'var(--text-muted)' }}>—</span>
+          <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, color: 'var(--text-main)', padding: '0.4rem 0.65rem', fontFamily: 'inherit', fontSize: '0.85rem', outline: 'none' }} />
+          <button onClick={() => load(from, to)} disabled={loading} style={{ background: 'var(--accent)', border: 'none', borderRadius: 8, color: 'black', cursor: loading ? 'not-allowed' : 'pointer', padding: '0.45rem 1rem', fontWeight: 700, fontSize: '0.85rem', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
             {loading ? 'กำลังโหลด...' : 'โหลดข้อมูล'}
           </button>
@@ -347,23 +347,22 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
 
       {/* Branch filter — admin เลือกได้ทุกสาขา / ไม่ใช่ admin ล็อกเฉพาะของตัวเอง */}
       <div style={{ ...card, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.55)', fontWeight: 600 }}>🏠 สาขา</span>
+        <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>🏠 สาขา</span>
         {isAdmin ? (
-          <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'white', padding: '0.4rem 0.75rem', fontFamily: 'inherit', fontSize: '0.85rem', outline: 'none', minWidth: 200 }}>
+          <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} style={{ background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, color: 'var(--text-main)', padding: '0.4rem 0.75rem', fontFamily: 'inherit', fontSize: '0.85rem', outline: 'none', minWidth: 200 }}>
             <option value="">ทุกสาขา (All branches)</option>
             {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
           </select>
         ) : (
-          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: '#a78bfa', background: 'rgba(124,58,237,0.15)', border: '1px solid rgba(124,58,237,0.3)', borderRadius: 8, padding: '0.3rem 0.85rem' }}>{branchFilter || '—'}</span>
+          <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 8, padding: '0.3rem 0.85rem' }}>{branchFilter || '—'}</span>
         )}
       </div>
 
       {error && <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 10, padding: '0.75rem 1rem', color: '#ef4444', marginBottom: '1rem', fontSize: '0.9rem' }}>{error}</div>}
 
-      {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{ padding: '0.45rem 1rem', borderRadius: 20, border: '1.5px solid', cursor: 'pointer', fontSize: '0.85rem', fontWeight: tab === t.key ? 700 : 400, fontFamily: 'inherit', background: tab === t.key ? 'rgba(124,58,237,0.2)' : 'rgba(255,255,255,0.04)', borderColor: tab === t.key ? '#7c3aed' : 'rgba(255,255,255,0.12)', color: tab === t.key ? '#a78bfa' : 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button key={t.key} onClick={() => setTab(t.key)} style={{ padding: '0.45rem 1rem', borderRadius: 20, border: '1.5px solid', cursor: 'pointer', fontSize: '0.85rem', fontWeight: tab === t.key ? 700 : 400, fontFamily: 'inherit', background: tab === t.key ? 'rgba(234,179,8,0.18)' : 'rgba(0,0,0,0.02)', borderColor: tab === t.key ? 'var(--accent)' : 'rgba(0,0,0,0.08)', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             {t.icon} {t.label}
           </button>
         ))}
@@ -371,9 +370,9 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
 
       {/* Empty state */}
       {!data && !loading && (
-        <div style={{ ...card, textAlign: 'center', padding: '3rem', color: 'rgba(255,255,255,0.35)' }}>
+        <div style={{ ...card, textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
           <BarChart2 size={48} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-          <p style={{ margin: 0 }}>กด <strong style={{ color: '#a78bfa' }}>โหลดข้อมูล</strong> เพื่อดูรายงาน</p>
+          <p style={{ margin: 0 }}>กด <strong style={{ color: 'var(--text-main)' }}>โหลดข้อมูล</strong> เพื่อดูรายงาน</p>
         </div>
       )}
 
@@ -392,18 +391,18 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
               {/* ยอดขายและจำนวนบิล */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', marginBottom: '0.4rem', fontWeight: 600 }}>💰 ยอดขายทั้งหมด</span>
-                  <span style={{ color: '#fbbf24', fontWeight: 900, fontSize: '2rem' }}>฿{fmt(totalSales)}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem', fontWeight: 600 }}>💰 ยอดขายทั้งหมด</span>
+                  <span style={{ color: 'var(--accent-hover)', fontWeight: 900, fontSize: '2rem' }}>฿{fmt(totalSales)}</span>
                 </div>
                 <div style={{ ...card, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px' }}>
-                  <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.85rem', marginBottom: '0.4rem', fontWeight: 600 }}>🧾 จำนวนบิลทั้งหมด</span>
-                  <span style={{ color: 'white', fontWeight: 900, fontSize: '2rem' }}>{totalBills} บิล</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.4rem', fontWeight: 600 }}>🧾 จำนวนบิลทั้งหมด</span>
+                  <span style={{ color: 'var(--text-main)', fontWeight: 900, fontSize: '2rem' }}>{totalBills} บิล</span>
                 </div>
               </div>
 
               {/* แยกตามประเภทการชำระเงิน */}
               <div style={card}>
-                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'white', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'var(--text-main)', borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '0.5rem' }}>
                   💳 แยกตามช่องทางการชำระเงิน
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.75rem' }}>
@@ -412,8 +411,8 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                     { label: '📱 เงินโอน / QR', value: `฿${fmt(totalXfer)}`, color: '#38bdf8' },
                     { label: '💳 บัตรเครดิต', value: `฿${fmt(totalCard)}`, color: '#f97316' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, padding: '0.75rem 1rem' }}>
-                      <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', marginBottom: 4 }}>{label}</div>
+                    <div key={label} style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.05)', borderRadius: 8, padding: '0.75rem 1rem' }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 4 }}>{label}</div>
                       <div style={{ color, fontWeight: 700, fontSize: '1.1rem' }}>{value}</div>
                     </div>
                   ))}
@@ -422,18 +421,18 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
 
               {/* ยอดขายแยกรายเมนู (ไม่รวมแอดออน/ป๊อปอัพ) */}
               <div style={card}>
-                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'white', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem', color: 'var(--text-main)', borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '0.5rem' }}>
                   🍲 ยอดขายแยกรายเมนู (ไม่รวมแอดออน/ป๊อปอัพ)
                 </h3>
                 <TableWrap empty={menuRows.length === 0} headers={['อันดับ','ชื่อเมนู','จำนวนที่ขายได้','ยอดรวมยอดขาย']}>
                   {menuRows.map((r, i) => (
                     <tr key={i}>
-                      <Td center color={i < 3 ? '#f97316' : undefined} bold={i < 3}>
+                      <Td center color={i < 3 ? 'var(--accent-hover)' : undefined} bold={i < 3}>
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                       </Td>
                       <Td bold>{r.name}</Td>
-                      <Td center bold style={{ fontSize: '1.05rem', color: 'var(--accent)' }}>{r.qty} จาน</Td>
-                      <Td bold color="#a78bfa">฿{fmt(r.revenue)}</Td>
+                      <Td center bold style={{ fontSize: '1.05rem', color: 'var(--text-main)' }}>{r.qty} จาน</Td>
+                      <Td bold color="var(--text-main)">฿{fmt(r.revenue)}</Td>
                     </tr>
                   ))}
                 </TableWrap>
@@ -446,14 +445,14 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
                 {[
-                  { label: 'รายรับรวม',  value: `฿${fmt(totalSales)}`,  color: '#a78bfa' },
+                  { label: 'รายรับรวม',  value: `฿${fmt(totalSales)}`,  color: 'var(--text-main)' },
                   { label: 'เงินสด',      value: `฿${fmt(totalCash)}`,   color: '#22c55e' },
                   { label: 'โอน / QR',    value: `฿${fmt(totalXfer)}`,   color: '#38bdf8' },
                   { label: 'บัตรเครดิต', value: `฿${fmt(totalCard)}`,   color: '#f97316' },
-                  { label: 'จำนวนบิล',   value: `${totalBills} บิล`,    color: 'white'   },
+                  { label: 'จำนวนบิล',   value: `${totalBills} บิล`,    color: 'var(--text-main)'   },
                 ].map(({ label, value, color }) => (
                   <div key={label} style={{ ...card, textAlign: 'center' }}>
-                    <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', marginBottom: 6 }}>{label}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 6 }}>{label}</div>
                     <div style={{ color, fontWeight: 800, fontSize: '1.3rem' }}>{value}</div>
                   </div>
                 ))}
@@ -462,7 +461,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                 {incomeRows.map((r, i) => (
                   <tr key={i}>
                     <Td>{r.day}</Td>
-                    <Td bold color="#a78bfa">฿{fmt(r.total)}</Td>
+                    <Td bold color="var(--text-main)">฿{fmt(r.total)}</Td>
                     <Td color="#22c55e">฿{fmt(r.cash)}</Td>
                     <Td color="#38bdf8">฿{fmt(r.transfer)}</Td>
                     <Td color="#f97316">฿{fmt(r.card)}</Td>
@@ -479,16 +478,16 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
             <TableWrap empty={menuRows.length === 0} headers={['อันดับ','ชื่อเมนู','จำนวน (ครั้ง)','รายได้รวม']}>
               {menuRows.map((r, i) => (
                 <tr key={i}>
-                  <Td center color={i < 3 ? '#f97316' : undefined} bold={i < 3}>
+                  <Td center color={i < 3 ? 'var(--accent-hover)' : undefined} bold={i < 3}>
                     {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                   </Td>
                   <Td bold>{r.name}</Td>
                   <Td center>{r.qty}</Td>
-                  <Td bold color="#a78bfa">฿{fmt(r.revenue)}</Td>
+                  <Td bold color="var(--text-main)">฿{fmt(r.revenue)}</Td>
                 </tr>
               ))}
               {menuAdjustment !== 0 && (
-                <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
+                <tr style={{ background: 'rgba(0,0,0,0.02)' }}>
                   <Td center muted>—</Td>
                   <Td muted><em>ส่วนต่าง (ส่วนลด / ภาษี / Service Charge)</em></Td>
                   <Td center muted>—</Td>
@@ -497,11 +496,11 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                   </Td>
                 </tr>
               )}
-              <tr style={{ background: 'rgba(167,139,250,0.06)', fontWeight: 'bold' }}>
+              <tr style={{ background: 'rgba(234,179,8,0.12)', fontWeight: 'bold' }}>
                 <Td center>—</Td>
-                <Td color="#a78bfa">รวมยอดขายสุทธิ (Grand Total)</Td>
+                <Td color="var(--text-main)">รวมยอดขายสุทธิ (Grand Total)</Td>
                 <Td center>—</Td>
-                <Td color="#a78bfa">฿{fmt(totalSales)}</Td>
+                <Td color="var(--text-main)">฿{fmt(totalSales)}</Td>
               </tr>
             </TableWrap>
           )}
@@ -509,12 +508,12 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
           {/* ── Tab: ประวัติการขาย ── */}
           {tab === 'history' && (
             <>
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>พบ {completedOrders.length} รายการ</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>พบ {completedOrders.length} รายการ</div>
               <TableWrap empty={completedOrders.length === 0} headers={['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','ชำระด้วย','พนักงาน']}>
                 {completedOrders.map((o, i) => (
                   <tr key={i}>
                     <Td muted nowrap>{fmtD(o.timestamp)}</Td>
-                    <Td bold color="#a78bfa">{o.orderNumber}</Td>
+                    <Td bold color="var(--text-main)">{o.orderNumber}</Td>
                     <Td>{o.customerName}</Td>
                     <Td bold>฿{fmt(o.total)}</Td>
                     <td style={td_}><PayBadge method={o.paymentMethod} /></td>
@@ -528,7 +527,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
           {/* ── Tab: ประวัติการยกเลิก ── */}
           {tab === 'cancel' && (
             <>
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>พบ {cancelledOrders.length} รายการ</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>พบ {cancelledOrders.length} รายการ</div>
               <TableWrap empty={cancelledOrders.length === 0} emptyMsg="ไม่มีรายการยกเลิกในช่วงเวลานี้" headers={['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','พนักงาน']}>
                 {cancelledOrders.map((o, i) => (
                   <tr key={i}>
@@ -546,7 +545,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
           {/* ── Tab: รายงานปิดกะ ── */}
           {tab === 'shift' && (
             filteredShifts.length === 0
-              ? <div style={{ ...card, textAlign: 'center', padding: '2rem', color: 'rgba(255,255,255,0.35)' }}>ยังไม่มีประวัติการเปิด-ปิดกะ</div>
+              ? <div style={{ ...card, textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>ยังไม่มีประวัติการเปิด-ปิดกะ</div>
               : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                   {[...filteredShifts].reverse().map((s, i) => {
                     const openCash_  = Number(s.openCash)  || 0;
@@ -557,36 +556,36 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                       <div key={i} style={card}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.9rem' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                            <span style={{ background: s.status === 'open' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.08)', color: s.status === 'open' ? '#22c55e' : 'rgba(255,255,255,0.45)', border: `1px solid ${s.status === 'open' ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.12)'}`, borderRadius: 20, padding: '0.2rem 0.7rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                            <span style={{ background: s.status === 'open' ? 'rgba(34,197,94,0.15)' : 'rgba(0,0,0,0.05)', color: s.status === 'open' ? '#22c55e' : 'var(--text-muted)', border: `1px solid ${s.status === 'open' ? 'rgba(34,197,94,0.3)' : 'rgba(0,0,0,0.08)'}`, borderRadius: 20, padding: '0.2rem 0.7rem', fontSize: '0.78rem', fontWeight: 700 }}>
                               {s.status === 'open' ? '🟢 เปิดอยู่' : '⚫ ปิดแล้ว'}
                             </span>
-                            <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.78rem' }}>{s.id}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>{s.id}</span>
                           </div>
-                          <div style={{ fontSize: '0.82rem', color: 'rgba(255,255,255,0.45)', textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', textAlign: 'right' }}>
                             เปิด {fmtD(s.openTime)} โดย <strong style={{ color: '#22c55e' }}>{s.openStaff}</strong>
                             {s.closeTime && <> &nbsp;•&nbsp; ปิด {fmtD(s.closeTime)} โดย <strong style={{ color: '#ef4444' }}>{s.closeStaff}</strong></>}
                           </div>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(130px,1fr))', gap: '0.5rem' }}>
                           {[
-                            { label: 'ยอดขายรวม',  value: `฿${fmt(s.totalSales)}`,   color: '#a78bfa' },
-                            { label: 'จำนวนบิล',   value: `${s.totalOrders || 0} บิล`, color: 'white' },
+                            { label: 'ยอดขายรวม',  value: `฿${fmt(s.totalSales)}`,   color: 'var(--text-main)' },
+                            { label: 'จำนวนบิล',   value: `${s.totalOrders || 0} บิล`, color: 'var(--text-main)' },
                             { label: 'เงินสด',      value: `฿${fmt(s.totalCash)}`,    color: '#22c55e' },
                             { label: 'โอน / QR',    value: `฿${fmt(s.totalTransfer)}`,color: '#38bdf8' },
                             { label: 'บัตรเครดิต', value: `฿${fmt(s.totalCard)}`,    color: '#f97316' },
-                            { label: 'เงินเปิดกะ', value: `฿${fmt(s.openCash)}`,     color: 'rgba(255,255,255,0.6)' },
+                            { label: 'เงินเปิดกะ', value: `฿${fmt(s.openCash)}`,     color: 'var(--text-muted)' },
                             ...(s.status === 'closed' ? [
-                              { label: 'เงินปิดกะ',       value: `฿${fmt(s.closeCash)}`, color: 'rgba(255,255,255,0.6)' },
+                              { label: 'เงินปิดกะ',       value: `฿${fmt(s.closeCash)}`, color: 'var(--text-muted)' },
                               { label: 'ส่วนต่างเงินสด',  value: `${diff >= 0 ? '+' : ''}฿${fmt(diff)}${Math.abs(diff) < 1 ? ' ✓' : diff > 0 ? ' เกิน' : ' ขาด'}`, color: Math.abs(diff) < 1 ? '#22c55e' : '#ef4444' },
                             ] : []),
                           ].map(({ label, value, color }) => (
-                            <div key={label} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: '0.55rem 0.75rem' }}>
-                              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.72rem', marginBottom: 2 }}>{label}</div>
+                            <div key={label} style={{ background: 'rgba(0,0,0,0.02)', borderRadius: 8, padding: '0.55rem 0.75rem' }}>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', marginBottom: 2 }}>{label}</div>
                               <div style={{ color, fontWeight: 700, fontSize: '0.95rem' }}>{value}</div>
                             </div>
                           ))}
                         </div>
-                        {s.note && <div style={{ marginTop: '0.75rem', color: 'rgba(255,255,255,0.45)', fontSize: '0.82rem' }}>หมายเหตุ: {s.note}</div>}
+                        {s.note && <div style={{ marginTop: '0.75rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>หมายเหตุ: {s.note}</div>}
                       </div>
                     );
                   })}
@@ -603,12 +602,12 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
 // ─── Small helpers ───────────────────────────────────────────
 function TableWrap({ headers, children, empty, emptyMsg = 'ไม่มีข้อมูลในช่วงเวลานี้' }) {
   if (empty) return (
-    <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, textAlign: 'center', padding: '2.5rem', color: 'rgba(255,255,255,0.35)' }}>{emptyMsg}</div>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>{emptyMsg}</div>
   );
   return (
-    <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden' }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead><tr style={{ background: 'rgba(255,255,255,0.04)' }}>{headers.map(h => <th key={h} style={th_}>{h}</th>)}</tr></thead>
+        <thead><tr style={{ background: 'rgba(0,0,0,0.02)' }}>{headers.map(h => <th key={h} style={th_}>{h}</th>)}</tr></thead>
         <tbody>{children}</tbody>
       </table>
     </div>
@@ -617,16 +616,16 @@ function TableWrap({ headers, children, empty, emptyMsg = 'ไม่มีข้
 
 function Td({ children, color, bold, muted, center, nowrap }) {
   return (
-    <td style={{ ...td_, color: color || (muted ? 'rgba(255,255,255,0.5)' : 'inherit'), fontWeight: bold ? 700 : undefined, textAlign: center ? 'center' : undefined, whiteSpace: nowrap ? 'nowrap' : undefined }}>
+    <td style={{ ...td_, color: color || (muted ? 'var(--text-muted)' : 'inherit'), fontWeight: bold ? 700 : undefined, textAlign: center ? 'center' : undefined, whiteSpace: nowrap ? 'nowrap' : undefined }}>
       {children}
     </td>
   );
 }
 
 function PayBadge({ method }) {
-  if (!method || method === '—') return <span style={{ color: 'rgba(255,255,255,0.3)' }}>—</span>;
+  if (!method || method === '—') return <span style={{ color: 'var(--text-muted)' }}>—</span>;
   const m = method.toLowerCase();
-  let c = '#a78bfa', bg = 'rgba(167,139,250,0.12)', b = 'rgba(167,139,250,0.3)';
+  let c = 'var(--text-main)', bg = 'rgba(234,179,8,0.15)', b = 'rgba(234,179,8,0.3)';
   if (m.includes('สด') || m === 'cash')                               { c = '#22c55e'; bg = 'rgba(34,197,94,0.12)';  b = 'rgba(34,197,94,0.3)'; }
   else if (m.includes('โอน') || m.includes('qr') || m === 'transfer') { c = '#38bdf8'; bg = 'rgba(56,189,248,0.12)'; b = 'rgba(56,189,248,0.3)'; }
   else if (m.includes('บัตร') || m === 'card')                        { c = '#f97316'; bg = 'rgba(249,115,22,0.12)'; b = 'rgba(249,115,22,0.3)'; }

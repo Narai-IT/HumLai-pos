@@ -42,7 +42,7 @@ const ShiftModal = ({ mode, currentShift, shiftSales, currentUser, pendingTables
       return `<div class="it"><div class="row"><span>โต๊ะ ${t.tableNo}${who ? ' · ' + who : ''}</span><span>฿${fmt(t.total)}</span></div></div>`;
     }).join('');
     return `
-      <div class="c xl">NaraiBoxset</div>
+      <div class="c xl">ข้าวมันไก่หำไหล</div>
       <div class="c sm">รายงานปิดกะ / SHIFT REPORT</div>
       <div class="hr"></div>
       ${line('กะ', currentShift?.id || '-')}
@@ -161,8 +161,8 @@ const ShiftModal = ({ mode, currentShift, shiftSales, currentUser, pendingTables
               {pendingTables.length > 0 && (
                 <div style={{ background: 'rgba(180,83,9,0.1)', border: '1px solid rgba(180,83,9,0.35)', borderRadius: 10, padding: '0.9rem 1rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                    <span style={{ color: '#fbbf24', fontWeight: 700, fontSize: '0.9rem' }}>🧾 บิลค้าง {pendingTables.length} โต๊ะ</span>
-                    <span style={{ color: '#fbbf24', fontWeight: 800 }}>฿{fmt(pendingTotal)}</span>
+                    <span style={{ color: '#f1592a', fontWeight: 700, fontSize: '0.9rem' }}>🧾 บิลค้าง {pendingTables.length} โต๊ะ</span>
+                    <span style={{ color: '#f1592a', fontWeight: 800 }}>฿{fmt(pendingTotal)}</span>
                   </div>
                   <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.76rem', margin: '0 0 0.75rem' }}>
                     กรอกชื่อ/เบอร์ลูกค้าของบิลที่ค้างไว้ — เมื่อปิดกะ โต๊ะทั้งหมดจะถูกเคลียร์และย้ายไปที่ "รายการบิลค้าง"

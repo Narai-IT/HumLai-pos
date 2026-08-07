@@ -4,7 +4,7 @@ import {
   Package, RefreshCw, Upload, ChevronRight, Edit2, X
 } from 'lucide-react';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 // ─── Helper: derive current BOM rows for selectedMenuId from bomConfig ───────
 const getBomRows = (bomConfig, menuId) =>
@@ -197,7 +197,7 @@ const ManageBOM = () => {
   };
 
   // ─── UI helpers ──────────────────────────────────────────────────────────
-  const marginColor = margin >= 60 ? '#22c55e' : margin >= 35 ? '#eab308' : '#ef4444';
+  const marginColor = margin >= 60 ? '#22c55e' : margin >= 35 ? '#d84518' : '#ef4444';
 
   const TAB_BTN = (tab, label, badge) => (
     <button
@@ -208,7 +208,7 @@ const ManageBOM = () => {
         fontSize: '0.9rem', fontWeight: 600, transition: 'all 0.15s',
         background: activeTab === tab ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
         borderColor: activeTab === tab ? 'var(--accent)' : 'rgba(255,255,255,0.15)',
-        color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem'
+        color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '0.4rem'
       }}
     >
       {label}
@@ -403,7 +403,7 @@ const ManageBOM = () => {
                                 />
                               )}
                               {row.ingId && ingredients.length > 0 && !ingredients.find(i => i.id === row.ingId) && (
-                                <div style={{ fontSize: '0.72rem', color: '#eab308', marginTop: '0.15rem' }}>⚠ ไม่พบในคลังวัตถุดิบ</div>
+                                <div style={{ fontSize: '0.72rem', color: '#d84518', marginTop: '0.15rem' }}>⚠ ไม่พบในคลังวัตถุดิบ</div>
                               )}
                             </td>
                             {/* Quantity */}
@@ -478,7 +478,7 @@ const ManageBOM = () => {
                 </button>
               </div>
 
-              <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', padding: '0.8rem 1rem', borderRadius: 10, color: '#eab308', fontSize: '0.8rem', lineHeight: 1.6 }}>
+              <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)', padding: '0.8rem 1rem', borderRadius: 10, color: '#d84518', fontSize: '0.8rem', lineHeight: 1.6 }}>
                 💡 <strong>วิธีใช้:</strong> บันทึก BOM ทุกเมนูที่ต้องการ แล้วกด <strong>"Sync ไปยัง GAS"</strong> เพื่อส่งข้อมูลไปชีท BOM
                 — ระบบจะตัดสต็อกอัตโนมัติเมื่อมีออเดอร์ผ่าน GAS action <code>deductStock</code>
               </div>
@@ -597,7 +597,7 @@ const ManageBOM = () => {
               <h2 style={{ margin: 0 }}>
                 {ingredients.find(i => i.id === editingIng.id) ? 'แก้ไขวัตถุดิบ' : 'เพิ่มวัตถุดิบใหม่'}
               </h2>
-              <button onClick={() => setEditingIng(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+              <button onClick={() => setEditingIng(null)} style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }}>
                 <X size={22} />
               </button>
             </div>

@@ -3,7 +3,7 @@ import { Plus, Edit2, Trash2, Save, X, Printer, FlaskConical, ChevronRight, Slid
 import { useOutletContext } from 'react-router-dom';
 import { emptyPopupFields, extractPopupConfig, flattenPopupConfig } from '../../utils/popupConfig';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 const ManageMenu = () => {
   const { lang } = useOutletContext();
@@ -147,7 +147,11 @@ const ManageMenu = () => {
       isActive: true,
       bundledItems: [],
       printerId: '',
-      prices: [{ name: '', price: '' }],
+      prices: [
+        { name: 'ปกติ', price: '' },
+        { name: 'Takehome', price: '' },
+        { name: 'Deli', price: '' }
+      ],
       ...emptyPopupFields()
     });
     setEditingBom([]);
@@ -345,7 +349,18 @@ const ManageMenu = () => {
                 {filteredMenu.length > 0 ? filteredMenu.map(item => (
                   <tr key={item.id}>
                     <td>
-                      <img src={item.image} alt="food" style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px' }} />
+                      <img
+                        src={item.image || `/images/item_${item.id}.svg`}
+                        alt="food"
+                        style={{ width: '50px', height: '50px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border-color)' }}
+                        onError={(e) => {
+                          const sanitized = (item.name || '').replace(/[\\/:*?"<>|]/g, '_').trim();
+                          if (!e.target.dataset.tried) {
+                            e.target.dataset.tried = 'true';
+                            e.target.src = `/images/${sanitized}.svg`;
+                          }
+                        }}
+                      />
                     </td>
                     <td>
                       <strong>{item.name}</strong><br/>
@@ -414,7 +429,7 @@ const ManageMenu = () => {
           <div className="admin-modal">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
               <h2>{editingItem.name ? (lang === 'th' ? 'แก้ไขเมนู' : 'Edit Menu') : (lang === 'th' ? 'เพิ่มเมนูใหม่' : 'Add New Menu')}</h2>
-              <button style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }} onClick={() => setIsModalOpen(false)}>
+              <button style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }} onClick={() => setIsModalOpen(false)}>
                 <X size={24} />
               </button>
             </div>
@@ -461,7 +476,7 @@ const ManageMenu = () => {
                         value={row.name || ''}
                         onChange={e => updatePriceRow(idx, 'name', e.target.value)}
                         placeholder={lang === 'th' ? (idx === 0 ? 'ชื่อราคา (เช่น ปกติ)' : 'ชื่อราคา (เช่น พิเศษ)') : 'Price name'}
-                        style={{ flex: 2, padding: '0.55rem 0.7rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px', margin: 0 }}
+                        style={{ flex: 2, padding: '0.55rem 0.7rem', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', margin: 0 }}
                       />
                       <div style={{ position: 'relative', flex: 1 }}>
                         <span style={{ position: 'absolute', left: '0.6rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>฿</span>
@@ -470,7 +485,7 @@ const ManageMenu = () => {
                           value={row.price ?? ''}
                           onChange={e => updatePriceRow(idx, 'price', e.target.value)}
                           placeholder="0"
-                          style={{ width: '100%', padding: '0.55rem 0.7rem 0.55rem 1.4rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '8px', margin: 0, boxSizing: 'border-box' }}
+                          style={{ width: '100%', padding: '0.55rem 0.7rem 0.55rem 1.4rem', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px', margin: 0, boxSizing: 'border-box' }}
                         />
                       </div>
                       <button
@@ -478,18 +493,47 @@ const ManageMenu = () => {
                         onClick={() => removePriceRow(idx)}
                         disabled={(editingItem.prices || []).length <= 1}
                         title={lang === 'th' ? 'ลบราคานี้' : 'Remove'}
-                        style={{ background: 'none', border: 'none', color: (editingItem.prices || []).length <= 1 ? 'rgba(255,255,255,0.2)' : '#ef4444', cursor: (editingItem.prices || []).length <= 1 ? 'not-allowed' : 'pointer', padding: '0.3rem', display: 'flex' }}
+                        style={{ background: 'none', border: 'none', color: (editingItem.prices || []).length <= 1 ? '#cbd5e1' : '#ef4444', cursor: (editingItem.prices || []).length <= 1 ? 'not-allowed' : 'pointer', padding: '0.3rem', display: 'flex' }}
                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
                   ))}
                 </div>
-                {(editingItem.prices || []).length < 5 && (
-                  <button type="button" className="admin-btn secondary" onClick={addPriceRow} style={{ fontSize: '0.82rem', padding: '0.4rem 0.9rem', marginTop: '0.5rem' }}>
-                    <Plus size={14} /> {lang === 'th' ? 'เพิ่มราคา' : 'Add price'}
-                  </button>
-                )}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                  {(editingItem.prices || []).length < 5 && (
+                    <button type="button" className="admin-btn secondary" onClick={addPriceRow} style={{ fontSize: '0.82rem', padding: '0.4rem 0.9rem' }}>
+                      <Plus size={14} /> {lang === 'th' ? 'เพิ่มราคา' : 'Add price'}
+                    </button>
+                  )}
+                  {!(editingItem.prices || []).some(p => p.name === 'ปกติ') && (
+                    <button
+                      type="button" className="admin-btn secondary"
+                      onClick={() => setEditingItem(prev => ({ ...prev, prices: [...(prev.prices || []), { name: 'ปกติ', price: '' }] }))}
+                      style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem', background: 'rgba(255,255,255,0.05)' }}
+                    >
+                      + 🪑 ปกติ
+                    </button>
+                  )}
+                  {!(editingItem.prices || []).some(p => p.name === 'Takehome') && (
+                    <button
+                      type="button" className="admin-btn secondary"
+                      onClick={() => setEditingItem(prev => ({ ...prev, prices: [...(prev.prices || []), { name: 'Takehome', price: '' }] }))}
+                      style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem', background: 'rgba(255,255,255,0.05)' }}
+                    >
+                      + 🛍️ Takehome
+                    </button>
+                  )}
+                  {!(editingItem.prices || []).some(p => p.name === 'Deli') && (
+                    <button
+                      type="button" className="admin-btn secondary"
+                      onClick={() => setEditingItem(prev => ({ ...prev, prices: [...(prev.prices || []), { name: 'Deli', price: '' }] }))}
+                      style={{ fontSize: '0.82rem', padding: '0.4rem 0.75rem', background: 'rgba(255,255,255,0.05)' }}
+                    >
+                      + 🛵 Deli
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="admin-form-group">
@@ -517,10 +561,10 @@ const ManageMenu = () => {
                           key={c.slug}
                           style={{
                             display: 'flex', alignItems: 'center', gap: '0.4rem',
-                            padding: '0.4rem 0.7rem', borderRadius: '8px', cursor: 'pointer',
-                            background: checked ? 'rgba(249,115,22,0.15)' : 'rgba(255,255,255,0.05)',
-                            border: `1px solid ${checked ? 'rgba(249,115,22,0.5)' : 'rgba(255,255,255,0.12)'}`,
-                            fontSize: '0.85rem', color: 'white'
+                            padding: '0.45rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
+                            background: checked ? 'rgba(234,179,8,0.18)' : 'var(--bg-main)',
+                            border: `1.5px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`,
+                            fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: checked ? '700' : '500'
                           }}
                         >
                           <input
@@ -539,7 +583,7 @@ const ManageMenu = () => {
               <div className="admin-form-group">
                 <label>{lang === 'th' ? 'รูปภาพ (อัปโหลดจากคอมฯ หรือวาง URL)' : 'Image (Upload from PC or enter Cloud URL)'}</label>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ flex: 1, padding: '0.5rem', background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }} />
+                  <input type="file" accept="image/*" onChange={handleImageUpload} style={{ flex: 1, padding: '0.5rem', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px' }} />
                   {uploading && <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{lang === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...'}</span>}
                 </div>
                 <input value={editingItem.image} onChange={e => setEditingItem({...editingItem, image: e.target.value})} placeholder={lang === 'th' ? 'หรือวางลิงก์รูปภาพที่นี่' : 'Or paste image URL here'} />
@@ -564,7 +608,7 @@ const ManageMenu = () => {
               </div>
 
               {/* Printer Selection */}
-              <div className="admin-form-group" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1rem', marginTop: '0.25rem' }}>
+              <div className="admin-form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.25rem' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem' }}>
                   <Printer size={15} /> {lang === 'th' ? 'ส่งปริ้นไปที่เครื่อง' : 'Send to Printer'}
                 </label>
@@ -588,7 +632,7 @@ const ManageMenu = () => {
               </div>
 
               {/* Bundled Items */}
-              <div className="admin-form-group" style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <div className="admin-form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
                 <label style={{ marginBottom: '0.5rem', display: 'block' }}>
                   {lang === 'th' ? 'เมนูที่เพิ่มอัตโนมัติเมื่อสั่ง (Bundled Items):' : 'Auto-add items when ordered (Bundled Items):'}
                 </label>
@@ -614,10 +658,10 @@ const ManageMenu = () => {
                         value={count === 0 ? '' : count}
                         placeholder="0"
                         onChange={e => updateCount(e.target.value)}
-                        style={{ width: '60px', padding: '0.2rem', margin: 0, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', borderRadius: '4px', textAlign: 'center' }}
+                        style={{ width: '60px', padding: '0.2rem', margin: 0, background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '4px', textAlign: 'center' }}
                       />
                       <span style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }} onClick={() => updateCount(count === 0 ? 1 : 0)}>
-                        <span style={{ fontWeight: count > 0 ? 'bold' : 'normal', color: count > 0 ? 'var(--accent)' : 'inherit' }}>{m.name}</span>
+                        <span style={{ fontWeight: count > 0 ? 'bold' : 'normal', color: count > 0 ? 'var(--accent-hover)' : 'inherit' }}>{m.name}</span>
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '0.5rem' }}>(฿{m.price})</span>
                       </span>
                     </div>
@@ -626,23 +670,23 @@ const ManageMenu = () => {
               </div>
 
               {/* ── Popup / ตัวเลือกตอนสั่ง (Order Wizard) ───────────── */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
                 <button
                   type="button"
                   onClick={() => setShowPopups(v => !v)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '0.5rem',
-                    background: 'none', border: 'none', color: 'white', cursor: 'pointer',
+                    background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer',
                     fontWeight: 600, fontSize: '0.9rem', padding: 0, marginBottom: showPopups ? '1rem' : 0,
                     width: '100%', textAlign: 'left'
                   }}
                 >
-                  <SlidersHorizontal size={16} style={{ color: 'var(--accent)' }} />
+                  <SlidersHorizontal size={16} style={{ color: 'var(--accent-hover)' }} />
                   {lang === 'th' ? 'ตัวเลือกตอนสั่ง (Popup)' : 'Order Options (Popups)'}
                   {(() => {
                     const n = [1,2,3,4,5,6].filter(i => editingItem[`hasPopup${i}`] === true).length;
                     return n > 0 ? (
-                      <span style={{ background: 'rgba(34,197,94,0.18)', color: '#22c55e', padding: '0.1rem 0.45rem', borderRadius: 4, fontSize: '0.73rem', fontWeight: 700 }}>
+                      <span style={{ background: 'rgba(34,197,94,0.18)', color: '#16a34a', padding: '0.1rem 0.45rem', borderRadius: 4, fontSize: '0.73rem', fontWeight: 700 }}>
                         {n} {lang === 'th' ? 'ป๊อปอัพ' : 'popups'}
                       </span>
                     ) : null;
@@ -672,13 +716,13 @@ const ManageMenu = () => {
                             <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{lang === 'th' ? `แสดง Popup ${num}` : `Show Popup ${num}`}</span>
                           </label>
                           {hasPopup === true && (
-                            <div style={{ marginLeft: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '0.75rem', borderRadius: '8px' }}>
+                            <div style={{ marginLeft: '1.5rem', background: 'var(--bg-main)', border: '1px solid var(--border-color)', padding: '0.75rem', borderRadius: '8px' }}>
                               <div className="admin-form-group" style={{ marginBottom: '0.5rem' }}>
                                 <label>{lang === 'th' ? 'ดึงเมนูจากหมวดหมู่:' : 'Pull items from category:'}</label>
                                 <select
                                   value={editingItem[categoryProp] || ''}
                                   onChange={e => setEditingItem({ ...editingItem, [categoryProp]: e.target.value, [itemsProp]: [] })}
-                                  style={{ padding: '0.5rem', width: '100%', borderRadius: '4px', background: 'var(--bg-card)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}
+                                  style={{ padding: '0.5rem', width: '100%', borderRadius: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }}
                                 >
                                   <option value="">{lang === 'th' ? '-- เลือกหมวดหมู่ --' : '-- Select Category --'}</option>
                                   {categories.map(c => <option key={c.slug} value={c.slug}>{c.name}</option>)}
@@ -686,11 +730,11 @@ const ManageMenu = () => {
                               </div>
                               <div className="admin-form-group" style={{ marginBottom: '0.5rem' }}>
                                 <label>{lang === 'th' ? 'บังคับเลือกอย่างน้อยกี่รายการ (0 = ไม่บังคับ):' : 'Min Required (0 = Optional):'}</label>
-                                <input type="number" min="0" value={editingItem[minProp] || 0} onChange={e => setEditingItem({ ...editingItem, [minProp]: parseInt(e.target.value) || 0 })} style={{ width: '120px', padding: '0.4rem', borderRadius: '4px', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }} />
+                                <input type="number" min="0" value={editingItem[minProp] || 0} onChange={e => setEditingItem({ ...editingItem, [minProp]: parseInt(e.target.value) || 0 })} style={{ width: '120px', padding: '0.4rem', borderRadius: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }} />
                               </div>
                               <div className="admin-form-group" style={{ marginBottom: '0.5rem' }}>
                                 <label>{lang === 'th' ? 'จำกัดจำนวนสูงสุด (0 = ไม่จำกัด):' : 'Max Allowed (0 = Unlimited):'}</label>
-                                <input type="number" min="0" value={editingItem[maxProp] || 0} onChange={e => setEditingItem({ ...editingItem, [maxProp]: parseInt(e.target.value) || 0 })} style={{ width: '120px', padding: '0.4rem', borderRadius: '4px', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid rgba(255,255,255,0.1)' }} />
+                                <input type="number" min="0" value={editingItem[maxProp] || 0} onChange={e => setEditingItem({ ...editingItem, [maxProp]: parseInt(e.target.value) || 0 })} style={{ width: '120px', padding: '0.4rem', borderRadius: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)' }} />
                               </div>
                               <div className="admin-form-group" style={{ marginBottom: '0.5rem' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: 0 }}>
@@ -725,7 +769,7 @@ const ManageMenu = () => {
                                               type="number" min="0"
                                               value={(editingItem[itemsMaxProp] || {})[it.id] || 0}
                                               onChange={e => setEditingItem({ ...editingItem, [itemsMaxProp]: { ...(editingItem[itemsMaxProp] || {}), [it.id]: parseInt(e.target.value) || 0 } })}
-                                              style={{ width: '50px', padding: '0.2rem 0.4rem', borderRadius: '4px', background: 'rgba(0,0,0,0.3)', color: 'white', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.8rem' }}
+                                              style={{ width: '50px', padding: '0.2rem 0.4rem', borderRadius: '4px', background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', fontSize: '0.8rem' }}
                                             />
                                           </>
                                         )}
@@ -748,21 +792,21 @@ const ManageMenu = () => {
               </div>
 
               {/* ── BOM / สูตรวัตถุดิบ ──────────────────────────────── */}
-              <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
                 <button
                   type="button"
                   onClick={() => setShowBom(v => !v)}
                   style={{
                     display: 'flex', alignItems: 'center', gap: '0.5rem',
-                    background: 'none', border: 'none', color: 'white', cursor: 'pointer',
+                    background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer',
                     fontWeight: 600, fontSize: '0.9rem', padding: 0, marginBottom: showBom ? '1rem' : 0,
                     width: '100%', textAlign: 'left'
                   }}
                 >
-                  <FlaskConical size={16} style={{ color: 'var(--accent)' }} />
+                  <FlaskConical size={16} style={{ color: 'var(--accent-hover)' }} />
                   {lang === 'th' ? 'สูตรวัตถุดิบ (BOM)' : 'Bill of Materials (BOM)'}
                   {editingBom.length > 0 && (
-                    <span style={{ background: 'rgba(34,197,94,0.18)', color: '#22c55e', padding: '0.1rem 0.45rem', borderRadius: 4, fontSize: '0.73rem', fontWeight: 700 }}>
+                    <span style={{ background: 'rgba(34,197,94,0.18)', color: '#16a34a', padding: '0.1rem 0.45rem', borderRadius: 4, fontSize: '0.73rem', fontWeight: 700 }}>
                       {editingBom.length} รายการ · ฿{bomTotalCost.toFixed(2)}
                     </span>
                   )}
@@ -780,7 +824,7 @@ const ManageMenu = () => {
                           {
                             label: 'Margin',
                             value: `${editingItem.price > 0 ? ((parseFloat(editingItem.price) - bomTotalCost) / parseFloat(editingItem.price) * 100).toFixed(1) : '0.0'}%`,
-                            color: editingItem.price > 0 && ((parseFloat(editingItem.price) - bomTotalCost) / parseFloat(editingItem.price) * 100) >= 50 ? '#22c55e' : '#eab308'
+                            color: editingItem.price > 0 && ((parseFloat(editingItem.price) - bomTotalCost) / parseFloat(editingItem.price) * 100) >= 50 ? '#22c55e' : '#d84518'
                           },
                         ].map(c => (
                           <div key={c.label} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '0.45rem 0.85rem', textAlign: 'center', flex: 1, minWidth: 90 }}>
@@ -839,7 +883,7 @@ const ManageMenu = () => {
                       <Plus size={14} /> เพิ่มวัตถุดิบ
                     </button>
                     {ingredients.length === 0 && (
-                      <p style={{ color: '#eab308', fontSize: '0.78rem', marginTop: '0.5rem', marginBottom: 0 }}>
+                      <p style={{ color: '#d84518', fontSize: '0.78rem', marginTop: '0.5rem', marginBottom: 0 }}>
                         💡 ยังไม่มีคลังวัตถุดิบ — ไปตั้งค่าที่หน้า <strong>BOM</strong> แท็บ "วัตถุดิบ" ก่อน
                       </p>
                     )}

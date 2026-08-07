@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
-import { resolvePopupSource } from '../utils/popupConfig';
+import { resolvePopupSource, getPriceOptions } from '../utils/popupConfig';
 
 const DINING_OPTIONS = [
   { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' },
@@ -17,10 +17,16 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const [selectedPopup6, setSelectedPopup6] = useState({});
   const [selectedDining, setSelectedDining] = useState(DINING_OPTIONS[0]);
 
-  // ราคาฐานถูกกำหนดจาก "ประเภทลูกค้า" ที่เลือกไว้ด้านบนหน้าเมนูแล้ว
-  const isDrink = !!food && food.category === 'drink';
+  const priceOptions = getPriceOptions(food);
+  const hasMultiplePrices = priceOptions.length > 1;
 
-  // ดึงค่า popup จากตัวเมนูเอง (ถ้าตั้งไว้) ไม่งั้น fallback ไปที่หมวดหมู่
+  const [selectedPrice, setSelectedPrice] = useState(() => {
+    const opts = getPriceOptions(food);
+    const match = opts.find(o => Number(o.price) === Number(basePrice));
+    return match || opts[0];
+  });
+
+  const isDrink = !!food && food.category === 'drink';
   const categoryConfig = food ? resolvePopupSource(food, categories) : {};
 
   const resolvePopupConfig = (configField, minField, categoryField, itemIdsField, fallbackFilter, freeField, maxField, itemsMaxField, allowRepeatField) => {
@@ -46,7 +52,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     items = items.map(m => ({ ...m, price: isFree ? 0 : m.price }));
 
     const itemsMaxMap = categoryConfig[itemsMaxField] || {};
-    const allowRepeat = categoryConfig[allowRepeatField] !== false; // ค่าเริ่มต้น = เลือกซ้ำได้
+    const allowRepeat = categoryConfig[allowRepeatField] !== false;
     return { namesTh, namesEn, items, minSelect: categoryConfig[minField] || 0, maxSelect: categoryConfig[maxField] || 0, itemsMaxMap, allowRepeat };
   };
 
@@ -57,7 +63,6 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const pop5Config = resolvePopupConfig('hasPopup5', 'popup5Min', 'popup5Category', 'popup5Items', null, 'popup5Free', 'popup5Max', 'popup5ItemsMax', 'popup5AllowRepeat');
   const pop6Config = resolvePopupConfig('hasPopup6', 'popup6Min', 'popup6Category', 'popup6Items', null, 'popup6Free', 'popup6Max', 'popup6ItemsMax', 'popup6AllowRepeat');
 
-  // Qty helpers: selectedQty = { itemId: count }
   const getQty = (qtyMap, id) => qtyMap[id] || 0;
   const totalQty = (qtyMap) => Object.values(qtyMap).reduce((s, v) => s + v, 0);
   const expandQty = (qtyMap, items) => {
@@ -70,8 +75,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   };
   const addQty = (setter, qtyMap, id, maxSelect, itemMaxSelect) => {
     const current = getQty(qtyMap, id);
-    if (maxSelect > 0 && totalQty(qtyMap) >= maxSelect) return;  // global max
-    if (itemMaxSelect > 0 && current >= itemMaxSelect) return;    // per-item max
+    if (maxSelect > 0 && totalQty(qtyMap) >= maxSelect) return;
+    if (itemMaxSelect > 0 && current >= itemMaxSelect) return;
     setter({ ...qtyMap, [id]: current + 1 });
   };
   const removeQty = (setter, qtyMap, id) => {
@@ -83,6 +88,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   };
 
   const validSteps = [
+    hasMultiplePrices ? 'price' : null,
     categoryConfig.hasPopup1 === true ? 1 : null,
     categoryConfig.hasPopup2 === true ? 2 : null,
     categoryConfig.hasPopup3 === true ? 3 : null,
@@ -102,7 +108,6 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     }
   }, [validSteps.length]);
 
-  // food การันตีว่ามีค่าจาก parent เสมอ — เช็คหลัง hooks ทั้งหมด เพื่อไม่ให้ลำดับ hooks เปลี่ยน (Rules of Hooks)
   if (!food) return null;
 
   const handleNext = () => {
@@ -138,13 +143,14 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   ];
 
   const currentTotal = () => {
-    let total = Number(basePrice) || 0;
+    let total = hasMultiplePrices ? (Number(selectedPrice?.price) || 0) : (Number(basePrice) || Number(food?.price) || 0);
     getExpandedPopups().forEach(a => { total += Number(a.price) || 0; });
     return total;
   };
 
   const handleSubmit = () => {
     onConfirm(food, {
+      selectedPrice: hasMultiplePrices ? selectedPrice : null,
       allPopups: getExpandedPopups(),
       dining: isDrink ? { id: 'drink', name: 'เครื่องดื่ม', nameEn: 'Drinks' } : selectedDining
     });
@@ -155,8 +161,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     const atMax = config.maxSelect > 0 && total >= config.maxSelect;
     return (
       <div className="wizard-step">
-        <h3 className="step-title">{lang === 'th' ? `เลือก ${config.namesTh}` : `Select ${config.namesEn}`}</h3>
-        <p className="step-desc">
+        <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? `เลือก ${config.namesTh}` : `Select ${config.namesEn}`}</h3>
+        <p className="step-desc" style={{ color: '#475569', fontWeight: '600' }}>
           {lang === 'th' ? (
             <>
               {config.minSelect > 0 ? `ต้องเลือกอย่างน้อย ${config.minSelect} รายการ` : 'เลือกเพิ่มเติมได้ตามต้องการ'}
@@ -175,26 +181,28 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
           {config.minSelect === 0 && config.items.length > 0 && (
             <div
               className={`option-card ${total === 0 ? 'selected' : ''}`}
+              style={{ background: total === 0 ? '#fff7ed' : '#ffffff', border: `2px solid ${total === 0 ? '#ea580c' : '#cbd5e1'}` }}
               onClick={() => setter({})}
             >
-              <div className="option-name">{lang === 'th' ? 'ไม่รับ (ข้าม)' : 'No Thanks'}</div>
-              <div className="option-price" style={{ color: 'var(--text-muted)' }}>-</div>
-              {total === 0 && (
-                <div className="check-icon" style={{ display: 'none' }}></div> // Visual placeholder if needed
-              )}
+              <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? 'ไม่รับ (ข้าม)' : 'No Thanks'}</div>
+              <div className="option-price" style={{ color: '#64748b' }}>-</div>
             </div>
           )}
           {config.items.length > 0 ? config.items.map(addon => {
             const qty = getQty(qtyMap, addon.id);
-            // ถ้าตั้ง "เลือกซ้ำไม่ได้" → จำกัดต่อรายการไว้ที่ 1
             const perItemMax = config.allowRepeat === false ? 1 : ((config.itemsMaxMap || {})[addon.id] || 0);
             const itemAtMax = perItemMax > 0 && qty >= perItemMax;
             const cardDisabled = (atMax && qty === 0) || itemAtMax;
+            const isSelected = qty > 0;
             return (
               <div
                 key={addon.id}
-                className={`option-card ${qty > 0 ? 'selected' : ''}`}
-                style={{ position: 'relative', cursor: cardDisabled ? 'default' : 'pointer', opacity: cardDisabled ? 0.5 : 1 }}
+                className={`option-card ${isSelected ? 'selected' : ''}`}
+                style={{
+                  position: 'relative', cursor: cardDisabled ? 'default' : 'pointer', opacity: cardDisabled ? 0.5 : 1,
+                  background: isSelected ? '#fff7ed' : '#ffffff',
+                  border: `2px solid ${isSelected ? '#ea580c' : '#cbd5e1'}`
+                }}
                 onClick={() => addQty(setter, qtyMap, addon.id, config.maxSelect, perItemMax)}
               >
                 {qty > 0 && (
@@ -202,16 +210,16 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     style={{
                       position: 'absolute', top: '-10px', right: '-10px',
                       display: 'flex', alignItems: 'center',
-                      background: 'rgba(20,20,30,0.95)',
+                      background: '#0f172a',
                       borderRadius: '20px', overflow: 'hidden',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                      zIndex: 10, border: '1px solid rgba(255,255,255,0.15)'
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                      zIndex: 10, border: '1px solid #cbd5e1'
                     }}
                   >
                     <div
                       onClick={e => { e.stopPropagation(); removeQty(setter, qtyMap, addon.id); }}
                       style={{
-                        background: 'rgba(239,68,68,0.8)', color: 'white',
+                        background: '#ef4444', color: 'white',
                         width: '22px', height: '22px', display: 'flex',
                         alignItems: 'center', justifyContent: 'center',
                         fontSize: '1rem', fontWeight: 'bold', cursor: 'pointer',
@@ -224,14 +232,14 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     }}>{qty}</div>
                   </div>
                 )}
-                <div className="option-name">{lang === 'th' ? addon.name : addon.nameEn}</div>
-                <div className="option-price" style={{ color: 'var(--text-muted)' }}>
+                <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? addon.name : addon.nameEn}</div>
+                <div className="option-price" style={{ color: '#ea580c', fontWeight: '800' }}>
                   {addon.price > 0 ? `+฿${addon.price}` : ''}
                 </div>
               </div>
             );
           }) : (
-            <p style={{ color: 'var(--text-muted)', gridColumn: '1 / -1', textAlign: 'center' }}>
+            <p style={{ color: '#64748b', gridColumn: '1 / -1', textAlign: 'center', fontWeight: '600' }}>
               {lang === 'th' ? 'ไม่มีตัวเลือกในหมวดนี้ กดถัดไปได้เลย' : 'No items found. Please click Next.'}
             </p>
           )}
@@ -242,20 +250,52 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content wizard-modal" onClick={e => e.stopPropagation()}>
+      <div className="modal-content wizard-modal" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', color: '#0f172a', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }}>
         <div className="modal-header">
           <div className="wizard-progress">
-            <span>{lang === 'th' ? `ขั้นตอนที่ ${currentStepIndex + 1}/${validSteps.length}` : `Step ${currentStepIndex + 1}/${validSteps.length}`}</span>
-            <div className="progress-bar">
-              <div className="progress-fill" style={{ width: `${((currentStepIndex + 1) / validSteps.length) * 100}%` }}></div>
+            <span style={{ color: '#475569', fontWeight: 700 }}>{lang === 'th' ? `ขั้นตอนที่ ${currentStepIndex + 1}/${validSteps.length}` : `Step ${currentStepIndex + 1}/${validSteps.length}`}</span>
+            <div className="progress-bar" style={{ background: '#e2e8f0' }}>
+              <div className="progress-fill" style={{ width: `${((currentStepIndex + 1) / validSteps.length) * 100}%`, background: '#ea580c' }}></div>
             </div>
           </div>
           <button className="close-btn" onClick={onClose}>
-            <X size={24} />
+            <X size={24} color="#0f172a" />
           </button>
         </div>
 
         <div className="wizard-body">
+          {step === 'price' && (
+            <div className="wizard-step">
+              <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? 'เลือกราคา / ขนาด' : 'Select Price / Size'}</h3>
+              <p className="step-desc" style={{ color: '#475569', fontWeight: '600' }}>
+                {lang === 'th' ? 'กรุณาเลือกตัวเลือกราคาสำหรับเมนูนี้' : 'Please select a price option for this item'}
+              </p>
+              <div className="options-grid cols-2">
+                {priceOptions.map((opt, idx) => {
+                  const isSel = selectedPrice?.name === opt.name && Number(selectedPrice?.price) === Number(opt.price);
+                  return (
+                    <div
+                      key={idx}
+                      className={`option-card large ${isSel ? 'selected' : ''}`}
+                      onClick={() => setSelectedPrice(opt)}
+                      style={{ cursor: 'pointer', background: isSel ? '#fff7ed' : '#ffffff', border: `2px solid ${isSel ? '#ea580c' : '#cbd5e1'}` }}
+                    >
+                      <div>
+                        <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{opt.name || (lang === 'th' ? 'ราคาปกติ' : 'Regular')}</div>
+                        <div className="option-price" style={{ color: '#ea580c', fontWeight: '800', fontSize: '1.1rem', marginTop: '4px' }}>
+                          ฿{Number(opt.price).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="radio-circle" style={{ borderColor: isSel ? '#ea580c' : '#cbd5e1' }}>
+                        {isSel && <div className="radio-fill" style={{ background: '#ea580c' }} />}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {step === 1 && renderPopupStep(pop1Config, selectedPopup1, setSelectedPopup1)}
           {step === 2 && renderPopupStep(pop2Config, selectedPopup2, setSelectedPopup2)}
           {step === 3 && renderPopupStep(pop3Config, selectedPopup3, setSelectedPopup3)}
@@ -265,17 +305,18 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
           {step === 7 && (
             <div className="wizard-step">
-              <h3 className="step-title">{lang === 'th' ? 'การรับประทาน' : 'Dining Option'}</h3>
+              <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? 'การรับประทาน' : 'Dining Option'}</h3>
               <div className="options-grid cols-2">
                 {DINING_OPTIONS.map(option => (
                   <div
                     key={option.id}
                     className={`option-card large ${selectedDining.id === option.id ? 'selected' : ''}`}
                     onClick={() => setSelectedDining(option)}
+                    style={{ background: selectedDining.id === option.id ? '#fff7ed' : '#ffffff', border: `2px solid ${selectedDining.id === option.id ? '#ea580c' : '#cbd5e1'}` }}
                   >
-                    <div className="option-name">{lang === 'th' ? option.name : option.nameEn}</div>
-                    <div className="radio-circle">
-                      {selectedDining.id === option.id && <div className="radio-fill" />}
+                    <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? option.name : option.nameEn}</div>
+                    <div className="radio-circle" style={{ borderColor: selectedDining.id === option.id ? '#ea580c' : '#cbd5e1' }}>
+                      {selectedDining.id === option.id && <div className="radio-fill" style={{ background: '#ea580c' }} />}
                     </div>
                   </div>
                 ))}
@@ -284,19 +325,19 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
           )}
         </div>
 
-        <div className="wizard-footer">
+        <div className="wizard-footer" style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
           {!isFirstStep ? (
-            <button className="nav-btn prev" onClick={handlePrev}>
+            <button className="nav-btn prev" onClick={handlePrev} style={{ color: '#0f172a', background: '#ffffff', border: '1px solid #cbd5e1', fontWeight: '700' }}>
               <ArrowLeft size={20} /> {lang === 'th' ? 'ย้อนกลับ' : 'Back'}
             </button>
           ) : <div></div>}
 
           {!isLastStep ? (
-            <button className="nav-btn next" onClick={handleNext}>
+            <button className="nav-btn next" onClick={handleNext} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}>
               {lang === 'th' ? `ถัดไป (ยอดรวมชั่วคราว: ฿${currentTotal()})` : `Next (Total: ฿${currentTotal()})`} <ArrowRight size={20} />
             </button>
           ) : (
-            <button className="nav-btn confirm" onClick={handleSubmit}>
+            <button className="nav-btn confirm" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}>
               {lang === 'th' ? `ยืนยันและเพิ่ม (฿${currentTotal()})` : `Confirm & Add (฿${currentTotal()})`} <Check size={20} />
             </button>
           )}

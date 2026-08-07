@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="studioLight" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </radialGradient>
+    <radialGradient id="ballGrad1" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#9a3412" />
+    </radialGradient>
+    <radialGradient id="ballGrad2" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef9c3" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#7c2d12" />
+    </radialGradient>
+  </defs>
+
+  <!-- Studio Dark Slate Tabletop Background -->
+  <rect width="400" height="300" fill="url(#studioLight)" />
+  
+  <!-- Studio Vignette / Lighting -->
+  <ellipse cx="200" cy="150" rx="180" ry="120" fill="#ffffff" opacity="0.04" />
+
+  <!-- Food Photo Visuals -->
+  
+        <ellipse cx="200" cy="250" rx="110" ry="25" fill="#000000" opacity="0.5" filter="blur(8px)"/>
+        <!-- Large Porcelain Soup Bowl -->
+        <path d="M 80 160 Q 200 290 320 160 Z" fill="#ffffff" />
+        <ellipse cx="200" cy="160" rx="120" ry="42" fill="#e2e8f0" />
+        <ellipse cx="200" cy="162" rx="110" ry="36" fill="#fef9c3" opacity="0.85" />
+        <!-- Steaming Broth shine -->
+        <ellipse cx="200" cy="165" rx="100" ry="30" fill="#fef08a" opacity="0.4" />
+        <!-- Rice Vermicelli Noodles -->
+        
+          <path d="M 120 160 Q 180 140 240 165 Q 190 185 270 155" stroke="#ffffff" stroke-width="5" stroke-linecap="round" fill="none" opacity="0.9" />
+          <path d="M 130 165 Q 200 145 250 170" stroke="#fef9c3" stroke-width="4" fill="none" />
+        
+        <!-- Plump Chicken Meatballs -->
+        <g filter="drop-shadow(0 6px 4px rgba(0,0,0,0.3))">
+          <circle cx="150" cy="155" r="18" fill="#fef3c7" stroke="#fde047" stroke-width="2" />
+          <circle cx="190" cy="145" r="18" fill="#fef3c7" stroke="#fde047" stroke-width="2" />
+          <circle cx="235" cy="150" r="18" fill="#fef3c7" stroke="#fde047" stroke-width="2" />
+          <circle cx="265" cy="165" r="16" fill="#fef3c7" stroke="#fde047" stroke-width="2" />
+          <!-- Herbs & Fried Garlic -->
+          <circle cx="170" cy="170" r="4" fill="#16a34a" />
+          <circle cx="210" cy="165" r="3" fill="#15803d" />
+          <circle cx="180" cy="140" r="3" fill="#d97706" />
+        </g>
+      
+
+  <!-- Dark Slate Banner with Dish Title -->
+  <rect x="0" y="248" width="400" height="52" fill="rgba(15, 23, 42, 0.88)" />
+  <text x="200" y="280" font-family="'Kanit', 'Sukhumvit Set', sans-serif" font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">
+    เส้นหมีน้ำลูกชิ้นไก่
+  </text>
+</svg>

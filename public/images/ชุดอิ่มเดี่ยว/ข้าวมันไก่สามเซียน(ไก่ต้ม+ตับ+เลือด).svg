@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#451a03" />
+      <stop offset="100%" stop-color="#1c1917" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="15" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="400" height="300" rx="20" fill="url(#bgGrad)" />
+  
+  <!-- Subtle Lighting Ring -->
+  <circle cx="200" cy="190" r="120" fill="#fbbf24" opacity="0.08" filter="url(#glow)" />
+  
+  <!-- Content Visuals -->
+  
+          <ellipse cx="200" cy="220" rx="140" ry="70" fill="#f8fafc" opacity="0.95" />
+          <ellipse cx="200" cy="215" rx="125" ry="60" fill="#e2e8f0" />
+          <ellipse cx="130" cy="210" rx="50" ry="30" fill="#fef08a" />
+          <!-- Boiled Chicken -->
+          <path d="M 165 165 Q 210 150 225 185 Q 200 210 170 200 Z" fill="#fffbeb" stroke="#fcd34d" stroke-width="2"/>
+          <!-- Liver -->
+          <ellipse cx="235" cy="175" rx="22" ry="12" fill="#78350f" />
+          <ellipse cx="245" cy="185" rx="18" ry="10" fill="#451a03" />
+          <!-- Blood Jelly -->
+          <rect x="230" y="200" width="35" height="18" rx="4" fill="#881337" />
+          <rect x="232" y="202" width="31" height="14" rx="3" fill="#9f1239" />
+          <ellipse cx="280" cy="220" rx="12" ry="6" fill="#22c55e" />
+        
+
+  <!-- Banner overlay for dish title -->
+  <rect x="0" y="250" width="400" height="50" fill="rgba(15, 23, 42, 0.75)" />
+  <text x="200" y="282" font-family="'Kanit', 'Sukhumvit Set', 'Inter', sans-serif" font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">
+    ข้าวมันไก่สามเซียน(ไก่ต้ม+ตับ+เลือด)
+  </text>
+</svg>

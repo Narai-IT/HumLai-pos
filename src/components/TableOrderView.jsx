@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Plus, CreditCard, Trash2, ChevronLeft, RefreshCw, Split, AlertTriangle } from 'lucide-react';
+import { ShoppingBag, Plus, CreditCard, Trash2, ChevronLeft, RefreshCw, Split, AlertTriangle, LayoutGrid } from 'lucide-react';
 
 const calcCharges = (subtotal, settings = {}) => {
   const scRate = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
@@ -18,6 +18,7 @@ const TableOrderView = ({
   onCheckout,
   onDeleteItem,
   onBack,
+  onSelectTable,
   onRefresh,
   isRefreshing,
   onMoveMerge,
@@ -32,8 +33,8 @@ const TableOrderView = ({
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(''); // 'move' | 'merge' | 'split'
   const [targetTable, setTargetTable] = useState('');
-  const [confirmStage, setConfirmStage] = useState(false); // true = ขั้นยืนยันอีกรอบ
-  const [selectedIdx, setSelectedIdx] = useState([]); // index ของรายการที่เลือก
+  const [confirmStage, setConfirmStage] = useState(false);
+  const [selectedIdx, setSelectedIdx] = useState([]);
   
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
   const [currentCount, setCurrentCount] = useState(() => localStorage.getItem('customer_count_' + tableNumber) || '');
@@ -58,7 +59,6 @@ const TableOrderView = ({
     setSelectedIdx(allSelected ? [] : pendingItems.map((_, i) => i));
   };
 
-  // เปิด modal สำหรับแอคชั่นโต๊ะ (move/merge/split)
   const openAction = (type) => {
     setActionType(type);
     setTargetTable('');
@@ -70,7 +70,6 @@ const TableOrderView = ({
     setConfirmStage(false);
   };
 
-  // รายการที่จะดำเนินการ: ถ้าไม่ได้เลือกอะไร = ทั้งโต๊ะ
   const actingItems = selectedIdx.length > 0 ? selectedIdx.map(i => pendingItems[i]).filter(Boolean) : pendingItems;
   const actingIsAll = selectedIdx.length === 0 || selectedIdx.length === pendingItems.length;
 
@@ -90,41 +89,65 @@ const TableOrderView = ({
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'var(--bg-dark)',
+      background: 'var(--bg-dark, #fcfbf7)',
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Header */}
+      {/* Top Header Bar */}
       <div style={{
-        background: 'linear-gradient(135deg, var(--bg-card) 0%, rgba(30,30,40,0.98) 100%)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
-        padding: '1rem 1.25rem',
+        background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.1)',
+        padding: '0.9rem 1.25rem',
         display: 'flex',
         alignItems: 'center',
-        gap: '1rem',
+        gap: '0.85rem',
         position: 'sticky',
         top: 0,
         zIndex: 10,
-        backdropFilter: 'blur(12px)'
+        boxShadow: '0 4px 15px rgba(0,0,0,0.15)'
       }}>
         <button
           onClick={onBack}
           style={{
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.12)',
+            border: '1px solid rgba(255,255,255,0.2)',
             borderRadius: '10px',
-            color: 'white',
+            color: '#ffffff',
             padding: '0.5rem',
             cursor: 'pointer',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            transition: 'background 0.2s'
           }}
+          title={lang === 'th' ? 'กลับไปหน้าสั่งอาหาร' : 'Back to Food Menu'}
         >
           <ChevronLeft size={22} />
         </button>
+        {onSelectTable && (
+          <button
+            onClick={onSelectTable}
+            style={{
+              background: 'rgba(255,255,255,0.12)',
+              border: '1px solid rgba(255,255,255,0.2)',
+              borderRadius: '10px',
+              color: '#ffffff',
+              padding: '0.45rem 0.75rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              fontWeight: '700',
+              fontSize: '0.85rem'
+            }}
+            title={lang === 'th' ? 'กลับไปหน้าเลือกโต๊ะ' : 'Back to Table Selection'}
+          >
+            <LayoutGrid size={16} color="#facc15" />
+            <span>{lang === 'th' ? 'เลือกโต๊ะ' : 'Tables'}</span>
+          </button>
+        )}
         <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: '700', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               {lang === 'th' ? 'สรุปบิล' : 'Bill Summary'}
               {currentCount && (
                 <span 
@@ -133,32 +156,32 @@ const TableOrderView = ({
                     setShowEditCustomerModal(true);
                   }}
                   style={{
-                    fontSize: '0.9rem',
-                    fontWeight: '600',
-                    color: 'var(--accent)',
-                    background: 'rgba(250,204,21,0.1)',
-                    padding: '2px 8px',
+                    fontSize: '0.85rem',
+                    fontWeight: '700',
+                    color: '#fef08a',
+                    background: 'rgba(245,158,11,0.25)',
+                    padding: '2px 10px',
                     borderRadius: '12px',
                     cursor: 'pointer',
-                    border: '1px solid rgba(250,204,21,0.3)'
+                    border: '1px solid rgba(245,158,11,0.5)'
                   }}
                 >
                   ({currentCount} {lang === 'th' ? 'ท่าน' : 'pax'})
                 </span>
               )}
             </h2>
-            <div style={{ display: 'flex', gap: '4px' }}>
+            <div style={{ display: 'flex', gap: '6px' }}>
               <button
                 onClick={() => openAction('move')}
                 disabled={pendingItems.length === 0}
                 style={{
-                  background: 'rgba(59,130,246,0.2)',
-                  border: '1px solid rgba(59,130,246,0.3)',
+                  background: 'rgba(56,189,248,0.2)',
+                  border: '1px solid rgba(56,189,248,0.4)',
                   borderRadius: '6px',
-                  color: '#60a5fa',
-                  padding: '2px 8px',
-                  fontSize: '0.75rem',
-                  fontWeight: '600',
+                  color: '#38bdf8',
+                  padding: '3px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
                   cursor: pendingItems.length === 0 ? 'not-allowed' : 'pointer',
                   opacity: pendingItems.length === 0 ? 0.4 : 1
                 }}
@@ -169,13 +192,13 @@ const TableOrderView = ({
                 onClick={() => openAction('merge')}
                 disabled={pendingItems.length === 0}
                 style={{
-                  background: 'rgba(16,185,129,0.2)',
-                  border: '1px solid rgba(16,185,129,0.3)',
+                  background: 'rgba(52,211,153,0.2)',
+                  border: '1px solid rgba(52,211,153,0.4)',
                   borderRadius: '6px',
                   color: '#34d399',
-                  padding: '2px 8px',
-                  fontSize: '0.75rem',
-                  fontWeight: '600',
+                  padding: '3px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
                   cursor: pendingItems.length === 0 ? 'not-allowed' : 'pointer',
                   opacity: pendingItems.length === 0 ? 0.4 : 1
                 }}
@@ -186,23 +209,23 @@ const TableOrderView = ({
                 onClick={() => openAction('split')}
                 disabled={pendingItems.length === 0}
                 style={{
-                  background: 'rgba(168,85,247,0.2)',
-                  border: '1px solid rgba(168,85,247,0.3)',
+                  background: 'rgba(192,132,252,0.2)',
+                  border: '1px solid rgba(192,132,252,0.4)',
                   borderRadius: '6px',
                   color: '#c084fc',
-                  padding: '2px 8px',
-                  fontSize: '0.75rem',
-                  fontWeight: '600',
+                  padding: '3px 10px',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
                   cursor: pendingItems.length === 0 ? 'not-allowed' : 'pointer',
                   opacity: pendingItems.length === 0 ? 0.4 : 1,
                   display: 'flex', alignItems: 'center', gap: '3px'
                 }}
               >
-                <Split size={12} /> {lang === 'th' ? 'แยกโต๊ะ' : 'Split'}
+                <Split size={13} /> {lang === 'th' ? 'แยกโต๊ะ' : 'Split'}
               </button>
             </div>
           </div>
-          <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+          <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8', marginTop: '2px' }}>
             {lang === 'th' ? `${pendingItems.length} รายการ` : `${pendingItems.length} items`}
           </p>
         </div>
@@ -210,10 +233,10 @@ const TableOrderView = ({
           onClick={onRefresh}
           disabled={isRefreshing}
           style={{
-            background: 'rgba(255,255,255,0.07)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.12)',
+            border: '1px solid rgba(255,255,255,0.2)',
             borderRadius: '10px',
-            color: 'white',
+            color: '#ffffff',
             padding: '0.5rem',
             cursor: 'pointer',
             display: 'flex',
@@ -226,14 +249,14 @@ const TableOrderView = ({
         </button>
       </div>
 
-      {/* Customer type + name (เชื่อมกับหน้าสั่งอาหาร) */}
+      {/* Customer type + name section */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap',
-        padding: '0.75rem 1.25rem',
-        background: 'rgba(255,255,255,0.03)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)'
+        display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap',
+        padding: '0.85rem 1.25rem',
+        background: '#f8fafc',
+        borderBottom: '1px solid #e2e8f0'
       }}>
-        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap' }}>
           👤 {lang === 'th' ? 'ประเภทลูกค้า' : 'Customer'}
         </span>
         <select
@@ -241,16 +264,15 @@ const TableOrderView = ({
           onChange={(e) => setCustomerType && setCustomerType(e.target.value)}
           style={{
             padding: '0.5rem 0.75rem', borderRadius: '8px',
-            background: 'rgba(255,255,255,0.08)', color: 'white',
-            border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.9rem',
-            fontWeight: 700, cursor: 'pointer', maxWidth: '160px'
+            background: '#ffffff', color: '#0f172a',
+            border: '2px solid #cbd5e1', fontSize: '0.9rem',
+            fontWeight: 700, cursor: 'pointer', maxWidth: '240px',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
           }}
         >
-          {customerTypeOptions.map(t => (
-            <option key={t || 'normal'} value={t} style={{ color: '#000' }}>
-              {t || (lang === 'th' ? 'ปกติ' : 'Normal')}
-            </option>
-          ))}
+          <option value="" style={{ color: '#000000', fontWeight: 'bold' }}>🪑 ราคาขายปกติ</option>
+          <option value="Takehome" style={{ color: '#000000', fontWeight: 'bold' }}>🛍️ TAKEHOME</option>
+          <option value="Deli" style={{ color: '#000000', fontWeight: 'bold' }}>🛵 DELI</option>
         </select>
         <input
           type="text"
@@ -259,15 +281,16 @@ const TableOrderView = ({
           placeholder={lang === 'th' ? 'ชื่อลูกค้า (ถ้ามี)' : 'Customer name (optional)'}
           style={{
             padding: '0.5rem 0.75rem', borderRadius: '8px',
-            background: 'rgba(255,255,255,0.08)', color: 'white',
-            border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.9rem',
-            width: '180px', flexShrink: 0
+            background: '#ffffff', color: '#0f172a',
+            border: '2px solid #cbd5e1', fontSize: '0.9rem',
+            fontWeight: 600, width: '200px', flexShrink: 0,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
           }}
         />
       </div>
 
-      {/* Order Items */}
-      <div style={{ flex: 1, padding: '1rem', overflowY: 'auto', paddingBottom: '180px' }}>
+      {/* Order Items List */}
+      <div style={{ flex: 1, padding: '1rem 1.25rem', overflowY: 'auto', paddingBottom: '200px' }}>
         {pendingItems.length === 0 ? (
           <div style={{
             display: 'flex',
@@ -275,58 +298,66 @@ const TableOrderView = ({
             alignItems: 'center',
             justifyContent: 'center',
             paddingTop: '4rem',
-            color: 'var(--text-muted)',
+            color: '#64748b',
             textAlign: 'center'
           }}>
-            <ShoppingBag size={64} style={{ opacity: 0.2, marginBottom: '1rem' }} />
-            <p style={{ fontSize: '1.1rem', marginBottom: '0.3rem' }}>
+            <ShoppingBag size={64} style={{ opacity: 0.25, marginBottom: '1rem', color: '#475569' }} />
+            <p style={{ fontSize: '1.1rem', fontWeight: 600, color: '#334155', marginBottom: '0.3rem' }}>
               {lang === 'th' ? 'ยังไม่มีรายการอาหาร' : 'No orders yet'}
             </p>
-            <p style={{ fontSize: '0.88rem', opacity: 0.7 }}>
-              {lang === 'th' ? 'กดปุ่มด้านล่างเพื่อสั่งอาหาร' : 'Tap the button below to order'}
+            <p style={{ fontSize: '0.88rem', color: '#64748b' }}>
+              {lang === 'th' ? 'กดปุ่มสั่งเพิ่มด้านล่างเพื่อสั่งอาหาร' : 'Tap the add button below to order'}
             </p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <label style={{
               display: 'flex', alignItems: 'center', gap: '0.6rem',
-              padding: '0.5rem 0.25rem', cursor: 'pointer',
-              color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600
+              padding: '0.4rem 0.25rem', cursor: 'pointer',
+              color: '#334155', fontSize: '0.9rem', fontWeight: 700
             }}>
-              <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} style={{ width: '18px', height: '18px', cursor: 'pointer' }} />
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#ea580c' }}
+              />
               {lang === 'th' ? 'เลือกทั้งหมด' : 'Select all'}
               {selectedIdx.length > 0 && (
-                <span style={{ color: 'var(--accent)' }}>
+                <span style={{ color: '#ea580c', fontWeight: 800 }}>
                   ({selectedIdx.length} {lang === 'th' ? 'รายการ' : 'selected'})
                 </span>
               )}
             </label>
             {pendingItems.map((item, idx) => {
               const subtotal = (Number(item.ItemPrice) || 0) * (Number(item.Quantity) || 1);
+              const isSelected = selectedIdx.includes(idx);
               return (
                 <div key={idx} style={{
-                  background: 'var(--bg-card)',
-                  border: `1px solid ${selectedIdx.includes(idx) ? 'rgba(250,204,21,0.5)' : 'rgba(255,255,255,0.07)'}`,
+                  background: '#ffffff',
+                  border: `2px solid ${isSelected ? '#ea580c' : '#e2e8f0'}`,
                   borderRadius: '14px',
                   padding: '1rem 1.1rem',
                   display: 'flex',
                   alignItems: 'flex-start',
-                  gap: '0.75rem'
+                  gap: '0.75rem',
+                  boxShadow: isSelected ? '0 4px 12px rgba(234,88,12,0.15)' : '0 2px 6px rgba(0,0,0,0.03)',
+                  transition: 'all 0.15s ease'
                 }}>
                   <input
                     type="checkbox"
-                    checked={selectedIdx.includes(idx)}
+                    checked={isSelected}
                     onChange={() => toggleSelect(idx)}
-                    style={{ width: '18px', height: '18px', marginTop: '0.35rem', cursor: 'pointer', flexShrink: 0 }}
+                    style={{ width: '18px', height: '18px', marginTop: '0.35rem', cursor: 'pointer', flexShrink: 0, accentColor: '#ea580c' }}
                   />
                   <div style={{
-                    background: 'rgba(250,204,21,0.12)',
-                    border: '1px solid rgba(250,204,21,0.3)',
+                    background: '#fff7ed',
+                    border: '1px solid #ffedd5',
                     borderRadius: '8px',
                     padding: '0.35rem 0.65rem',
-                    fontWeight: '700',
-                    color: 'var(--accent)',
-                    fontSize: '0.9rem',
+                    fontWeight: '800',
+                    color: '#c2410c',
+                    fontSize: '0.95rem',
                     flexShrink: 0,
                     minWidth: '36px',
                     textAlign: 'center'
@@ -334,20 +365,20 @@ const TableOrderView = ({
                     {Number(item.Quantity) || 1}x
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: '600', color: 'white', fontSize: '0.97rem' }}>
+                    <div style={{ fontWeight: '700', color: '#0f172a', fontSize: '1rem', lineHeight: '1.3' }}>
                       {lang === 'th' ? (item.ItemName || '') : (item.ItemNameEn || item.ItemName || '')}
                     </div>
                     {item.Options && (
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                      <div style={{ fontSize: '0.85rem', color: '#475569', marginTop: '0.25rem', fontWeight: 500 }}>
                         {item.Options}
                       </div>
                     )}
                     {item.Timestamp && !isNaN(new Date(item.Timestamp)) && (
                       <div style={{
-                        fontSize: '0.82rem',
-                        color: 'var(--text-muted)',
-                        marginTop: '0.15rem',
-                        opacity: 0.6
+                        fontSize: '0.8rem',
+                        color: '#64748b',
+                        marginTop: '0.25rem',
+                        fontWeight: 500
                       }}>
                         🕒 {new Date(item.Timestamp).toLocaleString(lang === 'th' ? 'th-TH' : 'en-GB', {
                           day: '2-digit', month: '2-digit', year: 'numeric',
@@ -357,23 +388,25 @@ const TableOrderView = ({
                     )}
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                    <span style={{ fontWeight: '700', color: 'white', fontSize: '0.97rem' }}>
-                      ฿{subtotal}
+                    <span style={{ fontWeight: '800', color: '#0f172a', fontSize: '1.05rem' }}>
+                      ฿{subtotal.toLocaleString()}
                     </span>
                     <button
                       onClick={() => onDeleteItem(item)}
                       style={{
-                        background: 'rgba(239,68,68,0.1)',
-                        border: '1px solid rgba(239,68,68,0.2)',
+                        background: '#fef2f2',
+                        border: '1px solid #fecaca',
                         borderRadius: '7px',
-                        color: '#f87171',
-                        padding: '0.25rem 0.4rem',
+                        color: '#ef4444',
+                        padding: '0.3rem 0.5rem',
                         cursor: 'pointer',
                         display: 'flex',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        transition: 'background 0.2s'
                       }}
+                      title={lang === 'th' ? 'ลบรายการ' : 'Delete item'}
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={15} />
                     </button>
                   </div>
                 </div>
@@ -389,51 +422,54 @@ const TableOrderView = ({
         bottom: 0,
         left: 0,
         right: 0,
-        background: 'linear-gradient(to top, var(--bg-dark) 80%, transparent)',
-        padding: '1rem 1.25rem 1.5rem',
+        background: '#ffffff',
+        borderTop: '1px solid #e2e8f0',
+        boxShadow: '0 -4px 20px rgba(0,0,0,0.08)',
+        padding: '1rem 1.25rem 1.25rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: '0.75rem'
+        gap: '0.75rem',
+        zIndex: 10
       }}>
         {pendingItems.length > 0 && (() => {
           const hasCharges = sc > 0 || vat > 0;
           return (
             <div style={{
-              background: 'var(--bg-card)',
-              border: '1px solid rgba(255,255,255,0.07)',
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
               borderRadius: '12px',
               padding: '0.75rem 1rem',
-              marginBottom: '0.25rem'
+              marginBottom: '0.1rem'
             }}>
               {hasCharges ? (
                 <div style={{ fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.65)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#475569', fontWeight: 600 }}>
                     <span>{lang === 'th' ? 'ยอดอาหาร' : 'Subtotal'}</span>
                     <span>฿{totalAmount.toLocaleString()}</span>
                   </div>
                   {sc > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#d97706', fontWeight: 600 }}>
                       <span>{lang === 'th' ? `เซอร์วิชชาร์จ ${settings.serviceCharge.rate}%` : `Service Charge ${settings.serviceCharge.rate}%`}</span>
                       <span>+฿{sc.toLocaleString()}</span>
                     </div>
                   )}
                   {vat > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#60a5fa' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#2563eb', fontWeight: 600 }}>
                       <span>{lang === 'th' ? `VAT ${settings.vat.rate}%` : `VAT ${settings.vat.rate}%`}</span>
                       <span>+฿{vat.toLocaleString()}</span>
                     </div>
                   )}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '800', fontSize: '1.1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.45rem', marginTop: '0.1rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>{lang === 'th' ? 'ยอดรวม' : 'Total'}</span>
-                    <span style={{ color: 'var(--accent)', fontSize: '1.4rem' }}>฿{grand.toLocaleString()}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '800', fontSize: '1.1rem', borderTop: '1px solid #cbd5e1', paddingTop: '0.45rem', marginTop: '0.1rem' }}>
+                    <span style={{ color: '#0f172a' }}>{lang === 'th' ? 'ยอดรวม' : 'Total'}</span>
+                    <span style={{ color: '#ea580c', fontSize: '1.4rem' }}>฿{grand.toLocaleString()}</span>
                   </div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                  <span style={{ color: '#0f172a', fontWeight: '700', fontSize: '1rem' }}>
                     {lang === 'th' ? 'ยอดรวม' : 'Total'}
                   </span>
-                  <span style={{ color: 'var(--accent)', fontWeight: '800', fontSize: '1.4rem' }}>
+                  <span style={{ color: '#ea580c', fontWeight: '800', fontSize: '1.5rem' }}>
                     ฿{totalAmount.toLocaleString()}
                   </span>
                 </div>
@@ -446,13 +482,13 @@ const TableOrderView = ({
             onClick={onAddMore}
             style={{
               flex: 1,
-              background: 'rgba(255,255,255,0.07)',
-              border: '1px solid rgba(255,255,255,0.12)',
+              background: '#f1f5f9',
+              border: '1px solid #cbd5e1',
               borderRadius: '14px',
-              color: 'white',
+              color: '#0f172a',
               padding: '0.9rem',
               cursor: 'pointer',
-              fontWeight: '600',
+              fontWeight: '700',
               fontSize: '0.95rem',
               display: 'flex',
               alignItems: 'center',
@@ -461,7 +497,7 @@ const TableOrderView = ({
               transition: 'all 0.2s'
             }}
           >
-            <Plus size={18} />
+            <Plus size={18} color="#0f172a" />
             {lang === 'th' ? 'สั่งเพิ่ม' : 'Add More'}
           </button>
           {pendingItems.length > 0 && (
@@ -475,19 +511,19 @@ const TableOrderView = ({
               }}
               style={{
                 flex: 2,
-                background: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                background: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)' : '#e2e8f0',
                 border: 'none',
                 borderRadius: '14px',
-                color: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? 'white' : 'var(--text-muted)',
+                color: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? '#ffffff' : '#94a3b8',
                 padding: '0.9rem',
                 cursor: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? 'pointer' : 'not-allowed',
-                fontWeight: '700',
-                fontSize: '1rem',
+                fontWeight: '800',
+                fontSize: '1.05rem',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                boxShadow: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? '0 4px 20px rgba(250,204,21,0.4)' : 'none',
+                boxShadow: (currentUser?.canCheckout !== false || currentUser?.isAdmin) ? '0 4px 15px rgba(217, 119, 6, 0.35)' : 'none',
                 transition: 'all 0.2s'
               }}
             >
@@ -502,7 +538,7 @@ const TableOrderView = ({
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
 
-      {/* Action Modal (Move / Merge) */}
+      {/* Action Modal (Move / Merge / Split) */}
       {showActionModal && (
         <div style={{
           position: 'fixed',
@@ -516,23 +552,22 @@ const TableOrderView = ({
           padding: '1rem'
         }}>
           <div style={{
-            background: 'var(--bg-card)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '360px',
             padding: '1.5rem',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
+            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
           }}>
-            <h3 style={{ margin: '0 0 1rem 0', color: 'white', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#0f172a', textAlign: 'center', fontWeight: '700' }}>
               {actionLabel(actionType)}
             </h3>
 
-            {/* สรุปรายการที่จะดำเนินการ */}
             <div style={{
               marginBottom: '1rem', padding: '0.6rem 0.8rem', borderRadius: '10px',
-              background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-              fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center'
+              background: '#f8fafc', border: '1px solid #e2e8f0',
+              fontSize: '0.85rem', color: '#475569', textAlign: 'center', fontWeight: '600'
             }}>
               {actingIsAll
                 ? (lang === 'th' ? `ดำเนินการกับ "ทั้งโต๊ะ" (${actingItems.length} รายการ)` : `Acting on the whole table (${actingItems.length} items)`)
@@ -542,7 +577,7 @@ const TableOrderView = ({
             {!confirmStage ? (
               <>
                 <div style={{ marginBottom: '1.5rem' }}>
-                  <label style={{ display: 'block', marginBottom: '0.5rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                  <label style={{ display: 'block', marginBottom: '0.5rem', color: '#334155', fontSize: '0.9rem', fontWeight: '600' }}>
                     {actionType === 'move'
                       ? (lang === 'th' ? 'ย้ายไปโต๊ะเบอร์ (โต๊ะว่าง):' : 'Move to table (empty):')
                       : actionType === 'merge'
@@ -556,12 +591,13 @@ const TableOrderView = ({
                     placeholder={lang === 'th' ? 'ระบุเบอร์โต๊ะเป้าหมาย' : 'Enter target table'}
                     style={{
                       width: '100%',
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid rgba(255,255,255,0.2)',
+                      background: '#ffffff',
+                      border: '2px solid #cbd5e1',
                       borderRadius: '10px',
-                      color: 'white',
+                      color: '#0f172a',
                       padding: '0.8rem',
                       fontSize: '1rem',
+                      fontWeight: '700',
                       outline: 'none',
                       boxSizing: 'border-box'
                     }}
@@ -573,9 +609,9 @@ const TableOrderView = ({
                   <button
                     onClick={closeAction}
                     style={{
-                      flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none',
-                      borderRadius: '10px', color: 'white', padding: '0.8rem',
-                      fontWeight: '600', cursor: 'pointer'
+                      flex: 1, background: '#f1f5f9', border: '1px solid #cbd5e1',
+                      borderRadius: '10px', color: '#0f172a', padding: '0.8rem',
+                      fontWeight: '700', cursor: 'pointer'
                     }}
                   >
                     {lang === 'th' ? 'ยกเลิก' : 'Cancel'}
@@ -585,9 +621,9 @@ const TableOrderView = ({
                     disabled={!targetTable || targetTable === String(tableNumber)}
                     style={{
                       flex: 1,
-                      background: actionType === 'move' ? '#3b82f6' : actionType === 'merge' ? '#10b981' : '#a855f7',
-                      border: 'none', borderRadius: '10px', color: 'white', padding: '0.8rem',
-                      fontWeight: '600', cursor: 'pointer',
+                      background: actionType === 'move' ? '#2563eb' : actionType === 'merge' ? '#059669' : '#7c3aed',
+                      border: 'none', borderRadius: '10px', color: '#ffffff', padding: '0.8rem',
+                      fontWeight: '700', cursor: 'pointer',
                       opacity: (!targetTable || targetTable === String(tableNumber)) ? 0.5 : 1
                     }}
                   >
@@ -601,11 +637,11 @@ const TableOrderView = ({
                   display: 'flex', flexDirection: 'column', alignItems: 'center',
                   gap: '0.75rem', marginBottom: '1.5rem', textAlign: 'center'
                 }}>
-                  <AlertTriangle size={40} color="#fbbf24" />
-                  <p style={{ margin: 0, color: 'white', fontSize: '1rem', fontWeight: 600 }}>
+                  <AlertTriangle size={40} color="#ea580c" />
+                  <p style={{ margin: 0, color: '#0f172a', fontSize: '1rem', fontWeight: 700 }}>
                     {lang === 'th' ? 'ยืนยันอีกครั้ง' : 'Please confirm again'}
                   </p>
-                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, color: '#475569', fontSize: '0.9rem', lineHeight: 1.5 }}>
                     {lang === 'th'
                       ? `${actionLabel(actionType)} ${actingIsAll ? 'ทั้งโต๊ะ' : `${actingItems.length} รายการ`} จากโต๊ะ ${tableNumber} ไปโต๊ะ ${targetTable} ?`
                       : `${actionLabel(actionType)} ${actingIsAll ? 'the whole table' : `${actingItems.length} items`} from table ${tableNumber} to table ${targetTable}?`}
@@ -616,9 +652,9 @@ const TableOrderView = ({
                   <button
                     onClick={() => setConfirmStage(false)}
                     style={{
-                      flex: 1, background: 'rgba(255,255,255,0.1)', border: 'none',
-                      borderRadius: '10px', color: 'white', padding: '0.8rem',
-                      fontWeight: '600', cursor: 'pointer'
+                      flex: 1, background: '#f1f5f9', border: '1px solid #cbd5e1',
+                      borderRadius: '10px', color: '#0f172a', padding: '0.8rem',
+                      fontWeight: '700', cursor: 'pointer'
                     }}
                   >
                     {lang === 'th' ? 'ย้อนกลับ' : 'Back'}
@@ -627,8 +663,8 @@ const TableOrderView = ({
                     onClick={runTableAction}
                     style={{
                       flex: 1,
-                      background: actionType === 'move' ? '#3b82f6' : actionType === 'merge' ? '#10b981' : '#a855f7',
-                      border: 'none', borderRadius: '10px', color: 'white', padding: '0.8rem',
+                      background: actionType === 'move' ? '#2563eb' : actionType === 'merge' ? '#059669' : '#7c3aed',
+                      border: 'none', borderRadius: '10px', color: '#ffffff', padding: '0.8rem',
                       fontWeight: '700', cursor: 'pointer'
                     }}
                   >
@@ -655,15 +691,15 @@ const TableOrderView = ({
           padding: '1rem'
         }}>
           <div style={{
-            background: 'var(--bg-card)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
             borderRadius: '16px',
             width: '100%',
             maxWidth: '320px',
             padding: '1.5rem',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.5)'
+            boxShadow: '0 10px 40px rgba(0,0,0,0.2)'
           }}>
-            <h3 style={{ margin: '0 0 1rem 0', color: 'white', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 1rem 0', color: '#0f172a', textAlign: 'center', fontWeight: '700' }}>
               {lang === 'th' ? 'แก้ไขจำนวนลูกค้า' : 'Edit Customer Count'}
             </h3>
             
@@ -672,30 +708,32 @@ const TableOrderView = ({
                 <button
                   onClick={() => setEditCustomerCount(Math.max(1, editCustomerCount - 1))}
                   style={{
-                    width: '40px', height: '40px',
+                    width: '44px', height: '44px',
                     borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    color: 'white',
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    color: '#0f172a',
                     fontSize: '1.5rem',
+                    fontWeight: '700',
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}
                 >
                   -
                 </button>
-                <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: 'var(--accent)', minWidth: '40px' }}>
+                <span style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ea580c', minWidth: '40px' }}>
                   {editCustomerCount}
                 </span>
                 <button
                   onClick={() => setEditCustomerCount(editCustomerCount + 1)}
                   style={{
-                    width: '40px', height: '40px',
+                    width: '44px', height: '44px',
                     borderRadius: '50%',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: 'none',
-                    color: 'white',
+                    background: '#f1f5f9',
+                    border: '1px solid #cbd5e1',
+                    color: '#0f172a',
                     fontSize: '1.5rem',
+                    fontWeight: '700',
                     cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                   }}
@@ -710,12 +748,12 @@ const TableOrderView = ({
                 onClick={() => setShowEditCustomerModal(false)}
                 style={{
                   flex: 1,
-                  background: 'rgba(255,255,255,0.1)',
-                  border: 'none',
+                  background: '#f1f5f9',
+                  border: '1px solid #cbd5e1',
                   borderRadius: '10px',
-                  color: 'white',
+                  color: '#0f172a',
                   padding: '0.8rem',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer'
                 }}
               >
@@ -729,12 +767,12 @@ const TableOrderView = ({
                 }}
                 style={{
                   flex: 1,
-                  background: 'var(--accent)',
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
                   border: 'none',
                   borderRadius: '10px',
-                  color: 'white',
+                  color: '#ffffff',
                   padding: '0.8rem',
-                  fontWeight: '600',
+                  fontWeight: '700',
                   cursor: 'pointer'
                 }}
               >

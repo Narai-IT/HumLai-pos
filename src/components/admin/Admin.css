@@ -2,27 +2,27 @@
   display: flex;
   height: 100vh;
   background: var(--bg-dark);
-  color: white;
+  color: var(--text-main);
   font-family: 'Inter', system-ui, sans-serif;
 }
 
 .admin-sidebar {
   width: 280px;
   background: var(--bg-card);
-  border-right: 1px solid rgba(255,255,255,0.05);
+  border-right: 1px solid rgba(0,0,0,0.08);
   display: flex;
   flex-direction: column;
 }
 
 .admin-logo {
   padding: 2rem;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
 }
 
 .admin-logo h2 {
   margin: 0;
   font-size: 1.5rem;
-  color: var(--accent);
+  color: var(--accent-hover);
 }
 
 .admin-nav {
@@ -51,8 +51,8 @@
 }
 
 .admin-link:hover, .admin-link.active {
-  background: rgba(250, 204, 21, 0.1);
-  color: var(--accent);
+  background: rgba(234, 179, 8, 0.15);
+  color: var(--text-main);
 }
 
 .admin-link.logout {
@@ -77,6 +77,7 @@
 .admin-header h1 {
   margin: 0 0 0.5rem 0;
   font-size: 2rem;
+  color: var(--text-main);
 }
 
 .admin-header p {
@@ -88,7 +89,7 @@
   background: var(--bg-card);
   border-radius: 16px;
   padding: 1.75rem;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid rgba(0,0,0,0.08);
   margin-bottom: 2rem;
 }
 
@@ -100,10 +101,10 @@
 }
 
 .stat-card {
-  background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+  background: var(--bg-card);
   padding: 1.5rem;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid rgba(0,0,0,0.08);
   display: flex;
   align-items: center;
   gap: 1.5rem;
@@ -116,8 +117,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(250, 204, 21, 0.1);
-  color: var(--accent);
+  background: rgba(250, 204, 21, 0.15);
+  color: var(--accent-hover);
 }
 
 .stat-details h3 {
@@ -131,7 +132,7 @@
   margin: 0;
   font-size: 1.75rem;
   font-weight: 700;
-  color: white;
+  color: var(--text-main);
 }
 
 .admin-table-container {
@@ -146,7 +147,7 @@
 .admin-table th, .admin-table td {
   padding: 1rem;
   text-align: left;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(0,0,0,0.08);
 }
 
 .admin-table th {
@@ -159,7 +160,7 @@
 
 .admin-btn {
   background: var(--accent);
-  color: white;
+  color: black;
   border: none;
   padding: 0.6rem 1.2rem;
   border-radius: 8px;
@@ -173,15 +174,16 @@
 
 .admin-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(250, 204, 21, 0.3);
+  box-shadow: 0 4px 12px rgba(234, 179, 8, 0.2);
 }
 
 .admin-btn.secondary {
-  background: rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.05);
+  color: var(--text-main);
 }
 
 .admin-btn.secondary:hover {
-  background: rgba(255,255,255,0.15);
+  background: rgba(0,0,0,0.08);
   box-shadow: none;
 }
 
@@ -199,7 +201,7 @@
 .admin-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.8);
+  background: rgba(0,0,0,0.4);
   backdrop-filter: blur(8px);
   display: flex;
   align-items: flex-start;
@@ -215,7 +217,8 @@
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(0,0,0,0.08);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.06);
   margin: auto;
 }
 
@@ -233,10 +236,10 @@
 .admin-form-group input, .admin-form-group select, .admin-form-group textarea {
   width: 100%;
   padding: 0.85rem;
-  background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.15);
   border-radius: 8px;
-  color: white;
+  color: var(--text-main);
   font-family: inherit;
   font-size: 1rem;
 }
@@ -249,10 +252,10 @@
 .admin-search-input {
   width: 100%;
   padding: 0.85rem 1rem;
-  background: rgba(0,0,0,0.2);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #ffffff;
+  border: 1px solid rgba(0,0,0,0.15);
   border-radius: 8px;
-  color: white;
+  color: var(--text-main);
   font-family: inherit;
   font-size: 1rem;
   transition: all 0.2s;
@@ -261,5 +264,5 @@
 .admin-search-input:focus {
   outline: none;
   border-color: var(--accent);
-  background: rgba(0,0,0,0.3);
+  background: #ffffff;
 }

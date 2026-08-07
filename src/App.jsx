@@ -1,6 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
-import { ShoppingCart, ClipboardList, Store, Globe, ShoppingBag, RefreshCw, LogOut } from 'lucide-react';
+import { ShoppingCart, ClipboardList, Store, Globe, ShoppingBag, RefreshCw, LogOut, LayoutGrid } from 'lucide-react';
 import FoodCard from './components/FoodCard';
 import OrderWizardModal from './components/OrderWizardModal';
 import CartModal from './components/CartModal';
@@ -19,6 +19,7 @@ const Dashboard = lazy(() => import('./components/admin/Dashboard'));
 const ManageMenu = lazy(() => import('./components/admin/ManageMenu'));
 const ManagePromotions = lazy(() => import('./components/admin/ManagePromotions'));
 const ManageCategories = lazy(() => import('./components/admin/ManageCategories'));
+const ManageTables = lazy(() => import('./components/admin/ManageTables'));
 const ManagePrinters = lazy(() => import('./components/admin/ManagePrinters'));
 const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
 const ManageSettings = lazy(() => import('./components/admin/ManageSettings'));
@@ -28,6 +29,7 @@ const Reports = lazy(() => import('./components/admin/Reports'));
 const OutstandingBills = lazy(() => import('./components/OutstandingBills'));
 const LiquorStorage = lazy(() => import('./components/LiquorStorage'));
 const WasteRecord = lazy(() => import('./components/WasteRecord'));
+const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
 import './index.css';
 
@@ -40,6 +42,11 @@ const branchPrefix = (b) => {
   return p || 'POS';
 };
 
+// ⚠️ ปิดหน้าล็อกอินชั่วคราว — เข้าเป็นแอดมินอัตโนมัติ ไม่ต้องกรอกรหัส
+// เมื่อตั้ง user/รหัสในชีท Users เรียบร้อยแล้ว เปลี่ยนเป็น false เพื่อเปิดหน้าล็อกอินกลับ
+const SKIP_LOGIN = true;
+const DEFAULT_ADMIN = { id: 'admin', username: 'admin', branch: 'admin', canCheckout: true, isAdmin: true };
+
 
 function App() {
   const navigate = useNavigate();
@@ -49,15 +56,16 @@ function App() {
   const [customerType, setCustomerType] = useState('');
   // ชื่อลูกค้า (ไม่บังคับกรอก)
   const [customerName, setCustomerName] = useState('');
-  // เริ่มต้นเลขโต๊ะที่โต๊ะ 1 เสมอ (ไม่ต้องเลือกโต๊ะ)
-  const [tableNumber, setTableNumber] = useState('1');
+  // เริ่มต้นด้วยค่าว่างเพื่อให้ระบบบังคับให้ผู้ใช้เลือกโต๊ะก่อนสั่งอาหาร
+  const [tableNumber, setTableNumber] = useState('');
 
   // Users & Auth — seed from cache so login shows immediately without waiting for GAS
   const [users, setUsers] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cached_users') || '[]'); } catch { return []; }
   });
   // ให้ล็อกอินใหม่ทุกครั้งที่เปิดโปรแกรม — ไม่กู้สถานะล็อกอินเดิมจาก localStorage
-  const [currentUser, setCurrentUser] = useState(null);
+  // (SKIP_LOGIN = true → ข้ามหน้าล็อกอิน เข้าเป็นแอดมินทันที)
+  const [currentUser, setCurrentUser] = useState(SKIP_LOGIN ? DEFAULT_ADMIN : null);
   // ล้าง key เก่าที่เคยจำล็อกอินไว้ (เผื่อเครื่องที่อัปเดตมาจากเวอร์ชันก่อน)
   React.useEffect(() => {
     try { localStorage.removeItem('current_user'); } catch {}
@@ -167,15 +175,16 @@ function App() {
     loginAtRef.current = Date.now();
     // ไม่บันทึกลง localStorage — ปิด/รีเฟรชโปรแกรมแล้วต้องล็อกอินใหม่เสมอ
     // เข้าสู่ระบบใหม่ → ไปที่หน้าสั่งอาหารทันที
-    setTableNumber('1');
+    setTableNumber('');
     navigate('/index', { replace: true });
   };
 
   const handleLogout = () => {
-    setCurrentUser(null);
+    // ระหว่างปิดหน้าล็อกอิน (SKIP_LOGIN) การออกจากระบบแค่รีเซ็ตกลับเป็นแอดมิน ไม่เด้งไปหน้าล็อกอิน
+    setCurrentUser(SKIP_LOGIN ? DEFAULT_ADMIN : null);
     loginAtRef.current = null;
     try { localStorage.removeItem('current_user'); } catch {}
-    setTableNumber('1');
+    setTableNumber('');
     navigate('/', { replace: true });
   };
 
@@ -202,7 +211,7 @@ function App() {
     else localStorage.removeItem('table_number');
   }, [tableNumber]);
 
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
   // ── Retry บิลที่ค้างใน localStorage (pending_orders) ──
   // เรียกตอนเปิดแอปและเมื่อเน็ตกลับมา — ส่งซ้ำเฉพาะที่ backend ยังไม่ตอบ success
@@ -316,6 +325,13 @@ function App() {
   // เก็บ JSON ของแต่ละส่วนที่ apply ไปแล้ว → อัปเดต state เฉพาะส่วนที่เปลี่ยนจริง (กัน re-render ทั้งแอปทุก 10 วิ)
   const appliedRef = React.useRef({});
   const lastRawRef = React.useRef('');
+  const lastStaticRef = React.useRef('');
+  // กันยิงซ้อน: GAS ตอบช้า แต่ poll เป็นรอบ — ถ้ารอบก่อนยังไม่เสร็จให้ข้ามรอบนี้ไป
+  const inFlightRef = React.useRef(false);
+  const staticInFlightRef = React.useRef(false);
+  // ถ้า Apps Script ที่ deploy อยู่ยังเป็นเวอร์ชันเก่า (ไม่รู้จัก getLive/getStatic)
+  // ให้ถอยกลับไปใช้ getAllData แบบเดิม เพื่อไม่ให้ร้านใช้งานไม่ได้ระหว่างรอ deploy
+  const legacyGasRef = React.useRef(false);
   const changed = (key, value) => {
     const json = JSON.stringify(value);
     if (appliedRef.current[key] === json) return false;
@@ -399,19 +415,70 @@ function App() {
     }
   };
 
-  const fetchOrdersFromSheet = async () => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000); // timeout 15 วิ
+  // เขียนทับเฉพาะส่วนที่ดึงมา ลงก้อน cache รวม 'gas_all_data'
+  // (หน้าหลังบ้านหลายหน้าอ่าน/แก้ก้อนนี้อยู่ จึงต้องคงเป็นก้อนเดียวเหมือนเดิม)
+  const mergeIntoCache = (partial) => {
     try {
-      const resp = await fetch(GAS_URL + '?action=getAllData', { signal: controller.signal });
+      const base = JSON.parse(localStorage.getItem('gas_all_data') || '{}') || {};
+      const merged = { ...base, ...partial };
+      delete merged.error; // กันข้อความ error จาก GAS ค้างอยู่ในก้อน cache
+      localStorage.setItem('gas_all_data', JSON.stringify(merged));
+    } catch {}
+  };
+
+  // ยิง action ใหม่ก่อน ถ้า GAS ยังเป็นเวอร์ชันเก่าจะตอบ {"error":"Unknown GET action"}
+  // → จำไว้แล้วถอยไปใช้ getAllData ตลอดทั้ง session
+  const fetchAction = async (action, signal) => {
+    if (legacyGasRef.current) return await (await fetch(GAS_URL + '?action=getAllData', { signal })).text();
+    const text = await (await fetch(GAS_URL + '?action=' + action, { signal })).text();
+    if (text.indexOf('Unknown GET action') !== -1) {
+      legacyGasRef.current = true;
+      console.warn(`GAS ยังไม่รองรับ ?action=${action} — ใช้ getAllData แทน (ต้อง deploy สคริปต์เวอร์ชันใหม่)`);
+      return await (await fetch(GAS_URL + '?action=getAllData', { signal })).text();
+    }
+    return text;
+  };
+
+  // ข้อมูล "เย็น" — เมนู/หมวดหมู่/โปรโมชั่น/พนักงาน/ปริ้นเตอร์/ส่วนลด/ตั้งค่า
+  // เปลี่ยนเฉพาะตอนแก้หลังบ้าน → ฝั่ง GAS cache ไว้ ดึงนาทีละครั้งพอ
+  const fetchStaticFromSheet = async () => {
+    if (staticInFlightRef.current) return;
+    staticInFlightRef.current = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    try {
+      const text = await fetchAction('getStatic', controller.signal);
+      if (text === lastStaticRef.current) return; // เหมือนเดิมเป๊ะ → ไม่ต้องทำอะไรต่อ
+      lastStaticRef.current = text;
+      const data = JSON.parse(text);
+      if (data) {
+        mergeIntoCache(data);
+        processAppGASData(data);
+      }
+    } catch (e) {
+      if (e.name !== 'AbortError') console.error('Error fetching static from GAS:', e);
+    } finally {
       clearTimeout(timer);
-      const text = await resp.text();
+      staticInFlightRef.current = false;
+    }
+  };
+
+  // ข้อมูล "ร้อน" — รายการอาหารรายโต๊ะ + ออเดอร์ล่าสุด ต้องสดเสมอ (อ่านแค่ 2 ชีท)
+  const fetchOrdersFromSheet = async () => {
+    if (inFlightRef.current) return; // รอบก่อนยังค้างอยู่ → ข้าม กันคำขอกองซ้อนกัน
+    inFlightRef.current = true;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000); // timeout 20 วิ
+    try {
+      const text = await fetchAction('getLive', controller.signal);
+      clearTimeout(timer);
       // ถ้าข้อมูลเหมือนเดิมเป๊ะ → ข้ามทั้งหมด (ไม่ parse/ไม่เซ็ต state/ไม่เขียน localStorage)
       if (text === lastRawRef.current) return;
       lastRawRef.current = text;
       const data = JSON.parse(text);
       if (data) {
-        localStorage.setItem('gas_all_data', text);
+        // ต้อง merge ไม่ใช่เขียนทับ — ไม่งั้นเมนู/หมวดหมู่ที่ดึงมาจาก getStatic จะหายไปจาก cache
+        mergeIntoCache(data);
         processAppGASData(data);
       }
     } catch (e) {
@@ -422,12 +489,16 @@ function App() {
       if (cached) {
         try { processAppGASData(JSON.parse(cached)); } catch {}
       }
+    } finally {
+      clearTimeout(timer);
+      inFlightRef.current = false;
     }
   };
 
+  // ปุ่มรีเฟรช = กดเอง จึงดึงทั้งของสดและเมนู/ตั้งค่าใหม่ทั้งคู่
   const refreshTableOrders = async () => {
     setIsRefreshing(true);
-    await fetchOrdersFromSheet();
+    await Promise.all([fetchOrdersFromSheet(), fetchStaticFromSheet()]);
     setIsRefreshing(false);
   };
 
@@ -438,8 +509,23 @@ function App() {
     if (cached) {
       try { processAppGASData(JSON.parse(cached)); } catch {}
     }
+    fetchStaticFromSheet();
     fetchOrdersFromSheet();
-    const interval = setInterval(fetchOrdersFromSheet, 10000);
+    // แยกจังหวะ: ข้อมูลโต๊ะต้องสด → ทุก 20 วิ (อ่านแค่ 2 ชีท เร็ว)
+    //            เมนู/พนักงาน/ตั้งค่า เปลี่ยนนาน ๆ ที → ทุก 1 นาที และฝั่ง GAS cache ไว้อีกชั้น
+    // หยุด poll เมื่อแท็บถูกซ่อน (พับจอ/สลับแอป) แล้วดึงทันทีตอนกลับมา
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchOrdersFromSheet();
+    }, 20000);
+    const staticInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchStaticFromSheet();
+    }, 60000);
+    const handleVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchOrdersFromSheet();
+      fetchStaticFromSheet();
+    };
+    document.addEventListener('visibilitychange', handleVisible);
     const handleLocalUpdate = () => {
       const cached = localStorage.getItem('gas_all_data');
       if (cached) {
@@ -452,6 +538,8 @@ function App() {
     window.addEventListener('appDataChanged', handleLocalUpdate);
     return () => {
       clearInterval(interval);
+      clearInterval(staticInterval);
+      document.removeEventListener('visibilitychange', handleVisible);
       window.removeEventListener('appDataChanged', handleLocalUpdate);
     };
   }, []);
@@ -474,47 +562,56 @@ function App() {
   const [cart, setCart] = useState([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
-  // รายการ "ประเภทลูกค้า" ทั้งหมด (รวมจากชื่อราคาของทุกเมนู) — '' = ราคาปกติ
-  const customerTypeOptions = React.useMemo(() => {
-    const names = new Set();
-    (liveMenu || []).forEach(m => {
-      getPriceOptions(m).forEach(o => { if (o.name && o.name.trim()) names.add(o.name.trim()); });
-    });
-    names.delete('ปกติ'); // ปกติ = ค่าเริ่มต้น แทนด้วย ''
-    return ['', ...Array.from(names)];
-  }, [liveMenu]);
+  React.useEffect(() => {
+    setCart([]);
+    setIsCartOpen(false);
+  }, [tableNumber]);
 
-  // ราคาตาม "ประเภทลูกค้า" ที่เลือก — ถ้าเมนูไม่มีประเภทนั้น ใช้ราคาปกติแทน
+  // รายการ "ประเภทลูกค้า / ช่องทาง" ทั้งหมด (ราคาขายปกติ / TAKEHOME / DELI)
+  const customerTypeOptions = React.useMemo(() => {
+    return ['', 'Takehome', 'Deli'];
+  }, []);
+
+  // ราคาตาม "ประเภทลูกค้า/ช่องทาง" ที่เลือก — ถ้าเมนูไม่มีประเภทนั้น ใช้ราคาปกติแทน
   const resolvePrice = (food) => {
     const opts = getPriceOptions(food);
     if (customerType) {
-      const match = opts.find(o => (o.name || '').trim() === customerType);
+      const target = customerType.trim().toLowerCase();
+      const match = opts.find(o => {
+        const name = (o.name || '').trim().toLowerCase();
+        if (name === target) return true;
+        if (target === 'takehome' && ['takehome', 'ห่อกลับบ้าน', 'กลับบ้าน', 'takeaway', 'take home'].includes(name)) return true;
+        if (target === 'deli' && ['deli', 'delivery', 'lineman', 'grab', 'shopee', 'เดลิเวอรี่'].includes(name)) return true;
+        return false;
+      });
       if (match) return match;
     }
     return opts.find(o => (o.name || '').trim() === 'ปกติ') || opts[0];
   };
 
   const handleOrderClick = (food) => {
-    // ราคาถูกกำหนดจาก "ประเภทลูกค้า" ด้านบนแล้ว → ไม่ต้องเลือกราคาใน popup อีก
     const cats = allCategories.length > 0 ? allCategories : categories;
     const cfg = resolvePopupSource(food, cats);
     const hasPopups = [1, 2, 3, 4, 5, 6].some(i => cfg[`hasPopup${i}`] === true);
+
     if (hasPopups) {
       setSelectedFood(food);
     } else {
-      // ไม่มี popup → เพิ่มลงตะกร้าทันที
+      // ไม่มี popup → เพิ่มลงตะกร้าทันทีตามราคาของ "ประเภทลูกค้า/ช่องทาง" ที่เลือกไว้ที่หัวโต๊ะ (ปกติ / Takehome / Deli)
       handleConfirmOrder(food, {
         allPopups: [],
-        dining: food.category === 'drink'
-          ? { id: 'drink', name: 'เครื่องดื่ม', nameEn: 'Drinks' }
-          : { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' }
+        dining: customerType === 'Takehome'
+          ? { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' }
+          : (food.category === 'drink'
+            ? { id: 'drink', name: 'เครื่องดื่ม', nameEn: 'Drinks' }
+            : { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' })
       });
     }
   };
 
   const handleConfirmOrder = (rawFood, orderDetails) => {
-    // ราคาฐานมาจาก "ประเภทลูกค้า" ที่เลือกไว้ (fallback = ราคาปกติ)
-    const chosen = resolvePrice(rawFood);
+    // ราคาฐานมาจากราคาที่เลือกจาก popup (ถ้าเลือกไว้) หรือจาก "ประเภทลูกค้า" (fallback = ราคาปกติ)
+    const chosen = orderDetails?.selectedPrice || resolvePrice(rawFood);
     const baseFood = chosen
       ? { ...rawFood, price: Number(chosen.price) || 0, priceName: chosen.name || '' }
       : rawFood;
@@ -769,7 +866,7 @@ function App() {
     setCheckoutItems([]);
     setIsCheckoutOpen(false);
     localStorage.removeItem('customer_count_' + tableNumber);
-    setTableNumber('1');
+    setTableNumber('');
     navigate('/index');
 
     // Save to Orders sheet + payment record ในคำขอเดียว (atomic) — กันบิลขึ้นแต่ payment หาย
@@ -982,18 +1079,51 @@ function App() {
     }, 0);
   };
 
-  // Only block main app with login. Kitchen can be viewed without login, or we can just block everything.
-  // For simplicity, block everything except if the user specifically goes to /kitchen maybe?
-  // Let's just block the entire app until logged in.
-  if (!currentUser) {
-    // If path is /kitchen, allow it? Optional. Let's just require login for everything.
+  const handleKioskSendOrder = async (targetTableNo, cartItems, total, paymentMethod) => {
+    const sessionId = String(Date.now());
+    const timestamp = getThaiTimeISO();
+
+    const cartForServer = cartItems.map(item => {
+      let unitPrice = Number(item.food.price) || 0;
+      if (item.allPopups && item.allPopups.length > 0) {
+        item.allPopups.forEach(p => { unitPrice += Number(p.price || 0); });
+      }
+      return {
+        ...item,
+        food: { ...item.food, price: unitPrice }
+      };
+    });
+
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({
+          action: 'addTableOrder',
+          tableNumber: String(targetTableNo),
+          sessionId,
+          items: cartForServer,
+          timestamp,
+          recordedBy: 'Self-Order'
+        })
+      });
+      setTimeout(() => fetchOrdersFromSheet(), 1500);
+    } catch (e) {
+      console.error('Error saving kiosk order:', e);
+    }
+  };
+
+  const isKioskPath = window.location.pathname.includes('/kiosk') || window.location.pathname.includes('/self-order');
+
+  if (!currentUser && !isKioskPath) {
     return (
       <LoginScreen
         users={users}
         onLogin={handleLogin}
         lang={lang}
         isOfflineMode={users.length === 0}
-        onRetry={fetchOrdersFromSheet}
+        onRetry={fetchStaticFromSheet}
       />
     );
   }
@@ -1020,6 +1150,8 @@ function App() {
       <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>{lang === 'th' ? 'กำลังโหลด...' : 'Loading...'}</div>}>
       <Routes>
         <Route path="/" element={<Navigate to="/index" replace />} />
+        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} />} />
+        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} />} />
 
         <Route path="/table-orders" element={
           !tableNumber ? <Navigate to="/index" replace /> :
@@ -1042,25 +1174,75 @@ function App() {
               setCustomerType={setCustomerType}
               customerName={customerName}
               setCustomerName={setCustomerName}
+              onSelectTable={() => setTableNumber('')}
               customerTypeOptions={customerTypeOptions}
             />
         } />
 
         <Route path="/index" element={
-          !tableNumber ? <Navigate to="/index" replace /> :
+          !tableNumber ? (
+            <TableSelection
+              setGlobalTableNumber={setTableNumber}
+              setCustomerType={setCustomerType}
+              lang={lang}
+              tableOrders={tableOrders}
+              shiftOpen={!!currentShift}
+              isAdmin={isAdmin}
+              onOpenShift={() => setShiftModalMode('open')}
+              onCloseShift={() => setShiftModalMode('close')}
+            />
+          ) : (
             <div className="pos-layout">
               {/* ─── POS Header ─── */}
               <header className="pos-header">
                 <div className="pos-header-left">
-                  <img src="/logo.png" alt="Logo" className="pos-logo" />
+                  <button
+                    className="pos-header-btn"
+                    onClick={() => {
+                      if (cart.length > 0) {
+                        if (window.confirm(lang === 'th' ? 'มีรายการอาหารในตะกร้าที่ยังไม่ได้ส่ง ต้องการกลับไปหน้าเลือกโต๊ะหรือไม่?' : 'Cart is not empty. Go back to table selection?')) {
+                          setTableNumber('');
+                        }
+                      } else {
+                        setTableNumber('');
+                      }
+                    }}
+                    style={{
+                      background: '#fef08a',
+                      border: '1.5px solid #eab308',
+                      color: '#000000',
+                      fontWeight: '800',
+                      padding: '0.45rem 0.85rem',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem'
+                    }}
+                    title={lang === 'th' ? 'กลับไปหน้าเลือกโต๊ะ' : 'Back to Table Selection'}
+                  >
+                    <LayoutGrid size={16} color="#854d0e" />
+                    <span>{lang === 'th' ? '🪑 เลือกโต๊ะ' : 'Tables'}</span>
+                  </button>
+                  <img
+                    src="/logo.png"
+                    alt="Logo"
+                    className="pos-logo"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => {
+                      if (window.confirm(lang === 'th' ? 'ต้องการสลับโต๊ะ/กลับหน้าเลือกคิว?' : 'Switch table/go back to selection?')) {
+                        setTableNumber('');
+                      }
+                    }}
+                  />
                   <div className="pos-header-info">
-                    <span className="pos-restaurant-name">NaraiBoxset</span>
+                    <span className="pos-restaurant-name">ข้าวมันไก่หำไหล</span>
                     <span className="pos-table-label">{lang === 'th' ? `โต๊ะ ${tableNumber}` : `Table ${tableNumber}`}</span>
                   </div>
                 </div>
                 <div className="pos-header-right">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.5rem' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'rgba(255,255,255,0.6)', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap' }}>
                       👤 {lang === 'th' ? 'ประเภทลูกค้า' : 'Customer'}
                     </span>
                     <select
@@ -1068,16 +1250,14 @@ function App() {
                       onChange={(e) => setCustomerType(e.target.value)}
                       style={{
                         padding: '0.5rem 0.75rem', borderRadius: '8px',
-                        background: 'rgba(255,255,255,0.08)', color: 'white',
-                        border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.9rem',
-                        fontWeight: 700, cursor: 'pointer', maxWidth: '160px'
+                        background: '#ffffff', color: '#0f172a',
+                        border: '2px solid #cbd5e1', fontSize: '0.9rem',
+                        fontWeight: 700, cursor: 'pointer', maxWidth: '240px'
                       }}
                     >
-                      {customerTypeOptions.map(t => (
-                        <option key={t || 'normal'} value={t} style={{ color: '#000' }}>
-                          {t || (lang === 'th' ? 'ปกติ' : 'Normal')}
-                        </option>
-                      ))}
+                      <option value="" style={{ color: '#000000', fontWeight: 'bold' }}>🪑 ราคาขายปกติ</option>
+                      <option value="Takehome" style={{ color: '#000000', fontWeight: 'bold' }}>🛍️ TAKEHOME</option>
+                      <option value="Deli" style={{ color: '#000000', fontWeight: 'bold' }}>🛵 DELI</option>
                     </select>
                     <input
                       type="text"
@@ -1086,28 +1266,37 @@ function App() {
                       placeholder={lang === 'th' ? 'ชื่อลูกค้า (ถ้ามี)' : 'Customer name (optional)'}
                       style={{
                         padding: '0.5rem 0.75rem', borderRadius: '8px',
-                        background: 'rgba(255,255,255,0.08)', color: 'white',
-                        border: '1px solid rgba(255,255,255,0.2)', fontSize: '0.9rem',
-                        width: '150px'
+                        background: '#ffffff', color: '#0f172a',
+                        border: '2px solid #cbd5e1', fontSize: '0.9rem',
+                        fontWeight: 600, width: '150px'
                       }}
                     />
                   </div>
-                  <button className="pos-header-btn" onClick={() => navigate('/table-orders')}>
+                  <button className="pos-header-btn" onClick={() => navigate('/table-orders')} style={{ background: '#1e293b', color: '#ffffff', border: '1px solid #0f172a', fontWeight: '700' }}>
                     🧾 {lang === 'th' ? 'สรุปบิล' : 'Bill Summary'}
                   </button>
-                  <button className="pos-header-btn" onClick={() => navigate('/waste')} style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.35)', color: '#f87171' }}>
+                  <button
+                    className="pos-header-btn"
+                    onClick={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
+                    style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', border: '1px solid #d97706', fontWeight: '800' }}
+                    title={lang === 'th' ? 'เปิดหน้าสั่งเองสำหรับลูกค้า' : 'Open Customer Kiosk View'}
+                  >
+                    📱 {lang === 'th' ? 'หน้าลูกค้าสั่งเอง (Kiosk)' : 'Customer Kiosk'}
+                  </button>
+                  <button className="pos-header-btn" onClick={() => navigate('/waste')} style={{ background: '#dc2626', border: '1px solid #991b1b', color: '#ffffff', fontWeight: '700' }}>
                     🗑️ {lang === 'th' ? 'ทิ้ง (Waste)' : 'Waste'}
                   </button>
-                  <button className="pos-header-btn" onClick={() => { setSalesSummaryMode('daily'); setShowSalesSummaryModal(true); }} style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.3)', color: '#c084fc' }}>
+                  <button className="pos-header-btn" onClick={() => { setSalesSummaryMode('daily'); setShowSalesSummaryModal(true); }} style={{ background: '#7c3aed', border: '1px solid #6d28d9', color: '#ffffff', fontWeight: '700' }}>
                     📊 {lang === 'th' ? 'สรุปยอดขายวันนี้' : 'Today Sales'}
                   </button>
-                  <button className="pos-header-btn" onClick={() => { setSalesSummaryMode('range'); setShowSalesSummaryModal(true); }} style={{ background: 'rgba(56,189,248,0.15)', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8' }}>
+                  <button className="pos-header-btn" onClick={() => { setSalesSummaryMode('range'); setShowSalesSummaryModal(true); }} style={{ background: '#0284c7', border: '1px solid #0369a1', color: '#ffffff', fontWeight: '700' }}>
                     📅 {lang === 'th' ? 'สรุปยอดขายระหว่างวัน' : 'Sales Range'}
                   </button>
                   <button
                     onClick={refreshTableOrders}
                     disabled={isRefreshing}
                     className="pos-header-btn"
+                    style={{ background: '#0f172a', border: '1px solid #020617', color: '#ffffff', fontWeight: '700' }}
                   >
                     <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
                     {isRefreshing ? (lang === 'th' ? 'กำลังโหลด...' : 'Loading...') : (lang === 'th' ? 'รีเฟรช' : 'Refresh')}
@@ -1118,18 +1307,18 @@ function App() {
                     <button
                       className="pos-header-btn"
                       onClick={() => navigate('/admin')}
-                      style={{ background: 'rgba(250,204,21,0.15)', border: '1px solid rgba(250,204,21,0.35)', color: '#facc15' }}
+                      style={{ background: '#ea580c', border: '1px solid #c2410c', color: '#ffffff', fontWeight: '700' }}
                     >
                       ⚙️ {lang === 'th' ? 'จัดการหลังบ้าน' : 'Admin Panel'}
                     </button>
                   )}
-                  <button className="pos-header-btn" onClick={() => setLang(lang === 'th' ? 'en' : 'th')}>
+                  <button className="pos-header-btn" onClick={() => setLang(lang === 'th' ? 'en' : 'th')} style={{ background: '#f1f5f9', border: '1.5px solid #94a3b8', color: '#0f172a', fontWeight: '700' }}>
                     <Globe size={14} /> {lang === 'th' ? 'TH' : 'EN'}
                   </button>
                   <button
                     className="pos-header-btn"
                     onClick={() => { if (window.confirm(lang === 'th' ? `ออกจากระบบสาขา "${branch}"?` : 'Log out?')) handleLogout(); }}
-                    style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}
+                    style={{ background: '#b91c1c', border: '1px solid #7f1d1d', color: '#ffffff', fontWeight: '700' }}
                   >
                     <LogOut size={14} /> {lang === 'th' ? `ออกจากระบบ (${branch})` : 'Logout'}
                   </button>
@@ -1208,6 +1397,7 @@ function App() {
                 </main>
               </div>
             </div>
+          )
         } />
 
         <Route path="/kitchen" element={
@@ -1247,6 +1437,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="menu" element={<ManageMenu />} />
           <Route path="categories" element={<ManageCategories />} />
+          <Route path="tables" element={<ManageTables />} />
           <Route path="users" element={isAdmin ? <ManageUsers /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
           <Route path="printers" element={isAdmin ? <ManagePrinters /> : <Navigate to="/admin" replace />} />

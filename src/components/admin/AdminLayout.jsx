@@ -13,7 +13,7 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
        <aside className="admin-sidebar">
           <div className="admin-logo">
              <h2>👑 {lang === 'th' ? 'แผงควบคุม' : 'Admin Panel'}</h2>
-             <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>NaraiBoxset</p>
+             <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>ข้าวมันไก่หำไหล</p>
           </div>
           <nav className="admin-nav">
              <NavLink to="/admin" end className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
@@ -24,6 +24,9 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
              </NavLink>
              <NavLink to="/admin/categories" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                 <Layers size={20} /> {lang === 'th' ? 'หมวดหมู่' : 'Categories'}
+             </NavLink>
+             <NavLink to="/admin/tables" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
+                <LayoutDashboard size={20} /> {lang === 'th' ? 'จัดการโต๊ะ & ราคา' : 'Manage Tables'}
              </NavLink>
              {allowAll && (
                <NavLink to="/admin/users" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>

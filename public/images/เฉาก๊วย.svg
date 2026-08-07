@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="studioLight" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </radialGradient>
+    <radialGradient id="ballGrad1" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#9a3412" />
+    </radialGradient>
+    <radialGradient id="ballGrad2" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef9c3" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#7c2d12" />
+    </radialGradient>
+  </defs>
+
+  <!-- Studio Dark Slate Tabletop Background -->
+  <rect width="400" height="300" fill="url(#studioLight)" />
+  
+  <!-- Studio Vignette / Lighting -->
+  <ellipse cx="200" cy="150" rx="180" ry="120" fill="#ffffff" opacity="0.04" />
+
+  <!-- Food Photo Visuals -->
+  
+        <ellipse cx="200" cy="245" rx="90" ry="25" fill="#000000" opacity="0.5" filter="blur(8px)"/>
+        <!-- Dessert Bowl -->
+        <path d="M 110 160 Q 200 260 290 160 Z" fill="#ffffff" />
+        <ellipse cx="200" cy="160" rx="90" ry="30" fill="#cbd5e1" />
+        <ellipse cx="200" cy="162" rx="82" ry="24" fill="#38bdf8" opacity="0.5" />
+        <!-- Glossy Black Grass Jelly Cubes -->
+        <g filter="drop-shadow(0 4px 4px rgba(0,0,0,0.5))">
+          <rect x="150" y="150" width="25" height="20" rx="4" fill="#09090b" />
+          <rect x="180" y="145" width="28" height="22" rx="4" fill="#18181b" />
+          <rect x="215" y="152" width="25" height="20" rx="4" fill="#09090b" />
+          <rect x="165" y="165" width="28" height="20" rx="4" fill="#18181b" />
+          <!-- Crushed Ice & Brown Sugar -->
+          <circle cx="160" cy="145" r="4" fill="#ffffff" opacity="0.85" />
+          <circle cx="210" cy="140" r="5" fill="#ffffff" opacity="0.85" />
+          <circle cx="195" cy="160" r="3" fill="#d97706" />
+        </g>
+      
+
+  <!-- Dark Slate Banner with Dish Title -->
+  <rect x="0" y="248" width="400" height="52" fill="rgba(15, 23, 42, 0.88)" />
+  <text x="200" y="280" font-family="'Kanit', 'Sukhumvit Set', sans-serif" font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">
+    เฉาก๊วย
+  </text>
+</svg>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, RefreshCw, Download, Calendar, TrendingUp, BarChart2, CheckCircle, Search, ArrowLeft, ChevronRight, Receipt, CreditCard, FileSpreadsheet } from 'lucide-react';
 import html2canvas from 'html2canvas';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 // Time helpers in Thai Timezone
 const getThaiTodayStr = () => {
@@ -531,7 +531,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
       ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"\r\n' +
       ' xmlns:html="http://www.w3.org/TR/REC-html40">\r\n' +
       ' <DocumentProperties xmlns="urn:schemas-microsoft-com:office:office">\r\n' +
-      '  <Author>NaraiBoxset</Author>\r\n' +
+      '  <Author>ข้าวมันไก่หำไหล</Author>\r\n' +
       ' </DocumentProperties>\r\n' +
       ' <Styles>\r\n' +
       '  <Style ss:ID="Default" ss:Name="Normal">\r\n' +
@@ -633,7 +633,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
   const handleExportExcel = () => {
     if (view === 'summary') {
       const summaryRows = [
-        ['สรุปยอดขาย NaraiBoxset', ''],
+        ['สรุปยอดขาย ข้าวมันไก่หำไหล', ''],
         ['ช่วงวันที่เริ่มต้น', from],
         ['ช่วงวันที่สิ้นสุด', to],
         ['ยอดขายทั้งหมด (บาท)', totalSales],
@@ -922,7 +922,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                   
                   {/* Report Title Banner */}
                   <div style={{ textAlign: 'center', marginBottom: '0.25rem' }}>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'white', letterSpacing: '0.5px' }}>NaraiBoxset</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'white', letterSpacing: '0.5px' }}>ข้าวมันไก่หำไหล</div>
                     <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.8rem', marginTop: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                       <Calendar size={13} /> 
                       {from === to ? (
@@ -935,9 +935,9 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
 
                   {/* Total sales & bills */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '0.75rem' }}>
-                    <div style={{ ...cardStyle, background: 'rgba(250,204,21,0.05)', border: '1px solid rgba(250,204,21,0.15)', textAlign: 'center', padding: '1.1rem' }}>
-                      <div style={{ fontSize: '0.78rem', color: 'rgba(250,204,21,0.8)', fontWeight: 700, marginBottom: '4px' }}>💰 ยอดขายทั้งหมด</div>
-                      <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#fbbf24' }}>฿{fmt(totalSales)}</div>
+                    <div style={{ ...cardStyle, background: 'rgba(241,89,42,0.05)', border: '1px solid rgba(241,89,42,0.15)', textAlign: 'center', padding: '1.1rem' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'rgba(241,89,42,0.8)', fontWeight: 700, marginBottom: '4px' }}>💰 ยอดขายทั้งหมด</div>
+                      <div style={{ fontSize: '1.75rem', fontWeight: 900, color: '#f1592a' }}>฿{fmt(totalSales)}</div>
                     </div>
                     
                     <button 
@@ -1000,7 +1000,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                               </span>
                             </div>
                             <div style={{ display: 'flex', gap: '14px', flexShrink: 0, alignItems: 'center' }}>
-                              <span style={{ color: '#fbbf24', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span style={{ color: '#f1592a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
                                 {r.qty} {lang === 'th' ? 'รายการ' : 'qty'}
                                 <ChevronRight size={12} style={{ opacity: 0.5 }} />
                               </span>
@@ -1030,7 +1030,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                         
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', alignItems: 'center', padding: '0.45rem 0.4rem 0.25rem', borderTop: '1px solid rgba(255,255,255,0.15)', marginTop: '4px', fontWeight: 'bold' }}>
                           <span style={{ color: 'white' }}>รวมยอดขายสุทธิ (Grand Total)</span>
-                          <span style={{ color: '#fbbf24', fontSize: '0.9rem' }}>฿{fmt(totalSales)}</span>
+                          <span style={{ color: '#f1592a', fontSize: '0.9rem' }}>฿{fmt(totalSales)}</span>
                         </div>
                       </div>
                     )}
@@ -1194,7 +1194,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.4)', marginRight: '6px' }}>รวมยอด</span>
-                                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#fbbf24' }}>฿{fmt(bill.total)}</span>
+                                <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#f1592a' }}>฿{fmt(bill.total)}</span>
                               </div>
                             </div>
                           </div>
@@ -1318,7 +1318,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                               <div key={midx} style={{ fontSize: '0.82rem' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px dashed rgba(255,255,255,0.05)', paddingBottom: '4px', marginBottom: '4px' }}>
                                   <span style={{ color: 'white', fontWeight: 600 }}>📦 {item.name}</span>
-                                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>฿{fmt(item.price)}</span>
+                                  <span style={{ color: '#f1592a', fontWeight: 700 }}>฿{fmt(item.price)}</span>
                                 </div>
                                 {item.subItems && item.subItems.length > 0 ? (
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: 'rgba(192,132,252,0.85)', paddingLeft: '0.5rem' }}>
@@ -1330,7 +1330,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                                           {options.map((opt, oidx) => (
                                             <div key={oidx} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                               <span style={{ color: '#c084fc' }}>↳</span>
-                                              <span style={{ color: opt.toLowerCase().includes(drilldownItem.toLowerCase()) ? '#fbbf24' : 'rgba(255,255,255,0.7)', fontWeight: opt.toLowerCase().includes(drilldownItem.toLowerCase()) ? 700 : 400 }}>
+                                              <span style={{ color: opt.toLowerCase().includes(drilldownItem.toLowerCase()) ? '#f1592a' : 'rgba(255,255,255,0.7)', fontWeight: opt.toLowerCase().includes(drilldownItem.toLowerCase()) ? 700 : 400 }}>
                                                 {opt}
                                               </span>
                                             </div>

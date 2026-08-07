@@ -2,6 +2,14 @@ import React from 'react';
 import { Plus, Minus } from 'lucide-react';
 
 const CATEGORY_FOLDERS = {
+  "ชุดอิ่มเดี่ยว": "ชุดอิ่มเดี่ยว",
+  "ไก่ล้วนๆ": "ไก่ล้วนๆ",
+  "ท๊อปปิ้งเสริม": "ท๊อปปิ้งเสริม",
+  "น้ำจิ้ม": "น้ำจิ้ม",
+  "ก๋วยเตี๊ยวลูกชิ้นไก่": "ก๋วยเตี๊ยวลูกชิ้นไก่",
+  "ของทานเล่น": "ของทานเล่น",
+  "เครื่องดื่ม": "เครื่องดื่ม",
+  "ของหวาน": "ของหวาน",
   "Promotion": "Promotion",
   "SET": "กับแกล้ม3อย่าง  ทอด ต้ม ย่าง",
   "ของกินเล่น": "ของกินเล่น",
@@ -13,9 +21,7 @@ const CATEGORY_FOLDERS = {
   "เบียร์": "เบียร์",
   "เหล้า": "เหล้า",
   "มิกเซอร์": "มิกเซอร์",
-  "โชจู": "โชจู",
-  "cat_1779987830937": "เหล้าอะไรก๋ได้ แถมไข่ตุ๋น",
-  "cat_1779988171217": "setเจ้าสัว"
+  "โชจู": "โชจู"
 };
 
 const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang = 'th', displayPrice }) => {
@@ -25,14 +31,28 @@ const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang 
   const folder = CATEGORY_FOLDERS[food.category] || food.category || 'uncategorized';
   const sanitizedFileName = (food.name || '').replace(/[\\/:*?"<>|]/g, '_').trim();
 
-  // ลำดับรูปที่จะลองโหลด (ไม่แก้ไข object ของเมนูโดยตรง)
+  // ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริง PNG/JPG ก่อน)
   const candidates = React.useMemo(() => {
     const list = [];
-    if (food.image) list.push(food.image);
+    // 1. Check folder-based real photos (PNG/JPG)
     list.push(`/images/${folder}/${sanitizedFileName}.png`);
+    list.push(`/images/${folder}/${sanitizedFileName}.jpg`);
+    // 2. Check root-based real photos (PNG/JPG)
+    list.push(`/images/${sanitizedFileName}.png`);
+    list.push(`/images/${sanitizedFileName}.jpg`);
+    // 3. Check ID-based real photos (PNG/JPG)
+    list.push(`/images/item_${food.id}.png`);
+    list.push(`/images/item_${food.id}.jpg`);
+    // 4. Custom image URL if set explicitly in backend
+    if (food.image && String(food.image).trim() && !food.image.endsWith('.svg')) {
+      list.push(food.image);
+    }
+    // 5. SVG vector fallback
     list.push(`/images/${folder}/${sanitizedFileName}.svg`);
+    list.push(`/images/${sanitizedFileName}.svg`);
+    list.push(`/images/item_${food.id}.svg`);
     return list;
-  }, [food.image, folder, sanitizedFileName]);
+  }, [food.image, folder, sanitizedFileName, food.id]);
 
   const [imgIdx, setImgIdx] = React.useState(0);
   React.useEffect(() => { setImgIdx(0); }, [food.id, candidates.length]);

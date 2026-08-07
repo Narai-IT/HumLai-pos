@@ -1,12 +1,12 @@
 // ==========================================
-// สเน่ห์POS - BACKEND SCRIPT (TABLE-BASED)
+// ข้าวมันไก่หำไหล POS - BACKEND SCRIPT (TABLE-BASED)
 // ==========================================
 // ⭐ ไฟล์ Backend เดียวของระบบ — ใช้ไฟล์นี้ไฟล์เดียวในการ Deploy บน Google Apps Script ⭐
 // (รวมทุกอย่างแล้ว: ออเดอร์/เมนู/หมวดหมู่/ผู้ใช้ + BOM/สต็อก + กะ + รายงาน + ชำระเงิน)
 // รองรับ: isAdmin, หมายเหตุอาหาร, popupConfig รายเมนู, ราคาหลายแบบ (prices), แยกจ่าย (splitDetail)
 // ==========================================
 
-var SHEET_ID = '1gijgBrK56bsjR7-R5NVWiTGTcxM57wjuYR3FUpl3EDQ';
+var SHEET_ID = '16TdnUiHIZ0ACWbbNq2h6tXg49LL0N3FCHXMXB5Y9BlM';
 
 function getOrCreateSheet(ss, sheetName, headers) {
   var sheet = ss.getSheetByName(sheetName);
@@ -52,6 +52,82 @@ function initializeAllSheetsAndBOM() {
   Logger.log("สร้างชีททั้งหมดพร้อมระบบสต็อก/BOM เรียบร้อยแล้ว!");
 }
 
+// เดิม doGet/doPost เรียก initializeSheets() ทุก request → เปิด+ตรวจ 16 ชีททุกครั้ง ช้ามาก
+// ตอนนี้รันครั้งเดียวแล้วจำไว้ใน ScriptProperties (ผูกกับ SHEET_ID — เปลี่ยนชีทแล้วจะรันใหม่เอง)
+// ถ้าต้องการบังคับสร้างชีทซ้ำ เรียก ?action=initSheets
+function ensureSheetsReady() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('sheets_ready') === SHEET_ID) return;
+  initializeSheets();
+  props.setProperty('sheets_ready', SHEET_ID);
+}
+
+// ──────────────────────────────────────────────
+// Cache ข้อมูล "เย็น" (เมนู/หมวดหมู่/พนักงาน/ตั้งค่า) — เก็บใน CacheService 5 นาที
+// CacheService จำกัดค่าละ ~100KB จึงต้องหั่นเป็นชิ้น (ภาษาไทย 1 ตัว = 3 ไบต์ → ชิ้นละ 25,000 ตัวอักษร)
+// ──────────────────────────────────────────────
+var STATIC_CACHE_KEY = 'static_v1';
+var STATIC_CACHE_SEC = 60;   // แก้เมนูหลังบ้านแล้วเห็นผลช้าสุด ~1 นาที (ถ้าแก้ผ่านระบบจะล้าง cache ให้ทันที)
+var CACHE_CHUNK      = 25000;
+var CACHE_MAX_CHUNKS = 40;
+
+function cachePutLong(key, str) {
+  var n = Math.ceil(str.length / CACHE_CHUNK);
+  if (n > CACHE_MAX_CHUNKS) return; // ใหญ่เกินไป → ไม่ cache ดีกว่าเก็บครึ่ง ๆ กลาง ๆ
+  var map = {};
+  for (var i = 0; i < n; i++) map[key + '_' + i] = str.substr(i * CACHE_CHUNK, CACHE_CHUNK);
+  var cache = CacheService.getScriptCache();
+  cache.putAll(map, STATIC_CACHE_SEC);
+  cache.put(key + '_n', String(n), STATIC_CACHE_SEC); // ใส่ตัวนับหลังสุด กันอ่านเจอตัวนับแต่ชิ้นยังไม่ครบ
+}
+
+function cacheGetLong(key) {
+  var cache = CacheService.getScriptCache();
+  var nStr = cache.get(key + '_n');
+  if (!nStr) return null;
+  var n = parseInt(nStr, 10);
+  var keys = [];
+  for (var i = 0; i < n; i++) keys.push(key + '_' + i);
+  var got = cache.getAll(keys);
+  var out = '';
+  for (var j = 0; j < n; j++) {
+    var part = got[key + '_' + j];
+    if (part == null) return null; // ชิ้นไหนหมดอายุก่อน → ถือว่าไม่มี cache
+    out += part;
+  }
+  return out;
+}
+
+// ลบแค่ตัวนับก็พอ — cacheGetLong จะคืน null ทันที
+function clearStaticCache() {
+  CacheService.getScriptCache().remove(STATIC_CACHE_KEY + '_n');
+}
+
+function readSettings(ss) {
+  var sh = ss.getSheetByName('Settings');
+  if (!sh) return null;
+  var d = sh.getDataRange().getValues();
+  for (var i = 1; i < d.length; i++) {
+    if (d[i][0] === 'pos_settings') {
+      try { return JSON.parse(d[i][1]); } catch(err) { return null; }
+    }
+  }
+  return null;
+}
+
+// ข้อมูลเย็น: เปลี่ยนเฉพาะตอนแอดมินแก้หลังบ้าน → อ่านจาก cache ได้
+function buildStaticData(ss) {
+  return {
+    categories: getSheetDataAsObjects(ss, 'Categories'),
+    menu:       getSheetDataAsObjects(ss, 'Menu'),
+    promotions: getSheetDataAsObjects(ss, 'Promotions'),
+    users:      getSheetDataAsObjects(ss, 'Users'),
+    printers:   getSheetDataAsObjects(ss, 'Printers'),
+    discounts:  getSheetDataAsObjects(ss, 'Discounts'),
+    settings:   readSettings(ss)
+  };
+}
+
 // ──────────────────────────────────────────────
 // doGet
 // ──────────────────────────────────────────────
@@ -59,30 +135,43 @@ function doGet(e) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getAllData';
 
-  initializeSheets();
+  ensureSheetsReady();
 
-  if (action === 'getAllData') {
-    var data = {
-      orders:      getSheetDataAsObjects(ss, 'Orders'),
-      categories:  getSheetDataAsObjects(ss, 'Categories'),
-      menu:        getSheetDataAsObjects(ss, 'Menu'),
-      promotions:  getSheetDataAsObjects(ss, 'Promotions'),
+  if (action === 'initSheets') {
+    initializeSheets();
+    PropertiesService.getScriptProperties().setProperty('sheets_ready', SHEET_ID);
+    return _bomJson({ success: true, message: 'สร้าง/ตรวจสอบชีทครบแล้ว' });
+  }
+
+  // ── ข้อมูล "ร้อน" — ต้องสดเสมอ อ่านแค่ 2 ชีท ไม่ cache ──
+  // หน้าบ้าน poll ตัวนี้ทุก 20 วิ
+  if (action === 'getLive') {
+    return _bomJson({
       tableOrders: getSheetDataAsObjects(ss, 'TableOrders'),
-      users:       getSheetDataAsObjects(ss, 'Users'),
-      printers:    getSheetDataAsObjects(ss, 'Printers'),
-      discounts:   getSheetDataAsObjects(ss, 'Discounts'),
-      settings:    (function() {
-        var sh = ss.getSheetByName('Settings');
-        if (!sh) return null;
-        var d = sh.getDataRange().getValues();
-        for (var i = 1; i < d.length; i++) {
-          if (d[i][0] === 'pos_settings') {
-            try { return JSON.parse(d[i][1]); } catch(e) { return null; }
-          }
-        }
-        return null;
-      })()
-    };
+      // Orders ใช้แค่หาเลขบิลสูงสุด + จอครัว → 300 บิลล่าสุดพอ
+      orders:      getSheetDataAsObjects(ss, 'Orders', 300)
+    });
+  }
+
+  // ── ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน อ่านจาก cache 5 นาที ──
+  // หน้าบ้านดึงตอนเปิดแอปครั้งเดียว แล้วดึงซ้ำทุก 5 นาที
+  if (action === 'getStatic') {
+    if (e && e.parameter && e.parameter.fresh === '1') clearStaticCache();
+    var cached = cacheGetLong(STATIC_CACHE_KEY);
+    if (cached) {
+      return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
+    }
+    var staticJson = JSON.stringify(buildStaticData(ss));
+    cachePutLong(STATIC_CACHE_KEY, staticJson);
+    return ContentService.createTextOutput(staticJson).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  // getAllData — ก้อนรวมแบบเดิม ยังใช้ได้ (หน้าหลังบ้านหลายหน้าเรียกตัวนี้)
+  if (action === 'getAllData') {
+    var data = buildStaticData(ss);
+    data.tableOrders = getSheetDataAsObjects(ss, 'TableOrders');
+    // Orders ดึงแค่ 2000 บิลล่าสุดพอ — รายงานย้อนหลังใช้ action getReportData ซึ่งอ่านทั้งชีทอยู่แล้ว ไม่กระทบ
+    data.orders      = getSheetDataAsObjects(ss, 'Orders', 2000);
     return _bomJson(data);
   }
 
@@ -180,12 +269,18 @@ function doGet(e) {
 // ──────────────────────────────────────────────
 // getSheetDataAsObjects
 // ──────────────────────────────────────────────
-function getSheetDataAsObjects(ss, sheetName) {
+// maxRows (ไม่บังคับ) = ดึงเฉพาะ N แถวล่าสุด — กันชีทที่โตเรื่อย ๆ (เช่น Orders) ทำให้ getAllData ช้าลงทุกวัน
+function getSheetDataAsObjects(ss, sheetName, maxRows) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return [];
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var startRow = (maxRows && lastRow - 1 > maxRows) ? lastRow - maxRows + 1 : 2;
+  // data[0] = แถวหัวตาราง เพื่อให้ index ด้านล่างเริ่มที่ 1 เหมือนเดิม
+  var data = [headers].concat(sheet.getRange(startRow, 1, lastRow - startRow + 1, lastCol).getValues());
   if (data.length < 2) return [];
-  var headers = data[0];
   var result = [];
   for (var i = 1; i < data.length; i++) {
     var obj = {};
@@ -208,7 +303,7 @@ function getSheetDataAsObjects(ss, sheetName) {
 // ──────────────────────────────────────────────
 function doPost(e) {
   var ss = SpreadsheetApp.openById(SHEET_ID);
-  initializeSheets();
+  ensureSheetsReady();
 
   var postData = {};
   try {
@@ -220,6 +315,17 @@ function doPost(e) {
   }
 
   var action = postData.action || 'insertOrder';
+
+  // แก้ข้อมูลเย็น (เมนู/หมวดหมู่/พนักงาน/ตั้งค่า) → ล้าง cache ทันที ไม่ต้องรอครบ 5 นาที
+  // ไม่รวม action ของออเดอร์/โต๊ะ/ชำระเงิน เพราะยิงถี่และไม่กระทบข้อมูลเย็น
+  var STATIC_WRITE_ACTIONS = [
+    'saveMenu', 'upsertMenu', 'deleteMenu',
+    'saveCategories', 'upsertCategory', 'deleteCategory',
+    'savePromotions', 'upsertPromotion', 'deletePromotion',
+    'saveUsers', 'savePrinters', 'saveDiscounts', 'saveSettings',
+    'resetAllSheetData'
+  ];
+  if (STATIC_WRITE_ACTIONS.indexOf(action) !== -1) clearStaticCache();
 
   // ── TABLE ORDER ACTIONS ──
   if (action === 'addTableOrder') {

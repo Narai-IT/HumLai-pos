@@ -3,7 +3,7 @@ import { Settings, ToggleLeft, ToggleRight, Save, Info, QrCode, Upload, CheckCir
 import jsQR from 'jsqr';
 import { parseKShopPayload } from '../../utils/promptpay';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 const DEFAULT_SETTINGS = {
   serviceCharge: { enabled: false, rate: 10 },
@@ -56,7 +56,7 @@ const decodeQrImage = (file, onOk, onErr) => {
 const ToggleBtn = ({ checked, onChange }) => (
   <button
     onClick={() => onChange(!checked)}
-    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: checked ? '#22c55e' : 'rgba(255,255,255,0.25)', transition: 'color 0.2s', flexShrink: 0 }}
+    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: checked ? '#22c55e' : 'rgba(0,0,0,0.15)', transition: 'color 0.2s', flexShrink: 0 }}
   >
     {checked ? <ToggleRight size={44} /> : <ToggleLeft size={44} />}
   </button>
@@ -169,18 +169,18 @@ const ManageSettings = ({ users = [] }) => {
 
   return (
     <div style={{ padding: '2rem', maxWidth: '640px' }}>
-      <h2 style={{ color: 'white', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '1.4rem' }}>
-        <Settings size={22} /> ตั้งค่าค่าบริการ
+      <h2 style={{ color: 'var(--text-main)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '1.4rem' }}>
+        <Settings size={22} color="var(--accent-hover)" /> ตั้งค่าค่าบริการ
       </h2>
       <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>
         เซอร์วิชชาร์จและ VAT จะแสดงในหน้าตะกร้าและหน้าชำระเงินโดยอัตโนมัติ
       </p>
 
       {/* Service Charge Card */}
-      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.25rem' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
           <div>
-            <h3 style={{ color: 'white', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>ค่าเซอร์วิชชาร์จ</h3>
+            <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>ค่าเซอร์วิชชาร์จ</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
               Service Charge — คิดจากยอดอาหารก่อน VAT
             </p>
@@ -194,7 +194,7 @@ const ManageSettings = ({ users = [] }) => {
             value={settings.serviceCharge.rate}
             onChange={(e) => update('serviceCharge', 'rate', parseFloat(e.target.value) || 0)}
             disabled={!settings.serviceCharge.enabled}
-            style={{ width: '90px', padding: '0.55rem 0.75rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: 'white', fontSize: '1.05rem', textAlign: 'center', fontWeight: '700' }}
+            style={{ width: '90px', padding: '0.55rem 0.75rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '1.05rem', textAlign: 'center', fontWeight: '700' }}
           />
           <span style={{ color: 'var(--text-muted)' }}>%</span>
           {settings.serviceCharge.enabled && (
@@ -206,10 +206,10 @@ const ManageSettings = ({ users = [] }) => {
       </div>
 
       {/* VAT Card */}
-      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
           <div>
-            <h3 style={{ color: 'white', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>ภาษีมูลค่าเพิ่ม (VAT)</h3>
+            <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>ภาษีมูลค่าเพิ่ม (VAT)</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
               VAT — คิดจากยอด (อาหาร + เซอร์วิชชาร์จ)
             </p>
@@ -223,7 +223,7 @@ const ManageSettings = ({ users = [] }) => {
             value={settings.vat.rate}
             onChange={(e) => update('vat', 'rate', parseFloat(e.target.value) || 0)}
             disabled={!settings.vat.enabled}
-            style={{ width: '90px', padding: '0.55rem 0.75rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '8px', color: 'white', fontSize: '1.05rem', textAlign: 'center', fontWeight: '700' }}
+            style={{ width: '90px', padding: '0.55rem 0.75rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '1.05rem', textAlign: 'center', fontWeight: '700' }}
           />
           <span style={{ color: 'var(--text-muted)' }}>%</span>
           {settings.vat.enabled && (
@@ -236,16 +236,16 @@ const ManageSettings = ({ users = [] }) => {
 
       {/* Preview */}
       {(settings.serviceCharge.enabled || settings.vat.enabled) && (
-        <div style={{ background: 'rgba(185,28,28,0.08)', border: '1px solid rgba(185,28,28,0.25)', borderRadius: '14px', padding: '1.25rem', marginBottom: '1.5rem' }}>
+        <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: '14px', padding: '1.25rem', marginBottom: '1.5rem' }}>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <Info size={14} /> ตัวอย่างการคำนวณ (ฐาน ฿{exampleSubtotal})
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.9rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'rgba(255,255,255,0.7)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-main)' }}>
               <span>ยอดอาหาร</span><span>฿{exampleSubtotal.toFixed(2)}</span>
             </div>
             {settings.serviceCharge.enabled && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#fbbf24' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-main)' }}>
                 <span>เซอร์วิชชาร์จ {settings.serviceCharge.rate}%</span><span>+฿{scAmount.toFixed(2)}</span>
               </div>
             )}
@@ -254,17 +254,17 @@ const ManageSettings = ({ users = [] }) => {
                 <span>VAT {settings.vat.rate}%</span><span>+฿{vatAmount.toFixed(2)}</span>
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'white', fontWeight: '800', fontSize: '1.05rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
-              <span>รวมทั้งสิ้น</span><span style={{ color: '#fbbf24' }}>฿{grandTotal.toFixed(2)}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-main)', fontWeight: '800', fontSize: '1.05rem', borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>
+              <span>รวมทั้งสิ้น</span><span style={{ color: 'var(--accent-hover)' }}>฿{grandTotal.toFixed(2)}</span>
             </div>
           </div>
         </div>
       )}
 
       {/* PromptPay / QR ชำระเงิน Card */}
-      <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ marginBottom: '1.25rem' }}>
-          <h3 style={{ color: 'white', margin: '0 0 0.3rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <QrCode size={18} color="#60a5fa" /> รูปแบบ QR ชำระเงิน (เงินโอน)
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
@@ -278,8 +278,8 @@ const ManageSettings = ({ users = [] }) => {
             onClick={() => { setSettings(prev => ({ ...prev, qrType: 'kshop_dynamic' })); setSaved(false); }}
             style={{
               flex: '1 1 100%', padding: '0.8rem', borderRadius: '10px',
-              background: (settings.qrType || 'dynamic') === 'kshop_dynamic' ? 'rgba(34,197,94,0.15)' : 'rgba(0,0,0,0.25)',
-              border: (settings.qrType || 'dynamic') === 'kshop_dynamic' ? '1px solid #22c55e' : '1px solid rgba(255,255,255,0.1)',
+              background: (settings.qrType || 'dynamic') === 'kshop_dynamic' ? 'rgba(34,197,94,0.15)' : 'rgba(0,0,0,0.02)',
+              border: (settings.qrType || 'dynamic') === 'kshop_dynamic' ? '1px solid #22c55e' : '1px solid rgba(0,0,0,0.08)',
               color: (settings.qrType || 'dynamic') === 'kshop_dynamic' ? '#22c55e' : 'var(--text-muted)',
               fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
             }}
@@ -291,8 +291,8 @@ const ManageSettings = ({ users = [] }) => {
             onClick={() => { setSettings(prev => ({ ...prev, qrType: 'dynamic' })); setSaved(false); }}
             style={{
               flex: '1 1 48%', padding: '0.75rem', borderRadius: '10px',
-              background: (settings.qrType || 'dynamic') === 'dynamic' ? 'rgba(96,165,250,0.15)' : 'rgba(0,0,0,0.25)',
-              border: (settings.qrType || 'dynamic') === 'dynamic' ? '1px solid #60a5fa' : '1px solid rgba(255,255,255,0.1)',
+              background: (settings.qrType || 'dynamic') === 'dynamic' ? 'rgba(96,165,250,0.15)' : 'rgba(0,0,0,0.02)',
+              border: (settings.qrType || 'dynamic') === 'dynamic' ? '1px solid #60a5fa' : '1px solid rgba(0,0,0,0.08)',
               color: (settings.qrType || 'dynamic') === 'dynamic' ? '#60a5fa' : 'var(--text-muted)',
               fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit'
             }}
@@ -304,9 +304,9 @@ const ManageSettings = ({ users = [] }) => {
             onClick={() => { setSettings(prev => ({ ...prev, qrType: 'static' })); setSaved(false); }}
             style={{
               flex: '1 1 48%', padding: '0.75rem', borderRadius: '10px',
-              background: (settings.qrType || 'dynamic') === 'static' ? 'rgba(250,204,21,0.15)' : 'rgba(0,0,0,0.25)',
-              border: (settings.qrType || 'dynamic') === 'static' ? '1px solid #facc15' : '1px solid rgba(255,255,255,0.1)',
-              color: (settings.qrType || 'dynamic') === 'static' ? '#facc15' : 'var(--text-muted)',
+              background: (settings.qrType || 'dynamic') === 'static' ? 'rgba(234,179,8,0.18)' : 'rgba(0,0,0,0.02)',
+              border: (settings.qrType || 'dynamic') === 'static' ? '1px solid var(--accent)' : '1px solid rgba(0,0,0,0.08)',
+              color: (settings.qrType || 'dynamic') === 'static' ? 'var(--text-main)' : 'var(--text-muted)',
               fontWeight: '700', fontSize: '0.9rem', cursor: 'pointer', fontFamily: 'inherit'
             }}
           >
@@ -323,8 +323,8 @@ const ManageSettings = ({ users = [] }) => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <label style={{
                 display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1rem',
-                background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)',
-                borderRadius: '8px', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700'
+                background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.1)',
+                borderRadius: '8px', color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '700'
               }}>
                 <Upload size={16} /> เลือกรูปภาพสกรีนช็อต
                 <input type="file" accept="image/*" onChange={handleQrUpload} style={{ display: 'none' }} />
@@ -349,8 +349,8 @@ const ManageSettings = ({ users = [] }) => {
             )}
 
             {decodedDetails && (
-              <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'rgba(255,255,255,0.7)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <div style={{ fontWeight: '700', color: 'white', marginBottom: '0.15rem', fontSize: '0.9rem' }}>ข้อมูลบัญชีที่ตรวจพบ:</div>
+              <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.06)', borderRadius: '10px', padding: '0.75rem 1rem', fontSize: '0.85rem', color: 'var(--text-main)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <div style={{ fontWeight: '700', color: 'var(--text-main)', marginBottom: '0.15rem', fontSize: '0.9rem' }}>ข้อมูลบัญชีที่ตรวจพบ:</div>
                 {decodedDetails.ref1 && (
                   <div>• Ref 1 (เลขอ้างอิงหลัก): <strong style={{ color: '#22c55e', wordBreak: 'break-all' }}>{decodedDetails.ref1}</strong></div>
                 )}
@@ -364,7 +364,7 @@ const ManageSettings = ({ users = [] }) => {
             )}
 
             {/* ช่องกรอกชื่อร้านและชื่อบัญชีเพิ่มเติม */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', borderTop: '1px dashed rgba(255,255,255,0.1)', paddingTop: '0.75rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem', borderTop: '1px dashed rgba(0,0,0,0.1)', paddingTop: '0.75rem' }}>
               <div>
                 <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.82rem', marginBottom: '0.35rem' }}>ชื่อร้านค้าที่จะให้แสดงบนการ์ด QR (เช่น NARAI-KHANOY UNION MALL 4F.)</label>
                 <input
@@ -372,7 +372,7 @@ const ManageSettings = ({ users = [] }) => {
                   value={settings.qrShopName || ''}
                   onChange={(e) => { setSettings(prev => ({ ...prev, qrShopName: e.target.value })); setSaved(false); }}
                   placeholder="เช่น NARAI-KHANOY UNION MALL 4F."
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: 'white', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
               <div>
@@ -382,7 +382,7 @@ const ManageSettings = ({ users = [] }) => {
                   value={settings.qrAccountName || ''}
                   onChange={(e) => { setSettings(prev => ({ ...prev, qrAccountName: e.target.value })); setSaved(false); }}
                   placeholder="เช่น บจก. นารายณ์ พิซเซอเรีย"
-                  style={{ width: '100%', padding: '0.55rem 0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '8px', color: 'white', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '0.55rem 0.75rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: '8px', color: 'var(--text-main)', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
@@ -398,7 +398,7 @@ const ManageSettings = ({ users = [] }) => {
               value={settings.promptPayId || ''}
               onChange={(e) => { setSettings(prev => ({ ...prev, promptPayId: e.target.value.replace(/[^0-9]/g, '') })); setSaved(false); }}
               placeholder="เช่น 0812345678 หรือ 004000001641684"
-              style={{ width: '100%', padding: '0.7rem 0.9rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: 'white', fontSize: '1.05rem', fontWeight: '700', letterSpacing: '0.04em', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '0.7rem 0.9rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '1.05rem', fontWeight: '700', letterSpacing: '0.04em', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
             />
             <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0.6rem 0 0' }}>
               {settings.promptPayId
@@ -416,7 +416,7 @@ const ManageSettings = ({ users = [] }) => {
               value={settings.staticQrUrl || '/kshop_qr.png'}
               onChange={(e) => { setSettings(prev => ({ ...prev, staticQrUrl: e.target.value })); setSaved(false); }}
               placeholder="เช่น /kshop_qr.png หรือ ลิงก์รูปภาพออนไลน์"
-              style={{ width: '100%', padding: '0.7rem 0.9rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '10px', color: 'white', fontSize: '1rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '0.7rem 0.9rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: '10px', color: 'var(--text-main)', fontSize: '1rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
             />
             <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', margin: '0.6rem 0 0' }}>
               💡 หากใช้ไฟล์รูปภาพของ K Shop กรุณาเซฟรูปเป็นชื่อ <strong>kshop_qr.png</strong> แล้วนำไปวางไว้ที่โฟลเดอร์ <strong>public</strong> ของโปรเจกต์นี้
@@ -426,10 +426,10 @@ const ManageSettings = ({ users = [] }) => {
       </div>
 
       {/* QR แยกตามสาขา Card */}
-      <div style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.25)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
+      <div style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.25)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.5rem' }}>
         <div style={{ marginBottom: '1rem' }}>
-          <h3 style={{ color: 'white', margin: '0 0 0.3rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <QrCode size={18} color="#c084fc" /> QR ชำระเงินแยกตามสาขา
+          <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <QrCode size={18} color="var(--accent-hover)" /> QR ชำระเงินแยกตามสาขา
           </h3>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
             ตั้ง QR เฉพาะของแต่ละสาขา — ตอนเช็คบิลระบบจะใช้ QR ของสาขาที่ล็อกอินอยู่ ถ้าสาขาไหนไม่ได้ตั้ง จะใช้ QR กลางด้านบนแทน
@@ -437,7 +437,7 @@ const ManageSettings = ({ users = [] }) => {
         </div>
 
         {branchList.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.2)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', background: 'rgba(0,0,0,0.02)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
             ยังไม่มีข้อมูลสาขา (เพิ่มสาขาได้ที่หน้า "จัดการผู้ใช้" โดยกรอกช่องสาขาให้ผู้ใช้แต่ละคน)
           </div>
         ) : (
@@ -448,7 +448,7 @@ const ManageSettings = ({ users = [] }) => {
               <select
                 value={branchTab}
                 onChange={(e) => { setBranchTab(e.target.value); setBranchUploadError(''); }}
-                style={{ flex: 1, minWidth: '180px', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'white', padding: '0.5rem 0.7rem', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }}
+                style={{ flex: 1, minWidth: '180px', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, color: 'var(--text-main)', padding: '0.5rem 0.7rem', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none' }}
               >
                 <option value="">— เลือกสาขาที่ต้องการตั้ง QR —</option>
                 {branchList.map(b => (
@@ -461,7 +461,7 @@ const ManageSettings = ({ users = [] }) => {
             {Object.keys(branchQRMap).length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
                 {Object.keys(branchQRMap).map(b => (
-                  <span key={b} style={{ fontSize: '0.75rem', fontWeight: 700, color: '#c084fc', background: 'rgba(192,132,252,0.12)', border: '1px solid rgba(192,132,252,0.3)', borderRadius: 20, padding: '0.2rem 0.65rem' }}>
+                  <span key={b} style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-main)', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 20, padding: '0.2rem 0.65rem' }}>
                     {b}
                   </span>
                 ))}
@@ -469,7 +469,7 @@ const ManageSettings = ({ users = [] }) => {
             )}
 
             {branchTab && (
-              <div style={{ borderTop: '1px dashed rgba(255,255,255,0.12)', paddingTop: '1rem' }}>
+              <div style={{ borderTop: '1px dashed rgba(0,0,0,0.12)', paddingTop: '1rem' }}>
                 {/* QR type ของสาขา */}
                 <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
                   {[
@@ -482,7 +482,7 @@ const ManageSettings = ({ users = [] }) => {
                       <button
                         key={t.key}
                         onClick={() => updateBranchQR('qrType', t.key)}
-                        style={{ flex: '1 1 30%', minWidth: '110px', padding: '0.6rem', borderRadius: 10, background: active ? `${t.color}22` : 'rgba(0,0,0,0.25)', border: active ? `1px solid ${t.color}` : '1px solid rgba(255,255,255,0.1)', color: active ? t.color : 'var(--text-muted)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit' }}
+                        style={{ flex: '1 1 30%', minWidth: '110px', padding: '0.6rem', borderRadius: 10, background: active ? `${t.color}22` : 'rgba(0,0,0,0.02)', border: active ? `1px solid ${t.color}` : '1px solid rgba(0,0,0,0.08)', color: active ? t.color : 'var(--text-muted)', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit' }}
                       >
                         {t.label}
                       </button>
@@ -492,7 +492,7 @@ const ManageSettings = ({ users = [] }) => {
 
                 {(curBranchQR.qrType || 'kshop_dynamic') === 'kshop_dynamic' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1rem', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, alignSelf: 'flex-start' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.65rem 1rem', background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 8, color: 'var(--text-main)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, alignSelf: 'flex-start' }}>
                       <Upload size={16} /> อัปโหลดรูป QR K Shop ของสาขา {branchTab}
                       <input type="file" accept="image/*" onChange={handleBranchQrUpload} style={{ display: 'none' }} />
                     </label>
@@ -517,14 +517,14 @@ const ManageSettings = ({ users = [] }) => {
                       value={curBranchQR.qrShopName || ''}
                       onChange={(e) => updateBranchQR('qrShopName', e.target.value)}
                       placeholder="ชื่อร้านที่แสดงบนการ์ด QR (เช่น NARAI -KHANOY CENTURY)"
-                      style={{ width: '100%', padding: '0.55rem 0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: 'white', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '0.55rem 0.75rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, color: 'var(--text-main)', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                     />
                     <input
                       type="text"
                       value={curBranchQR.qrAccountName || ''}
                       onChange={(e) => updateBranchQR('qrAccountName', e.target.value)}
                       placeholder="ชื่อบัญชีรับเงิน (เช่น บจก. นารายณ์ พิซเซอเรีย)"
-                      style={{ width: '100%', padding: '0.55rem 0.75rem', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: 'white', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                      style={{ width: '100%', padding: '0.55rem 0.75rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, color: 'var(--text-main)', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                     />
                   </div>
                 )}
@@ -536,7 +536,7 @@ const ManageSettings = ({ users = [] }) => {
                     value={curBranchQR.promptPayId || ''}
                     onChange={(e) => updateBranchQR('promptPayId', e.target.value.replace(/[^0-9]/g, ''))}
                     placeholder="หมายเลขพร้อมเพย์ของสาขา (เช่น 0812345678)"
-                    style={{ width: '100%', padding: '0.7rem 0.9rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, color: 'white', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.04em', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '0.7rem 0.9rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 10, color: 'var(--text-main)', fontSize: '1rem', fontWeight: 700, letterSpacing: '0.04em', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   />
                 )}
 
@@ -546,7 +546,7 @@ const ManageSettings = ({ users = [] }) => {
                     value={curBranchQR.staticQrUrl || ''}
                     onChange={(e) => updateBranchQR('staticQrUrl', e.target.value)}
                     placeholder="พาธ/ลิงก์รูป QR ของสาขา (เช่น /kshop_qr_center.png)"
-                    style={{ width: '100%', padding: '0.7rem 0.9rem', background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 10, color: 'white', fontSize: '1rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '0.7rem 0.9rem', background: '#ffffff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 10, color: 'var(--text-main)', fontSize: '1rem', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                   />
                 )}
 
@@ -566,7 +566,7 @@ const ManageSettings = ({ users = [] }) => {
 
       <button
         onClick={handleSave}
-        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 2rem', background: saved ? '#22c55e' : 'var(--accent)', color: 'white', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', transition: 'background 0.3s', fontFamily: 'inherit' }}
+        style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 2rem', background: saved ? '#22c55e' : 'var(--accent)', color: saved ? 'white' : 'black', border: 'none', borderRadius: '12px', fontWeight: '700', fontSize: '1rem', cursor: 'pointer', transition: 'background 0.3s', fontFamily: 'inherit' }}
       >
         <Save size={18} /> {saved ? 'บันทึกแล้ว ✓' : 'บันทึกการตั้งค่า'}
       </button>

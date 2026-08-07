@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwEGa7KC8W8FiQutWl84FL3XyaHUni23zgFET3q7ATSpBTzftfNX7ILvbEYbG134KAl/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
 
 const ManageCategories = () => {
   const { lang } = useOutletContext();
@@ -302,7 +302,7 @@ const ManageCategories = () => {
           <div className="admin-modal">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
               <h2>{editingItem.name ? (lang === 'th' ? 'แก้ไขหมวดหมู่' : 'Edit Category') : (lang === 'th' ? 'เพิ่มหมวดหมู่ใหม่' : 'Add New Category')}</h2>
-              <button style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }} onClick={() => setIsModalOpen(false)}>
+              <button style={{ background: 'none', border: 'none', color: 'var(--text-main)', cursor: 'pointer' }} onClick={() => setIsModalOpen(false)}>
                 <X size={24} />
               </button>
             </div>

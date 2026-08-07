@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="100%" height="100%">
+  <defs>
+    <radialGradient id="studioLight" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#334155" />
+      <stop offset="100%" stop-color="#0f172a" />
+    </radialGradient>
+    <radialGradient id="ballGrad1" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#9a3412" />
+    </radialGradient>
+    <radialGradient id="ballGrad2" cx="35%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#fef9c3" />
+      <stop offset="50%" stop-color="#d97706" />
+      <stop offset="100%" stop-color="#7c2d12" />
+    </radialGradient>
+  </defs>
+
+  <!-- Studio Dark Slate Tabletop Background -->
+  <rect width="400" height="300" fill="url(#studioLight)" />
+  
+  <!-- Studio Vignette / Lighting -->
+  <ellipse cx="200" cy="150" rx="180" ry="120" fill="#ffffff" opacity="0.04" />
+
+  <!-- Food Photo Visuals -->
+  
+        <!-- Charcoal grill slate table -->
+        <ellipse cx="200" cy="240" rx="140" ry="40" fill="#000000" opacity="0.6" filter="blur(10px)" />
+        <line x1="70" y1="230" x2="330" y2="140" stroke="#d97706" stroke-width="5" stroke-linecap="round" />
+        <line x1="80" y1="250" x2="340" y2="160" stroke="#d97706" stroke-width="5" stroke-linecap="round" />
+        <!-- Skewered Grilled Chicken Balls with tamarind glaze -->
+        <g filter="drop-shadow(0 8px 6px rgba(0,0,0,0.5))">
+          <circle cx="120" cy="210" r="18" fill="#7c2d12" />
+          <circle cx="120" cy="210" r="16" fill="#9a3412" />
+          <circle cx="165" cy="192" r="18" fill="#7c2d12" />
+          <circle cx="210" cy="175" r="18" fill="#9a3412" />
+          <circle cx="255" cy="158" r="18" fill="#7c2d12" />
+          <!-- Charcoal grill marks & sauce drip -->
+          <line x1="110" y1="205" x2="130" y2="215" stroke="#1c1917" stroke-width="3" />
+          <line x1="155" y1="187" x2="175" y2="197" stroke="#1c1917" stroke-width="3" />
+          <line x1="200" y1="170" x2="220" y2="180" stroke="#1c1917" stroke-width="3" />
+          <path d="M 115 210 Q 180 180 260 155" stroke="#ef4444" stroke-width="6" stroke-linecap="round" fill="none" opacity="0.85" />
+        </g>
+      
+
+  <!-- Dark Slate Banner with Dish Title -->
+  <rect x="0" y="248" width="400" height="52" fill="rgba(15, 23, 42, 0.88)" />
+  <text x="200" y="280" font-family="'Kanit', 'Sukhumvit Set', sans-serif" font-size="16" font-weight="600" fill="#ffffff" text-anchor="middle">
+    ลูกชิ้นไก่ปิ้ง(5ไม้)
+  </text>
+</svg>

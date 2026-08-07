@@ -60,26 +60,26 @@ const LoginScreen = ({ users, onLogin, lang, onRetry }) => {
             {retrying ? (
               /* กำลัง retry */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0' }}>
-                <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', color: '#f97316' }} />
+                <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', color: 'var(--accent-hover)' }} />
                 <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>กำลังเชื่อมต่อ...</p>
               </div>
             ) : showRetry ? (
               /* หมดเวลารอ — แสดงปุ่ม retry + default admin */
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.9rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '0.65rem 1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#b91c1c', fontSize: '0.9rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: '0.65rem 1rem' }}>
                   <WifiOff size={16} />
                   {lang === 'th' ? 'เชื่อมต่อฐานข้อมูลไม่ได้' : 'Cannot connect to database'}
                 </div>
                 <button
                   onClick={handleRetry}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: '#f97316', color: 'white', border: 'none', borderRadius: 12, padding: '0.75rem 1.5rem', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', fontFamily: 'inherit' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent)', color: 'black', border: 'none', borderRadius: 12, padding: '0.75rem 1.5rem', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer', fontFamily: 'inherit' }}
                 >
                   <RefreshCw size={17} /> ลองเชื่อมต่อใหม่
                 </button>
                 <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
-                  <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem' }}>หรือ</span>
-                  <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+                  <div style={{ flex: 1, height: 1, background: 'rgba(0,0,0,0.08)' }} />
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>หรือ</span>
+                  <div style={{ flex: 1, height: 1, background: 'rgba(0,0,0,0.08)' }} />
                 </div>
                 <button onClick={handleDefaultAdmin} className="default-admin-btn">
                   {lang === 'th' ? 'เข้าในฐานะแอดมิน (ชั่วคราว)' : 'Login as Default Admin'}
@@ -134,8 +134,8 @@ const LoginScreen = ({ users, onLogin, lang, onRetry }) => {
               style={{
                 width: '100%', boxSizing: 'border-box', textAlign: 'center',
                 padding: '0.85rem 1rem', fontSize: '1.1rem', letterSpacing: '0.15rem',
-                background: 'rgba(0,0,0,0.35)', border: '1px solid rgba(255,255,255,0.18)',
-                borderRadius: 12, color: 'white', outline: 'none', fontFamily: 'inherit',
+                background: '#ffffff', border: '1.5px solid rgba(0,0,0,0.15)',
+                borderRadius: 12, color: 'var(--text-main)', outline: 'none', fontFamily: 'inherit',
               }}
             />
             {error && <div className="pin-error" style={{ marginTop: '0.75rem' }}>{error}</div>}
@@ -144,8 +144,8 @@ const LoginScreen = ({ users, onLogin, lang, onRetry }) => {
               disabled={!password}
               style={{
                 marginTop: '1.1rem', width: '100%', padding: '0.85rem',
-                background: password ? '#f97316' : 'rgba(255,255,255,0.08)',
-                border: 'none', borderRadius: 12, color: password ? 'white' : 'rgba(255,255,255,0.35)',
+                background: password ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
+                border: 'none', borderRadius: 12, color: password ? 'black' : 'var(--text-muted)',
                 fontWeight: 700, fontSize: '1rem', cursor: password ? 'pointer' : 'not-allowed',
                 fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
               }}
