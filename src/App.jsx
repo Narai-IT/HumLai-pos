@@ -1,5 +1,5 @@
 import React, { useState, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import { ShoppingCart, ClipboardList, Store, Globe, ShoppingBag, RefreshCw, LogOut, LayoutGrid } from 'lucide-react';
 import FoodCard from './components/FoodCard';
 import OrderWizardModal from './components/OrderWizardModal';
@@ -50,6 +50,7 @@ const DEFAULT_ADMIN = { id: 'admin', username: 'admin', branch: 'admin', canChec
 
 function App() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeCategory, setActiveCategory] = useState('food');
   const [lang, setLang] = useState('th');
   // ประเภทลูกค้าที่เลือกอยู่ (กำหนดราคาของทุกเมนู) — '' = ราคาปกติ
@@ -1114,7 +1115,7 @@ function App() {
     }
   };
 
-  const isKioskPath = window.location.pathname.includes('/kiosk') || window.location.pathname.includes('/self-order');
+  const isKioskPath = location.pathname.includes('/kiosk') || location.pathname.includes('/self-order');
 
   if (!currentUser && !isKioskPath) {
     return (
@@ -1433,7 +1434,7 @@ function App() {
           />
         } />
 
-        <Route path="/admin" element={(isAdmin || isCashier) ? <AdminLayout lang={lang} setLang={setLang} onLogout={handleLogout} isCashier={isCashier} /> : <Navigate to="/table-select" replace />}>
+        <Route path="/admin" element={(isAdmin || isCashier) ? <AdminLayout lang={lang} setLang={setLang} onLogout={handleLogout} isCashier={isCashier} /> : <Navigate to="/index" replace />}>
           <Route index element={<Dashboard />} />
           <Route path="menu" element={<ManageMenu />} />
           <Route path="categories" element={<ManageCategories />} />
@@ -1446,6 +1447,8 @@ function App() {
           <Route path="stock" element={<ManageStock />} />
           <Route path="reports" element={(isAdmin || isCashier) ? <Reports allMenu={allMenu} isAdmin={isAdmin} branch={branch} users={users} /> : <Navigate to="/admin" replace />} />
         </Route>
+
+        <Route path="*" element={<Navigate to="/index" replace />} />
       </Routes>
       </Suspense>
 
