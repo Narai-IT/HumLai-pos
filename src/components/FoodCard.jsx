@@ -34,19 +34,20 @@ const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang 
   // ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริง PNG/JPG ก่อน)
   const candidates = React.useMemo(() => {
     const list = [];
-    // 1. Check folder-based real photos (PNG/JPG)
+    // 1. รูปที่แอดมินอัปโหลด/ใส่ลิงก์ไว้เอง (เช่นรูปใน Google Drive) — มาก่อนเสมอ
+    //    เพราะเป็นรูปที่ตั้งใจเลือกให้เมนูนี้ ส่วนข้อ 2-4 เป็นการ "เดา" ชื่อไฟล์ในเครื่อง
+    if (food.image && String(food.image).trim()) {
+      list.push(String(food.image).trim());
+    }
+    // 2. Check folder-based real photos (PNG/JPG)
     list.push(`/images/${folder}/${sanitizedFileName}.png`);
     list.push(`/images/${folder}/${sanitizedFileName}.jpg`);
-    // 2. Check root-based real photos (PNG/JPG)
+    // 3. Check root-based real photos (PNG/JPG)
     list.push(`/images/${sanitizedFileName}.png`);
     list.push(`/images/${sanitizedFileName}.jpg`);
-    // 3. Check ID-based real photos (PNG/JPG)
+    // 4. Check ID-based real photos (PNG/JPG)
     list.push(`/images/item_${food.id}.png`);
     list.push(`/images/item_${food.id}.jpg`);
-    // 4. Custom image URL if set explicitly in backend
-    if (food.image && String(food.image).trim() && !food.image.endsWith('.svg')) {
-      list.push(food.image);
-    }
     // 5. SVG vector fallback
     list.push(`/images/${folder}/${sanitizedFileName}.svg`);
     list.push(`/images/${sanitizedFileName}.svg`);
@@ -67,10 +68,13 @@ const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang 
     >
       <div className="pos-card-img-wrap">
         {imageSrc ? (
-          <img 
-            src={imageSrc} 
-            alt={name} 
-            className="pos-card-img" 
+          <img
+            src={imageSrc}
+            alt={name}
+            className="pos-card-img"
+            loading="lazy"
+            /* Google Drive ปฏิเสธการโหลดรูปข้ามเว็บเมื่อมี referrer ติดไปด้วย */
+            referrerPolicy="no-referrer"
             onError={handleImageError}
           />
         ) : (

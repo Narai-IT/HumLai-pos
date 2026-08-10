@@ -8,6 +8,18 @@
 
 var SHEET_ID = '16TdnUiHIZ0ACWbbNq2h6tXg49LL0N3FCHXMXB5Y9BlM';
 
+// โฟลเดอร์ Google Drive สำหรับเก็บรูปเมนูที่อัปโหลดจากหน้าจัดการเมนู
+// https://drive.google.com/drive/folders/14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3
+var MENU_IMAGE_FOLDER_ID = '14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3';
+// โฟลเดอร์เก็บสลิปการโอนเงิน (แยกจากรูปเมนู)
+var SLIP_FOLDER_ID = '1gxmLA9FZttcH3PCxlqY7TEHNXtnMMgYj';
+
+// ลิงก์รูปที่เอาไปใส่ <img> ได้จริง — ปลายทาง /uc?export=view ถูก Google บล็อกการ hotlink
+// บ่อย ๆ ส่วน /thumbnail ยังเสิร์ฟรูปตรง ๆ ให้ (sz=w1000 คือกว้างสุด 1000px พอสำหรับการ์ดเมนู)
+function driveImageUrl(fileId) {
+  return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1000';
+}
+
 function getOrCreateSheet(ss, sheetName, headers) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -475,14 +487,20 @@ function doPost(e) {
   }
 
   // ── ADMIN ACTIONS ──
+  // อัปโหลดรูปเมนูลงโฟลเดอร์รูปเมนูใน Google Drive แล้วคืนลิงก์ที่เอาไปแสดงในหน้าขายได้เลย
   if (action === 'uploadImage') {
     try {
-      var folderId = '11aWwDOmZO_mijABBSJjpm-0pHuhLvyYp';
+      var folderId = postData.folderId || MENU_IMAGE_FOLDER_ID;
       var folder   = DriveApp.getFolderById(folderId);
-      var blob     = Utilities.newBlob(Utilities.base64Decode(postData.base64), postData.mimeType, postData.filename);
+      var blob     = Utilities.newBlob(
+        Utilities.base64Decode(postData.base64),
+        postData.mimeType || 'image/jpeg',
+        postData.filename || ('menu-' + Date.now() + '.jpg')
+      );
       var file     = folder.createFile(blob);
+      // ต้องเปิดให้ "ทุกคนที่มีลิงก์ดูได้" ไม่งั้นเครื่องขายที่ไม่ได้ล็อกอินบัญชีนี้จะเห็นเป็นรูปแตก
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      return _bomJson({ success: true, url: 'https://drive.google.com/uc?export=view&id=' + file.getId() });
+      return _bomJson({ success: true, fileId: file.getId(), url: driveImageUrl(file.getId()) });
     } catch(e) {
       return _bomJson({ success: false, error: e.toString() });
     }
@@ -491,12 +509,11 @@ function doPost(e) {
   // อัปโหลดสลิปการโอน ลงโฟลเดอร์เฉพาะ ตั้งชื่อตามเลขที่บิล
   if (action === 'uploadSlip') {
     try {
-      var slipFolderId = '1gxmLA9FZttcH3PCxlqY7TEHNXtnMMgYj';
-      var slipFolder   = DriveApp.getFolderById(slipFolderId);
+      var slipFolder   = DriveApp.getFolderById(postData.folderId || SLIP_FOLDER_ID);
       var slipBlob     = Utilities.newBlob(Utilities.base64Decode(postData.base64), postData.mimeType || 'image/jpeg', postData.filename || ('slip-' + Date.now() + '.jpg'));
       var slipFile     = slipFolder.createFile(slipBlob);
       slipFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      return _bomJson({ success: true, url: 'https://drive.google.com/uc?export=view&id=' + slipFile.getId() });
+      return _bomJson({ success: true, fileId: slipFile.getId(), url: driveImageUrl(slipFile.getId()) });
     } catch(e) {
       return _bomJson({ success: false, error: e.toString() });
     }

@@ -282,6 +282,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   <img
                     src={food.image || `/images/menu/${food.id}.png`}
                     alt={food.name}
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
                     onError={(e) => { e.target.src = '/images/menu/default.png'; }}
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
