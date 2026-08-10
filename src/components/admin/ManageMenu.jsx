@@ -273,8 +273,8 @@ const ManageMenu = () => {
     }
   };
 
-  // ย่อรูปก่อนส่ง — รูปจากมือถือมักใหญ่ 3-8 MB พอแปลงเป็น base64 จะบวมอีก ~33%
-  // ส่งขนาดนั้นเข้า Apps Script จะช้าและมีสิทธิ์ timeout กว้าง 1000px พอสำหรับการ์ดเมนูแล้ว
+  // ย่อรูปก่อนส่ง — รูปจากมือถือมักใหญ่ 3-8 MB อัปตรง ๆ จะช้าและกินโควตาฝากรูปเปล่า ๆ
+  // กว้าง 1000px พอสำหรับการ์ดเมนูแล้ว
   const fileToResizedDataUrl = (file, maxDim = 1000, quality = 0.85) => new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -295,8 +295,12 @@ const ManageMenu = () => {
     reader.readAsDataURL(file);
   });
 
-  // อัปโหลดรูปเมนูเข้าโฟลเดอร์ Google Drive ของร้าน (ผ่าน Apps Script)
-  // แล้วเก็บ "ลิงก์" ที่ได้ลงคอลัมน์ image ของชีต Menu → หน้าขายดึงไปแสดงเอง
+  // อัปโหลดรูปเมนูไปที่ ImgBB แล้วเก็บ "ลิงก์" ที่ได้ลงคอลัมน์ image ของชีต Menu
+  // → หน้าขาย/หน้าลูกค้าสั่งเอง ดึงลิงก์นี้ไปแสดงเอง
+  //
+  // ทำไมไม่ใช้ Google Drive: ลองแล้วติด "Access denied: DriveApp" ที่ฝั่ง Apps Script
+  // (สิทธิ์ Drive ไม่ติดมากับโทเคนของเว็บแอป) โค้ดฝั่ง Apps Script ยังอยู่ครบ
+  // เผื่ออยากกลับไปใช้ทีหลัง — เรียก action 'uploadImage' ได้เลย
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -308,33 +312,27 @@ const ManageMenu = () => {
       const base64 = String(dataUrl).split(',')[1];
       if (!base64) throw new Error('อ่านไฟล์รูปไม่ได้');
 
-      // ตั้งชื่อไฟล์ตามเมนู เพื่อให้ไล่หาในไดรฟ์ได้ง่าย
-      const safeName = (editingItem?.name || editingItem?.id || 'menu')
-        .toString().replace(/[\\/:*?"<>|]/g, '_').trim() || 'menu';
+      const IMGBB_API_KEY = 'c46b3eebbda2ef57c71cb885cb305fe5';
+      const formData = new FormData();
+      formData.append('image', base64); // ImgBB รับ base64 ตรง ๆ ได้ ไม่ต้องแนบเป็นไฟล์
+      formData.append('name', (editingItem?.name || 'menu').toString().slice(0, 60));
 
-      // ต้องอ่าน response กลับมาเอา URL จึงใช้ fetch แบบปกติ (ห้าม no-cors)
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'uploadImage',
-          base64,
-          mimeType: 'image/jpeg',
-          filename: `${safeName}-${Date.now()}.jpg`
-        })
+        body: formData
       });
       const data = await res.json().catch(() => null);
 
-      if (data && data.success && data.url) {
-        setEditingItem(prev => ({ ...prev, image: data.url }));
+      if (data && data.success && data.data && data.data.display_url) {
+        setEditingItem(prev => ({ ...prev, image: data.data.display_url }));
       } else {
-        throw new Error((data && data.error) || 'Apps Script ไม่ตอบ success');
+        throw new Error((data && data.error && data.error.message) || 'ImgBB ไม่ตอบลิงก์รูปกลับมา');
       }
     } catch (err) {
-      console.error('Drive upload error:', err);
+      console.error('Image upload error:', err);
       alert(lang === 'th'
-        ? 'อัปโหลดรูปขึ้น Google Drive ไม่สำเร็จ: ' + (err.message || err) + '\n\n(ถ้าเพิ่งแก้สคริปต์ อย่าลืม Deploy เวอร์ชันใหม่ใน Apps Script ด้วย)'
-        : 'Upload to Google Drive failed: ' + (err.message || err));
+        ? 'อัปโหลดรูปไม่สำเร็จ: ' + (err.message || err) + '\n\nลองใหม่อีกครั้ง หรือเช็กอินเทอร์เน็ต'
+        : 'Image upload failed: ' + (err.message || err));
     }
     setUploading(false);
   };
@@ -620,10 +618,10 @@ const ManageMenu = () => {
               )}
 
               <div className="admin-form-group">
-                <label>{lang === 'th' ? 'รูปภาพ (อัปโหลดเก็บใน Google Drive ของร้าน หรือวาง URL)' : 'Image (Upload to the shop Google Drive, or paste a URL)'}</label>
+                <label>{lang === 'th' ? 'รูปภาพ (อัปโหลดจากเครื่อง หรือวาง URL)' : 'Image (Upload from this device, or paste a URL)'}</label>
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem' }}>
                   <input type="file" accept="image/*" onChange={handleImageUpload} disabled={uploading} style={{ flex: 1, padding: '0.5rem', background: 'var(--bg-main)', border: '1px solid var(--border-color)', color: 'var(--text-main)', borderRadius: '8px' }} />
-                  {uploading && <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{lang === 'th' ? 'กำลังอัปโหลดขึ้น Drive...' : 'Uploading to Drive...'}</span>}
+                  {uploading && <span style={{ color: 'var(--accent)', fontSize: '0.85rem' }}>{lang === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...'}</span>}
                 </div>
                 <input value={editingItem.image} onChange={e => setEditingItem({...editingItem, image: e.target.value})} placeholder={lang === 'th' ? 'หรือวางลิงก์รูปภาพที่นี่' : 'Or paste image URL here'} />
                 {editingItem.image && (
@@ -633,8 +631,8 @@ const ManageMenu = () => {
                 )}
                 <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                   {lang === 'th'
-                    ? 'ไฟล์จะถูกย่อเหลือกว้างสุด 1000px แล้วเก็บลงโฟลเดอร์รูปเมนูใน Google Drive — รูปจะขึ้นในหน้าขายและหน้าลูกค้าสั่งเองอัตโนมัติ'
-                    : 'Files are resized to max 1000px and stored in the menu-images folder on Google Drive — the photo then shows on the POS and kiosk screens.'}
+                    ? 'ไฟล์จะถูกย่อเหลือกว้างสุด 1000px ก่อนอัปโหลด — อย่าลืมกดบันทึก แล้วรูปจะขึ้นในหน้าขายและหน้าลูกค้าสั่งเองอัตโนมัติ'
+                    : 'Files are resized to max 1000px before upload — remember to save; the photo then shows on the POS and kiosk screens.'}
                 </div>
               </div>
 
