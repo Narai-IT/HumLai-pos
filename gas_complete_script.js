@@ -8,6 +8,10 @@
 
 var SHEET_ID = '16TdnUiHIZ0ACWbbNq2h6tXg49LL0N3FCHXMXB5Y9BlM';
 
+// ป้ายเวอร์ชันของสคริปต์ — ใช้ตรวจว่า deployment ที่แอปเรียกอยู่เป็นโค้ดล่าสุดหรือยัง
+// (เปิด <URL>/exec?action=ping ในเบราว์เซอร์แล้วดูค่านี้) แก้โค้ดครั้งต่อไปให้ขยับเลขวันที่ด้วย
+var SCRIPT_BUILD = '2026-08-10-drive-upload';
+
 // โฟลเดอร์ Google Drive สำหรับเก็บรูปเมนูที่อัปโหลดจากหน้าจัดการเมนู
 // https://drive.google.com/drive/folders/14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3
 var MENU_IMAGE_FOLDER_ID = '14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3';
@@ -174,8 +178,23 @@ function buildStaticData(ss) {
 // doGet
 // ──────────────────────────────────────────────
 function doGet(e) {
-  var ss = SpreadsheetApp.openById(SHEET_ID);
   var action = (e && e.parameter && e.parameter.action) ? e.parameter.action : 'getAllData';
+
+  // เช็กว่า URL /exec ที่แอปเรียกอยู่ กำลังเสิร์ฟโค้ดเวอร์ชันไหน
+  // เปิดในเบราว์เซอร์: <URL ที่อยู่ในโค้ดหน้าเว็บ>?action=ping
+  // ถ้า build ไม่ตรงกับที่วางไว้ล่าสุด = deployment ตัวนี้ยังเป็นโค้ดเก่า (แก้ผิดตัว/ยังไม่ได้ขึ้นเวอร์ชันใหม่)
+  // วางไว้ก่อน openById เพื่อให้ตอบได้แม้สิทธิ์อื่นมีปัญหา
+  if (action === 'ping') {
+    return _bomJson({
+      success: true,
+      build: SCRIPT_BUILD,
+      menuImageFolderId: MENU_IMAGE_FOLDER_ID,
+      hasUploadImage: true,
+      effectiveUser: Session.getEffectiveUser().getEmail()
+    });
+  }
+
+  var ss = SpreadsheetApp.openById(SHEET_ID);
 
   ensureSheetsReady();
 
