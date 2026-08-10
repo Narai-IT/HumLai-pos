@@ -20,6 +20,36 @@ function driveImageUrl(fileId) {
   return 'https://drive.google.com/thumbnail?id=' + fileId + '&sz=w1000';
 }
 
+// ⭐ แก้อาการ "Access denied: DriveApp" ตอนอัปรูปเมนู ⭐
+// Apps Script ขอสิทธิ์แค่ครั้งแรกที่กดอนุญาต แล้วจำชุดนั้นไว้
+// สคริปต์นี้เดิมใช้แค่ Sheets จึงไม่มีสิทธิ์ Drive ติดมาด้วย — การ Deploy เฉย ๆ ไม่ขอสิทธิ์ใหม่
+// วิธีใช้: เปิดหน้า Apps Script → เลือกฟังก์ชัน authorizeDrive ในแถบด้านบน → กด Run
+//         → กด Review permissions → เลือกบัญชีร้าน → Advanced → Go to ... → Allow
+//         แล้วค่อย Deploy เวอร์ชันใหม่
+// ผลลัพธ์ใน Execution log:
+//   "✅ ..."  = ใช้ได้แล้ว
+//   "no item with the given ID" = สิทธิ์ Drive ผ่านแล้ว แต่บัญชีนี้เข้าโฟลเดอร์ไม่ได้
+//                                 → ไปแชร์โฟลเดอร์ให้บัญชีนี้เป็น Editor
+// แปลง error ดิบของ Drive เป็นข้อความที่บอกได้ว่าต้องไปแก้ตรงไหน
+// (คนหน้าร้านเห็นข้อความนี้ผ่าน alert ตอนอัปรูปไม่สำเร็จ)
+function explainDriveError(e) {
+  var raw = String(e);
+  if (raw.indexOf('Access denied') !== -1 || raw.indexOf('PERMISSION_DENIED') !== -1) {
+    return 'สคริปต์ยังไม่ได้รับสิทธิ์เข้าถึง Google Drive — เปิด Apps Script แล้วกด Run ฟังก์ชัน authorizeDrive() หนึ่งครั้ง กดอนุญาตให้ครบ แล้ว Deploy เวอร์ชันใหม่ (' + raw + ')';
+  }
+  if (raw.indexOf('no item with the given ID') !== -1 || raw.indexOf('not found') !== -1) {
+    return 'เข้าโฟลเดอร์รูปเมนูไม่ได้ — แชร์โฟลเดอร์ให้บัญชีที่เป็นเจ้าของ Apps Script เป็น Editor ก่อน (' + raw + ')';
+  }
+  return raw;
+}
+
+function authorizeDrive() {
+  var folder = DriveApp.getFolderById(MENU_IMAGE_FOLDER_ID);
+  var msg = '✅ เข้าถึงโฟลเดอร์รูปเมนูได้แล้ว: ' + folder.getName();
+  Logger.log(msg);
+  return msg;
+}
+
 function getOrCreateSheet(ss, sheetName, headers) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -502,7 +532,7 @@ function doPost(e) {
       file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       return _bomJson({ success: true, fileId: file.getId(), url: driveImageUrl(file.getId()) });
     } catch(e) {
-      return _bomJson({ success: false, error: e.toString() });
+      return _bomJson({ success: false, error: explainDriveError(e) });
     }
   }
 
@@ -515,7 +545,7 @@ function doPost(e) {
       slipFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
       return _bomJson({ success: true, fileId: slipFile.getId(), url: driveImageUrl(slipFile.getId()) });
     } catch(e) {
-      return _bomJson({ success: false, error: e.toString() });
+      return _bomJson({ success: false, error: explainDriveError(e) });
     }
   }
 
