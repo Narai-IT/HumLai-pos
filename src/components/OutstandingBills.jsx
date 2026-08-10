@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, RefreshCw, ReceiptText, ChevronDown, ChevronUp, Phone, User, Clock } from 'lucide-react';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
 const parseItems = (raw) => {
   if (Array.isArray(raw)) return raw;

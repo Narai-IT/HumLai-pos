@@ -4,7 +4,7 @@ import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, Chevr
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { print80mm, scopedSlipCss } from '../utils/print80mm';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
 const calcCharges = (subtotal, settings = {}, discount = null) => {
   let discountAmount = 0;

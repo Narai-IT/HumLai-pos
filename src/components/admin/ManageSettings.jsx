@@ -3,7 +3,7 @@ import { Settings, ToggleLeft, ToggleRight, Save, Info, QrCode, Upload, CheckCir
 import jsQR from 'jsqr';
 import { parseKShopPayload } from '../../utils/promptpay';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
 const DEFAULT_SETTINGS = {
   serviceCharge: { enabled: false, rate: 10 },

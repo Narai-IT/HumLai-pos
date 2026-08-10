@@ -212,7 +212,7 @@ function App() {
     else localStorage.removeItem('table_number');
   }, [tableNumber]);
 
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
+  const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
   // ── Retry บิลที่ค้างใน localStorage (pending_orders) ──
   // เรียกตอนเปิดแอปและเมื่อเน็ตกลับมา — ส่งซ้ำเฉพาะที่ backend ยังไม่ตอบ success

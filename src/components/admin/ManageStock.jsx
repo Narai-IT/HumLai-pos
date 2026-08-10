@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Package, AlertTriangle, RefreshCw, Plus, X, Save, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
 const STATUS_CONFIG = {
   OUT: { label: '🔴 หมดแล้ว!',   bg: 'rgba(239,68,68,0.15)',   border: 'rgba(239,68,68,0.4)',   text: '#ef4444' },

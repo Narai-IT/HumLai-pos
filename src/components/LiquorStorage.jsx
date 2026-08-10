@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Wine, Plus, ArrowDownCircle, ArrowUpCircle, RefreshCw, X, Save, ChevronLeft, Clock } from 'lucide-react';
 
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwz9dK329nfIhvmi-Ixy8lA9xQLLheFWHAeVQsdSm_HfciQdgvbDbBdM6y-e0544GTL/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
 const EMPTY_FORM = { customerName: '', phone: '', productName: '', category: 'เหล้า', qty: '', unit: '%', note: '' };
 const LIQUOR_UNITS = ['%', 'ml', 'ขวด', 'ส่วน'];
