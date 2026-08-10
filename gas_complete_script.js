@@ -10,7 +10,7 @@ var SHEET_ID = '16TdnUiHIZ0ACWbbNq2h6tXg49LL0N3FCHXMXB5Y9BlM';
 
 // ป้ายเวอร์ชันของสคริปต์ — ใช้ตรวจว่า deployment ที่แอปเรียกอยู่เป็นโค้ดล่าสุดหรือยัง
 // (เปิด <URL>/exec?action=ping ในเบราว์เซอร์แล้วดูค่านี้) แก้โค้ดครั้งต่อไปให้ขยับเลขวันที่ด้วย
-var SCRIPT_BUILD = '2026-08-10-drive-upload';
+var SCRIPT_BUILD = '2026-08-10-drivetest';
 
 // โฟลเดอร์ Google Drive สำหรับเก็บรูปเมนูที่อัปโหลดจากหน้าจัดการเมนู
 // https://drive.google.com/drive/folders/14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3
@@ -192,6 +192,39 @@ function doGet(e) {
       hasUploadImage: true,
       effectiveUser: Session.getEffectiveUser().getEmail()
     });
+  }
+
+  // ตรวจสิทธิ์ Drive "ในบริบทของเว็บแอปจริง ๆ" — ไม่ใช่บริบทหน้าแก้ไขซึ่งใช้สิทธิ์คนละชุด
+  // เปิด <URL>/exec?action=drivetest แล้วดูผลทีละขั้น จะรู้ทันทีว่าติดที่สิทธิ์ หรือติดที่โฟลเดอร์
+  if (action === 'drivetest') {
+    var out = { build: SCRIPT_BUILD, folderId: MENU_IMAGE_FOLDER_ID };
+
+    try { out.effectiveUser = Session.getEffectiveUser().getEmail(); }
+    catch (e1) { out.effectiveUser = 'ERROR: ' + e1; }
+
+    // สิทธิ์ที่ติดมากับโทเคนของเว็บแอปจริง ๆ — ถ้าไม่มี .../auth/drive ในนี้ คืออัปรูปไม่ได้แน่นอน
+    try {
+      var token = ScriptApp.getOAuthToken();
+      var info  = UrlFetchApp.fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + token,
+                                    { muteHttpExceptions: true }).getContentText();
+      var scopes = (JSON.parse(info).scope || '').split(' ');
+      out.grantedScopes = scopes;
+      out.hasDriveScope = scopes.indexOf('https://www.googleapis.com/auth/drive') !== -1;
+    } catch (e2) { out.grantedScopes = 'ERROR: ' + e2; }
+
+    // อ่านโฟลเดอร์ได้ไหม
+    try { out.readFolder = 'OK: ' + DriveApp.getFolderById(MENU_IMAGE_FOLDER_ID).getName(); }
+    catch (e3) { out.readFolder = 'ERROR: ' + e3; }
+
+    // เขียนไฟล์ได้ไหม (สร้างไฟล์ทดสอบเล็ก ๆ แล้วย้ายลงถังขยะทันที)
+    try {
+      var f = DriveApp.getFolderById(MENU_IMAGE_FOLDER_ID)
+                      .createFile('drivetest.txt', 'ok', MimeType.PLAIN_TEXT);
+      out.writeFile = 'OK: ' + f.getId();
+      f.setTrashed(true);
+    } catch (e4) { out.writeFile = 'ERROR: ' + e4; }
+
+    return _bomJson(out);
   }
 
   var ss = SpreadsheetApp.openById(SHEET_ID);
