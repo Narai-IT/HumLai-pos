@@ -30,6 +30,7 @@ const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
+import { getPrinterByType } from './utils/printerRouting';
 
 const MENU_ITEMS = [];
 
@@ -1023,9 +1024,9 @@ function App() {
 
     try {
       // Print receipt
-      const receiptIP = localStorage.getItem('printer_receipt_ip');
-      if (receiptIP) {
-        sendPrintJob({ ip: receiptIP, printerType: 'receipt', orderData: newOrder })
+      const receiptPrinter = getPrinterByType('receipt');
+      if (receiptPrinter) {
+        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: newOrder })
           .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
           .catch(err => console.error('Silent print failed:', err));
       }
@@ -1360,6 +1361,7 @@ function App() {
             orders={orders.filter(o => o.status && o.status.toLowerCase() === 'pending')}
             onUpdateOrderStatus={handleUpdateOrderStatus}
             onNewOrder={() => navigate('/index')}
+            allMenu={allMenu.length > 0 ? allMenu : liveMenu}
           />
         } />
 

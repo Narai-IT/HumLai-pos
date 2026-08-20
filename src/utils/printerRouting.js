@@ -1,0 +1,101 @@
+// ===============================================================
+// จับคู่รายการอาหารกับเครื่องพิมพ์ แล้วสั่งพิมพ์แยกใบตามเครื่อง
+// ---------------------------------------------------------------
+// เมนูแต่ละรายการตั้ง printerId ได้ที่ ตั้งค่าแอดมิน > จัดการเมนู
+// ถ้าไม่ได้ตั้ง จะตกไปที่เครื่องพิมพ์ประเภท "ครัว" เป็นค่าเริ่มต้น
+// ===============================================================
+
+import { sendPrintJob } from './printServer';
+
+const PRINTERS_KEY = 'printers_config';
+
+// ชื่อรายการจากชีตมีจำนวนต่อท้าย เช่น "ข้าวกะเพราหมู (x2)" — ตัดออกก่อนจับคู่เมนู
+export const stripQty = (name) => String(name || '').replace(/\s*\(x\d+\)\s*$/, '').trim();
+
+export const getPrinters = () => {
+  try {
+    const stored = localStorage.getItem(PRINTERS_KEY);
+    if (stored) {
+      const list = JSON.parse(stored);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+  } catch (e) { /* ค่าเสีย ให้ตกไปใช้ค่าเก่าด้านล่าง */ }
+
+  // รองรับเครื่องที่ตั้งค่าไว้ก่อนมีหน้าจัดการหลายเครื่องพิมพ์
+  const legacy = [];
+  const receiptIp = localStorage.getItem('printer_receipt_ip');
+  const kitchenIp = localStorage.getItem('printer_kitchen_ip');
+  if (receiptIp) legacy.push({ id: 'legacy-receipt', name: 'ใบเสร็จ', ip: receiptIp, type: 'receipt' });
+  if (kitchenIp) legacy.push({ id: 'legacy-kitchen', name: 'ครัว', ip: kitchenIp, type: 'kitchen' });
+  return legacy;
+};
+
+export const getPrinterByType = (type, printers = getPrinters()) =>
+  printers.find(p => p.type === type && p.ip) || null;
+
+export const getPrinterById = (id, printers = getPrinters()) => {
+  if (id === undefined || id === null || id === '') return null;
+  return printers.find(p => String(p.id) === String(id) && p.ip) || null;
+};
+
+// เครื่องสำรองสำหรับใบครัว: ครัว → บาร์ → เครื่องแรกที่มี IP
+const fallbackKitchenPrinter = (printers) =>
+  getPrinterByType('kitchen', printers) ||
+  getPrinterByType('bar', printers) ||
+  printers.find(p => p.ip) ||
+  null;
+
+// แบ่งรายการอาหารออกเป็นกลุ่มตามเครื่องพิมพ์ที่ต้องไป
+export const groupItemsByPrinter = (items = [], allMenu = [], printers = getPrinters()) => {
+  const groups = new Map();
+  const unrouted = [];
+
+  items.forEach(item => {
+    const name = stripQty(item.isFlattened ? item.name : item.food?.name);
+    const menuItem = allMenu.find(m => stripQty(m.name) === name || (m.nameEn && stripQty(m.nameEn) === name));
+    const printer = getPrinterById(menuItem?.printerId, printers) || fallbackKitchenPrinter(printers);
+
+    if (!printer) {
+      unrouted.push(item);
+      return;
+    }
+    const key = String(printer.id);
+    if (!groups.has(key)) groups.set(key, { printer, items: [] });
+    groups.get(key).items.push(item);
+  });
+
+  return { groups: Array.from(groups.values()), unrouted };
+};
+
+// พิมพ์ใบครัวของออเดอร์ แยกใบไปตามเครื่องพิมพ์ของแต่ละเมนู
+// คืนค่า { success, printed, total, error }
+export const printKitchenOrder = async (order, allMenu = []) => {
+  const printers = getPrinters();
+  if (printers.length === 0) {
+    return { success: false, printed: 0, total: 0, error: 'ยังไม่ได้ตั้งค่าเครื่องพิมพ์ — ไปที่ ตั้งค่าแอดมิน > ตั้งค่าเครื่องพิมพ์' };
+  }
+
+  const { groups } = groupItemsByPrinter(order.items, allMenu, printers);
+  if (groups.length === 0) {
+    return { success: false, printed: 0, total: 0, error: 'ไม่พบเครื่องพิมพ์ที่ใช้งานได้ (ยังไม่ได้ระบุ IP Address)' };
+  }
+
+  const results = await Promise.all(groups.map(async ({ printer, items }) => {
+    const res = await sendPrintJob({
+      ip: printer.ip,
+      printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
+      orderData: { ...order, items }
+    });
+    return { printer, ...res };
+  }));
+
+  const failed = results.filter(r => !r.success);
+  return {
+    success: failed.length === 0,
+    printed: results.length - failed.length,
+    total: results.length,
+    error: failed.length
+      ? failed.map(f => `${f.printer.name || f.printer.ip}: ${f.error}`).join(' | ')
+      : null
+  };
+};
