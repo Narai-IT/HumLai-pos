@@ -275,6 +275,11 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       background: '#f8fafc',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       color: '#0f172a',
+      // กล่องนี้เป็นลูกของ .app-container ซึ่งเป็น flex column — พอใส่ margin auto
+      // ตัวมันจะเลิก stretch แล้วกว้างตามเนื้อหา (ไปชน max-width 480) ทำให้จอ 320-430px
+      // เลื่อนซ้ายขวาได้ ต้องกำหนด width 100% + min-width 0 บังคับให้กว้างเท่าจอเสมอ
+      width: '100%',
+      minWidth: 0,
       maxWidth: '480px',
       margin: '0 auto',
       boxShadow: '0 0 30px rgba(0,0,0,0.1)',
@@ -290,27 +295,32 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
         position: 'sticky', top: 0, zIndex: 100,
         background: '#ffffff',
         borderBottom: '1px solid #e2e8f0',
-        padding: '0.85rem 1.25rem',
+        // ระยะห่างและขนาดตัวอักษรยืดตามความกว้างจอ (clamp) — จอ 320px จะไม่แน่นจนชื่อร้านตกบรรทัด
+        padding: 'clamp(0.6rem, 3vw, 0.85rem) clamp(0.75rem, 4vw, 1.25rem)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        gap: '0.5rem',
         boxShadow: '0 4px 15px rgba(0,0,0,0.03)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <img src="/logo.png" alt="Logo" style={{ width: '42px', height: '42px', borderRadius: '12px', objectFit: 'cover' }} />
-          <div>
-            <h1 style={{ fontSize: '1.15rem', fontWeight: '800', margin: 0, color: '#0f172a', lineHeight: 1.2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.4rem, 2vw, 0.75rem)', minWidth: 0, flex: 1 }}>
+          <img src="/logo.png" alt="Logo" style={{ width: 'clamp(32px, 10vw, 42px)', height: 'clamp(32px, 10vw, 42px)', borderRadius: '12px', objectFit: 'cover', flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 'clamp(0.92rem, 4.2vw, 1.15rem)', fontWeight: '800', margin: 0, color: '#0f172a', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {lang === 'th' ? 'ข้าวมันไก่หำไหล' : 'Hamlai Chicken Rice'}
             </h1>
-            <span style={{ fontSize: '0.78rem', color: '#ea580c', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <Utensils size={12} /> {lang === 'th' ? 'ระบบสั่งอาหารด้วยตนเอง' : 'Self-Ordering Kiosk'}
+            <span style={{ fontSize: 'clamp(0.66rem, 2.8vw, 0.78rem)', color: '#ea580c', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+              <Utensils size={12} style={{ flexShrink: 0 }} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {lang === 'th' ? 'ระบบสั่งอาหารด้วยตนเอง' : 'Self-Ordering Kiosk'}
+              </span>
             </span>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexShrink: 0 }}>
           <div style={{
             background: '#fff7ed', border: '1.5px solid #ffedd5',
-            color: '#c2410c', fontWeight: '800', fontSize: '0.85rem',
-            padding: '0.35rem 0.75rem', borderRadius: '20px'
+            color: '#c2410c', fontWeight: '800', fontSize: 'clamp(0.72rem, 3vw, 0.85rem)',
+            padding: '0.35rem 0.6rem', borderRadius: '20px', whiteSpace: 'nowrap'
           }}>
             🪑 {lang === 'th' ? `โต๊ะ ${tableNo}` : `Table ${tableNo}`}
           </div>
@@ -318,9 +328,10 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
             style={{
               background: '#f1f5f9', border: '1px solid #cbd5e1',
-              borderRadius: '20px', padding: '0.35rem 0.6rem',
-              color: '#0f172a', fontWeight: '700', fontSize: '0.8rem',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px'
+              borderRadius: '20px', padding: '0.35rem 0.55rem',
+              color: '#0f172a', fontWeight: '700', fontSize: 'clamp(0.7rem, 3vw, 0.8rem)',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px',
+              whiteSpace: 'nowrap', flexShrink: 0
             }}
           >
             <Globe size={13} /> {lang === 'th' ? 'TH' : 'EN'}
@@ -352,9 +363,10 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
 
       {/* ─── Horizontal Scroll Category Filter Bar ─── */}
       <div style={{
-        display: 'flex', gap: '0.55rem', overflowX: 'auto',
-        padding: '0.5rem 1rem 0.75rem', scrollbarWidth: 'none',
-        msOverflowStyle: 'none'
+        // ห้ามเลื่อนซ้ายขวา — ให้ปุ่มหมวดหมู่ตัดขึ้นบรรทัดใหม่แทนการเลื่อนไปทางขวา
+        // ลูกค้าจะได้เห็นทุกหมวดในจอเดียว ไม่มีหมวดไหนถูกซ่อนอยู่นอกจอ
+        display: 'flex', flexWrap: 'wrap', gap: '0.5rem',
+        padding: '0.5rem 1rem 0.75rem'
       }}>
         {categories.map(cat => {
           const isActive = cat.slug === activeCategory;
@@ -363,9 +375,10 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
               key={cat.slug}
               onClick={() => setActiveCategory(cat.slug)}
               style={{
-                flexShrink: 0,
-                display: 'flex', alignItems: 'center', gap: '0.45rem',
-                padding: '0.6rem 1rem', borderRadius: '25px',
+                maxWidth: '100%',
+                display: 'flex', alignItems: 'center', gap: '0.4rem',
+                padding: '0.55rem 0.9rem', borderRadius: '25px',
+                textAlign: 'left', lineHeight: 1.25,
                 border: `2px solid ${isActive ? '#ea580c' : '#e2e8f0'}`,
                 background: isActive ? '#ea580c' : '#ffffff',
                 color: isActive ? '#ffffff' : '#0f172a',
@@ -374,8 +387,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                 boxShadow: isActive ? '0 4px 12px rgba(234,88,12,0.3)' : 'none'
               }}
             >
-              <span>{cat.icon || '🍲'}</span>
-              <span>{lang === 'th' ? cat.name : cat.nameEn}</span>
+              <span style={{ flexShrink: 0 }}>{cat.icon || '🍲'}</span>
+              <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{lang === 'th' ? cat.name : cat.nameEn}</span>
             </button>
           );
         })}
