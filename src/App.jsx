@@ -820,7 +820,6 @@ function App() {
 
     setTableOrders(prev => [...prev, ...newLocalItems]);
     setCart([]);
-    navigate('/table-orders');
 
     try {
       await fetch(GAS_URL, {
@@ -1332,6 +1331,8 @@ function App() {
               onUpdateNote={handleUpdateCartNote}
               onClearCart={() => setCart([])}
               onSendOrder={handleSendOrderToTable}
+              onCheckout={handleOpenCheckoutFromTable}
+              onDeleteTableItem={handleDeleteTableItem}
               resolvePrice={resolvePrice}
               customerType={customerType}
               setCustomerType={setCustomerType}

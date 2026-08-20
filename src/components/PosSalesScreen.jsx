@@ -28,7 +28,7 @@ const PosSalesScreen = ({
   activeCategory, setActiveCategory,
   cart = [],
   onOrderClick, onUpdateQuantity, onRemoveFromCart, onUpdateNote, onClearCart,
-  onSendOrder,
+  onSendOrder, onCheckout, onDeleteTableItem,
   resolvePrice,
   customerType, setCustomerType,
   customerName, setCustomerName,
@@ -176,12 +176,40 @@ const PosSalesScreen = ({
     if (item.promo && item.promo.price) p += Number(item.promo.price) || 0;
     return p;
   };
-  const subtotal = cart.reduce((s, i) => s + unitPrice(i) * (i.quantity || 1), 0);
+  const cartTotal = cart.reduce((s, i) => s + unitPrice(i) * (i.quantity || 1), 0);
+
+  // รายการที่ส่งเข้าครัวไปแล้วของโต๊ะนี้ = ตัวบิลจริงที่จะเอาไปชำระเงิน
+  const sentItems = useMemo(
+    () => tableOrders.filter(o => sameTable(o.TableNumber, tableNumber) && o.Status !== 'paid'),
+    [tableOrders, tableNumber]
+  );
+  const sentTotal = sentItems.reduce(
+    (s, o) => s + (Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1), 0
+  );
+
+  const subtotal = sentTotal + cartTotal;
   const scRate  = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
   const vatRate = settings?.vat?.enabled ? (settings.vat.rate || 0) : 0;
   const serviceCharge = Math.round(subtotal * scRate) / 100;
   const vat = Math.round((subtotal + serviceCharge) * vatRate) / 100;
   const grandTotal = subtotal + serviceCharge + vat;
+
+  // ชำระเงินได้เฉพาะของที่ส่งครัวแล้ว — ของในตะกร้าที่ยังไม่ส่งจะไม่อยู่ในบิล
+  // ถ้าปล่อยให้กดชำระทั้งที่ยังมีของค้างในตะกร้า ของนั้นจะหายไปพร้อมการปิดโต๊ะ
+  const handleCheckoutClick = () => {
+    if (cart.length > 0) {
+      alert(t(
+        `ยังมีรายการในตะกร้าอีก ${cart.length} รายการที่ยังไม่ได้ส่งครัว\nกรุณากด "ส่งรายการอาหาร" ก่อน แล้วจึงชำระเงิน`,
+        `${cart.length} item(s) are still unsent. Please send the order before taking payment.`
+      ));
+      return;
+    }
+    if (sentItems.length === 0) {
+      alert(t('โต๊ะนี้ยังไม่มีรายการอาหารที่ต้องชำระ', 'This table has nothing to pay for yet.'));
+      return;
+    }
+    onCheckout(sentItems, sentTotal);
+  };
 
   const optionText = (item) => {
     const parts = [];
@@ -227,8 +255,9 @@ const PosSalesScreen = ({
           >
             {shiftOpen ? t('🔒 ปิดกะ', '🔒 Close shift') : t('🕐 เปิดกะ', '🕐 Open shift')}
           </button>
+          {/* หน้ารายละเอียดบิล เหลือไว้สำหรับงานที่ทำในแผงขวาไม่ได้ — ย้ายโต๊ะ / รวมโต๊ะ / แยกบิล */}
           <button className="pos2-btn" onClick={onOpenBill} disabled={!tableNumber}>
-            <Receipt size={15} /> {t('สรุปบิล', 'Bill')}
+            <Receipt size={15} /> {t('ย้าย/รวมโต๊ะ', 'Move/Merge')}
           </button>
           {(isAdmin || isCashier) && (
             <button className="pos2-btn" onClick={onOpenAdmin}>
@@ -445,7 +474,52 @@ const PosSalesScreen = ({
           </div>
 
           <div className="pos2-cart-items">
-            {cart.length === 0 ? (
+            {/* ── ของที่ส่งครัวไปแล้ว = บิลของโต๊ะนี้ ── */}
+            {sentItems.length > 0 && (
+              <>
+                <div className="pos2-sec-head">
+                  <span>🍽️ {t('ส่งครัวแล้ว', 'Sent to kitchen')} ({sentItems.length})</span>
+                  <b>฿{sentTotal.toLocaleString()}</b>
+                </div>
+                {sentItems.map((o, idx) => (
+                  <div key={`${o.SessionId}-${o.ItemName}-${idx}`} className="pos2-line-item sent">
+                    <div className="pos2-line-top">
+                      <div className="pos2-line-name">
+                        <span className="pos2-qty-badge">{Number(o.Quantity) || 1}×</span> {o.ItemName}
+                      </div>
+                      <button
+                        className="pos2-icon-btn"
+                        title={t('ลบรายการนี้ออกจากบิล', 'Remove from bill')}
+                        onClick={() => {
+                          if (window.confirm(t(`ลบ "${o.ItemName}" ออกจากบิลโต๊ะ ${tableNumber}?`, `Remove "${o.ItemName}" from the bill?`))) {
+                            onDeleteTableItem(o);
+                          }
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                    {o.Options && <div className="pos2-line-opt">{o.Options}</div>}
+                    <div className="pos2-line-bottom">
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>
+                        {t('ส่งครัวแล้ว', 'sent')}
+                      </span>
+                      <div className="pos2-line-price">
+                        ฿{((Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1)).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {cart.length > 0 && (
+                  <div className="pos2-sec-head new">
+                    <span>🆕 {t('รายการใหม่ (ยังไม่ส่ง)', 'New (not sent)')} ({cart.length})</span>
+                    <b>฿{cartTotal.toLocaleString()}</b>
+                  </div>
+                )}
+              </>
+            )}
+
+            {cart.length === 0 && sentItems.length === 0 ? (
               <div className="pos2-cart-empty">{t('ยังไม่มีรายการ — แตะเมนูเพื่อเพิ่ม', 'No items yet — tap a menu item')}</div>
             ) : cart.map(item => (
               <div key={item.cartId} className="pos2-line-item">
@@ -479,8 +553,13 @@ const PosSalesScreen = ({
 
           <div className="pos2-cart-foot">
             <div className="pos2-sum">
-              <span>{t('ยอดรวม', 'Subtotal')}</span><b>฿{subtotal.toLocaleString()}</b>
+              <span>{t('ส่งครัวแล้ว', 'Sent')}</span><b>฿{sentTotal.toLocaleString()}</b>
             </div>
+            {cart.length > 0 && (
+              <div className="pos2-sum" style={{ color: '#b45309' }}>
+                <span>{t('ยังไม่ส่ง', 'Not sent')}</span><b style={{ color: '#b45309' }}>฿{cartTotal.toLocaleString()}</b>
+              </div>
+            )}
             {serviceCharge > 0 && (
               <div className="pos2-sum">
                 <span>{t(`เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, `Service ${settings.serviceCharge.rate}%`)}</span>
@@ -501,8 +580,8 @@ const PosSalesScreen = ({
               <button className="pos2-send" onClick={onSendOrder} disabled={cart.length === 0 || !tableNumber}>
                 ✅ {t('ส่งรายการอาหาร', 'Send order')}
               </button>
-              <button className="pos2-bill" onClick={onOpenBill}>
-                🧾 {t('ชำระเงิน', 'Payment')}
+              <button className="pos2-bill" onClick={handleCheckoutClick} disabled={!tableNumber}>
+                💳 {t('ชำระเงิน', 'Payment')}
               </button>
             </div>
           </div>
