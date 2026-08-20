@@ -277,3 +277,61 @@
   .pos2-cart-items { max-height: 45vh; }
   .pos2-top { flex-wrap: wrap; gap: 0.4rem; }
 }
+
+/* ── แถบเตือน (ยังไม่เปิดกะ / ยังไม่เลือกโต๊ะ) ── */
+.pos2-notice {
+  flex-shrink: 0;
+  border-radius: 12px;
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 800;
+  background: var(--pos2-primary-soft);
+  color: var(--pos2-primary-dark);
+  border: 1px solid var(--pos2-primary);
+}
+.pos2-notice.warn {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+/* ── ช่องระบุเบอร์โต๊ะเอง ── */
+.pos2-custom-table { display: flex; gap: 0.3rem; }
+.pos2-custom-table input {
+  width: 108px;
+  border: 1.5px solid var(--pos2-line);
+  border-radius: 999px;
+  padding: 0.42rem 0.8rem;
+  font-size: 0.8rem; font-weight: 700; font-family: inherit; color: #0f172a;
+  outline: none; background: #fff;
+}
+.pos2-custom-table input:focus { border-color: var(--pos2-primary); }
+
+/* ── โมดอลจำนวนลูกค้า ── */
+.pos2-modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.pos2-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.35rem;
+  width: 100%; max-width: 320px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+  text-align: center;
+}
+.pos2-modal h3 { margin: 0 0 0.3rem; font-size: 1.1rem; font-weight: 900; color: #0f172a; }
+.pos2-modal p { margin: 0 0 0.9rem; font-size: 0.85rem; font-weight: 700; color: #64748b; }
+.pos2-guest-row { display: flex; align-items: center; justify-content: center; gap: 1.1rem; margin-bottom: 1.1rem; }
+.pos2-guest-row button {
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 1.5px solid var(--pos2-line); background: #f8fafc;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: #0f172a;
+}
+.pos2-guest-row button:hover { background: #f1f5f9; }
+.pos2-guest-row span { font-size: 1.6rem; font-weight: 900; color: #0f172a; min-width: 46px; }
+.pos2-modal-actions { display: flex; gap: 0.5rem; }
+.pos2-modal-actions .pos2-btn { flex: 1; justify-content: center; padding: 0.7rem; }

@@ -1,7 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import OrderWizardModal from './components/OrderWizardModal';
-import TableSelection from './components/TableSelection';
 import PosSalesScreen from './components/PosSalesScreen';
 import PaymentApprovalListener from './components/PaymentApprovalListener';
 import TableOrderView from './components/TableOrderView';
@@ -1181,19 +1180,7 @@ function App() {
         } />
 
         <Route path="/index" element={
-          !tableNumber ? (
-            <TableSelection
-              setGlobalTableNumber={setTableNumber}
-              setCustomerType={setCustomerType}
-              lang={lang}
-              tableOrders={tableOrders}
-              shiftOpen={!!currentShift}
-              isAdmin={isAdmin}
-              onOpenShift={() => setShiftModalMode('open')}
-              onCloseShift={() => setShiftModalMode('close')}
-            />
-          ) : (
-            <PosSalesScreen
+          <PosSalesScreen
               lang={lang}
               setLang={setLang}
               tableNumber={tableNumber}
@@ -1222,6 +1209,9 @@ function App() {
               isCashier={isCashier}
               branch={branch}
               currentUser={currentUser}
+              shiftOpen={!!currentShift}
+              onOpenShift={() => setShiftModalMode('open')}
+              onCloseShift={() => setShiftModalMode('close')}
               onLogout={handleLogout}
               onRefresh={refreshTableOrders}
               isRefreshing={isRefreshing}
@@ -1229,9 +1219,8 @@ function App() {
               onOpenAdmin={() => navigate('/admin')}
               onOpenWaste={() => navigate('/waste')}
               onOpenSummary={(mode) => { setSalesSummaryMode(mode); setShowSalesSummaryModal(true); }}
-              onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
-            />
-          )
+            onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
+          />
         } />
 
         <Route path="/kitchen" element={
@@ -1243,14 +1232,14 @@ function App() {
         } />
 
         <Route path="/outstanding" element={
-          <OutstandingBills lang={lang} onBack={() => navigate('/table-select')} />
+          <OutstandingBills lang={lang} onBack={() => navigate('/index')} />
         } />
 
         <Route path="/liquor" element={
           <LiquorStorage
             currentUser={currentUser}
             lang={lang}
-            onBack={() => navigate('/table-select')}
+            onBack={() => navigate('/index')}
             menu={allMenu.length > 0 ? allMenu : liveMenu}
             categories={allCategories.length > 0 ? allCategories : categories}
           />

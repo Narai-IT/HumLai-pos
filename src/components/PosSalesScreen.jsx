@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RefreshCw, LogOut, Settings, Trash2, Plus, Minus,
-  MoreHorizontal, LayoutGrid, Globe, Receipt
+  MoreHorizontal, Globe, Receipt
 } from 'lucide-react';
 import FoodCard from './FoodCard';
 import './PosSalesScreen.css';
@@ -34,6 +34,7 @@ const PosSalesScreen = ({
   customerName, setCustomerName,
   settings = {},
   isAdmin, isCashier, branch, currentUser,
+  shiftOpen, onOpenShift, onCloseShift,
   onLogout, onRefresh, isRefreshing,
   onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onDecreaseQuantity
 }) => {
@@ -108,14 +109,49 @@ const PosSalesScreen = ({
     return '';
   };
 
+  // จำนวนลูกค้าของโต๊ะที่กำลังจะเปิด (ถามเฉพาะโต๊ะทานที่ร้านที่ยังว่าง)
+  const [pendingTable, setPendingTable] = useState(null);
+  const [guestCount, setGuestCount] = useState(1);
+
+  const openTable = (name, tier) => {
+    setCustomerType(tier);
+    onSelectTable(name);
+  };
+
   const handleTableClick = (name) => {
+    if (!shiftOpen) {
+      alert(t('กรุณาเปิดกะก่อนจึงจะเปิดโต๊ะและสั่งอาหารได้', 'Please open a shift first.'));
+      return;
+    }
     if (sameTable(name, tableNumber)) return;
     if (cart.length > 0 && !window.confirm(t(
       'ยังมีรายการในตะกร้าที่ยังไม่ได้ส่ง ถ้าเปลี่ยนโต๊ะรายการจะถูกล้าง ต้องการเปลี่ยนหรือไม่?',
       'The cart still has unsent items. Switching tables clears them. Continue?'
     ))) return;
-    setCustomerType(priceTypeForTable(name));
-    onSelectTable(name);
+
+    const tier = priceTypeForTable(name);
+    // โต๊ะทานที่ร้านที่ยังไม่มีรายการ = เปิดโต๊ะใหม่ → ถามจำนวนลูกค้าไว้ขึ้นบิล
+    if (tier === '' && tableState(name).count === 0) {
+      setPendingTable(name);
+      setGuestCount(1);
+      return;
+    }
+    openTable(name, tier);
+  };
+
+  const confirmGuestCount = (skip = false) => {
+    const name = pendingTable;
+    if (!name) return;
+    if (!skip) localStorage.setItem('customer_count_' + name, String(guestCount));
+    setPendingTable(null);
+    openTable(name, priceTypeForTable(name));
+  };
+
+  // สั่งอาหารได้ต่อเมื่อเปิดกะและเลือกโต๊ะแล้ว — กันคีย์ของลอยแล้วหายตอนเลือกโต๊ะทีหลัง
+  const guardedOrderClick = (food) => {
+    if (!shiftOpen) { alert(t('กรุณาเปิดกะก่อนจึงจะสั่งอาหารได้', 'Please open a shift first.')); return; }
+    if (!tableNumber) { alert(t('กรุณาเลือกโต๊ะด้านบนก่อนเริ่มคีย์รายการ', 'Please pick a table first.')); return; }
+    onOrderClick(food);
   };
 
   // ── ค้นหาเมนูแล้วกดเพิ่มลงตะกร้าได้เลย ──
@@ -180,10 +216,13 @@ const PosSalesScreen = ({
         </div>
 
         <div className="pos2-top-right">
-          <button className="pos2-btn" onClick={() => onSelectTable('')} title={t('กลับไปหน้าเลือกโต๊ะ', 'Back to tables')}>
-            <LayoutGrid size={15} /> {t('เลือกโต๊ะ', 'Tables')}
+          <button
+            className={`pos2-btn ${shiftOpen ? '' : 'primary'}`}
+            onClick={shiftOpen ? onCloseShift : onOpenShift}
+          >
+            {shiftOpen ? t('🔒 ปิดกะ', '🔒 Close shift') : t('🕐 เปิดกะ', '🕐 Open shift')}
           </button>
-          <button className="pos2-btn" onClick={onOpenBill}>
+          <button className="pos2-btn" onClick={onOpenBill} disabled={!tableNumber}>
             <Receipt size={15} /> {t('สรุปบิล', 'Bill')}
           </button>
           {(isAdmin || isCashier) && (
@@ -227,6 +266,20 @@ const PosSalesScreen = ({
 
       <div className="pos2-body">
         <div className="pos2-main">
+          {/* ── แถบเตือนสถานะ ── */}
+          {!shiftOpen && (
+            <div className="pos2-notice warn">
+              ⚠️ {t('ยังไม่ได้เปิดกะ — กดปุ่ม "เปิดกะ" มุมขวาบนก่อนจึงจะเปิดโต๊ะและสั่งอาหารได้',
+                    'Shift not open — use "Open shift" before taking orders.')}
+            </div>
+          )}
+          {shiftOpen && !tableNumber && (
+            <div className="pos2-notice">
+              👆 {t('เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ',
+                    'Pick a table below, then tap menu items to add them.')}
+            </div>
+          )}
+
           {/* ── แถบโต๊ะ ── */}
           <div className="pos2-card pos2-tables">
             <div className="pos2-tables-head">
@@ -254,6 +307,17 @@ const PosSalesScreen = ({
                 <button className="pos2-btn" onClick={onRefresh} disabled={isRefreshing} title={t('รีเฟรช', 'Refresh')}>
                   <RefreshCw size={15} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
                 </button>
+                <form
+                  className="pos2-custom-table"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const val = e.target.elements.customTable.value.trim();
+                    if (val) { handleTableClick(val); e.target.reset(); }
+                  }}
+                >
+                  <input name="customTable" placeholder={t('เบอร์โต๊ะอื่น', 'Other table')} />
+                  <button type="submit" className="pos2-btn">{t('เปิด', 'Open')}</button>
+                </form>
               </div>
             </div>
 
@@ -307,7 +371,7 @@ const PosSalesScreen = ({
                   food={item}
                   lang={lang}
                   displayPrice={Number(resolvePrice(item)?.price) || 0}
-                  onOrderClick={onOrderClick}
+                  onOrderClick={guardedOrderClick}
                   onDecreaseClick={onDecreaseQuantity}
                   cartQuantity={cart.filter(c => c.food.id === item.id).reduce((s, c) => s + (c.quantity || 1), 0)}
                 />
@@ -355,7 +419,7 @@ const PosSalesScreen = ({
                   {searchResults.map(m => (
                     <button
                       key={m.id}
-                      onClick={() => { onOrderClick(m); setQuery(''); }}
+                      onClick={() => { guardedOrderClick(m); setQuery(''); }}
                     >
                       <span>{lang === 'th' ? m.name : (m.nameEn || m.name)}</span>
                       <b>฿{Number(resolvePrice(m)?.price || 0).toLocaleString()}</b>
@@ -426,7 +490,7 @@ const PosSalesScreen = ({
               <b>฿{grandTotal.toLocaleString()}</b>
             </div>
             <div className="pos2-actions">
-              <button className="pos2-send" onClick={onSendOrder} disabled={cart.length === 0}>
+              <button className="pos2-send" onClick={onSendOrder} disabled={cart.length === 0 || !tableNumber}>
                 ✅ {t('ส่งรายการอาหาร', 'Send order')}
               </button>
               <button className="pos2-bill" onClick={onOpenBill}>
@@ -436,6 +500,25 @@ const PosSalesScreen = ({
           </div>
         </aside>
       </div>
+
+      {/* ── จำนวนลูกค้าตอนเปิดโต๊ะใหม่ — ขึ้นบนบิลตอนเช็คบิล ── */}
+      {pendingTable && (
+        <div className="pos2-modal-overlay" onClick={() => setPendingTable(null)}>
+          <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{t(`เปิดโต๊ะ ${pendingTable}`, `Open table ${pendingTable}`)}</h3>
+            <p>{t('ระบุจำนวนลูกค้า (ท่าน)', 'Number of guests')}</p>
+            <div className="pos2-guest-row">
+              <button onClick={() => setGuestCount(c => Math.max(1, c - 1))}><Minus size={18} /></button>
+              <span>{guestCount}</span>
+              <button onClick={() => setGuestCount(c => c + 1)}><Plus size={18} /></button>
+            </div>
+            <div className="pos2-modal-actions">
+              <button className="pos2-btn" onClick={() => confirmGuestCount(true)}>{t('ข้าม', 'Skip')}</button>
+              <button className="pos2-btn primary" onClick={() => confirmGuestCount(false)}>{t('เปิดโต๊ะ', 'Open table')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
