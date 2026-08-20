@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu } from 'lucide-react';
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
@@ -29,6 +29,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   // ร้านเลือกไม่ตรวจสลิปอัตโนมัติแล้ว ลูกค้าโอนตาม QR แล้วกดยืนยัน = ถือว่าชำระแล้ว
   // ต้องติ๊กช่อง "โอนแล้ว" ก่อน กันเผลอกดปุ่มโดยยังไม่ได้โอน
   const [transferConfirmed, setTransferConfirmed] = useState(false);
+
+  // แผงเลือกหมวดหมู่ (เปิดจากปุ่ม 3 ขีด)
+  const [showCategoryMenu, setShowCategoryMenu] = useState(false);
 
   useEffect(() => {
     if (categories.length > 0 && !categories.some(c => c.slug === activeCategory)) {
@@ -273,37 +276,25 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
         <Sparkles size={36} color="#f59e0b" style={{ flexShrink: 0, opacity: 0.9 }} />
       </div>
 
-      {/* ─── Horizontal Scroll Category Filter Bar ─── */}
-      <div style={{
-        // ห้ามเลื่อนซ้ายขวา — ให้ปุ่มหมวดหมู่ตัดขึ้นบรรทัดใหม่แทนการเลื่อนไปทางขวา
-        // ลูกค้าจะได้เห็นทุกหมวดในจอเดียว ไม่มีหมวดไหนถูกซ่อนอยู่นอกจอ
-        display: 'flex', flexWrap: 'wrap', gap: '0.5rem',
-        padding: '0.5rem 1rem 0.75rem'
-      }}>
-        {categories.map(cat => {
-          const isActive = cat.slug === activeCategory;
-          return (
-            <button
-              key={cat.slug}
-              onClick={() => setActiveCategory(cat.slug)}
-              style={{
-                maxWidth: '100%',
-                display: 'flex', alignItems: 'center', gap: '0.4rem',
-                padding: '0.55rem 0.9rem', borderRadius: '25px',
-                textAlign: 'left', lineHeight: 1.25,
-                border: `2px solid ${isActive ? '#ea580c' : '#e2e8f0'}`,
-                background: isActive ? '#ea580c' : '#ffffff',
-                color: isActive ? '#ffffff' : '#0f172a',
-                fontWeight: '800', fontSize: '0.9rem',
-                cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                boxShadow: isActive ? '0 4px 12px rgba(234,88,12,0.3)' : 'none'
-              }}
-            >
-              <span style={{ flexShrink: 0 }}>{cat.icon || '🍲'}</span>
-              <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{lang === 'th' ? cat.name : cat.nameEn}</span>
-            </button>
-          );
-        })}
+      {/* ─── ปุ่มหมวดหมู่ปุ่มเดียว (3 ขีด) — กดแล้วเลือกหมวดจากรายการ ─── */}
+      <div style={{ padding: '0.5rem 1rem 0.75rem' }}>
+        <button
+          onClick={() => setShowCategoryMenu(true)}
+          style={{
+            width: '100%',
+            display: 'flex', alignItems: 'center', gap: '0.6rem',
+            padding: '0.75rem 0.9rem', borderRadius: '14px',
+            border: '2px solid #e2e8f0', background: '#ffffff',
+            color: '#0f172a', fontWeight: '800', fontSize: '0.95rem',
+            fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left'
+          }}
+        >
+          <Menu size={20} color="#ea580c" />
+          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {activeCat ? `${activeCat.icon || '🍲'} ${lang === 'th' ? activeCat.name : (activeCat.nameEn || activeCat.name)}` : (lang === 'th' ? 'เลือกหมวดหมู่' : 'Choose a category')}
+          </span>
+          <ChevronRight size={18} color="#94a3b8" style={{ transform: 'rotate(90deg)' }} />
+        </button>
       </div>
 
       {/* ─── Large Photo Food Cards Feed ─── */}
@@ -328,12 +319,13 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             return (
               <div
                 key={food.id}
-                onClick={() => handleFoodClick(food)}
+                /* ตั้งใจไม่ให้กดที่การ์ด/รูปแล้วสั่ง — ลูกค้ามักแตะรูปเพื่อดูให้ชัด
+                   ถ้าแตะแล้วเพิ่มของทันทีจะได้ของที่ไม่ได้ตั้งใจสั่ง ต้องกดปุ่ม "+ สั่ง" เท่านั้น */
                 style={{
                   background: '#ffffff', borderRadius: '18px',
                   border: '1px solid #e2e8f0', overflow: 'hidden',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.04)',
-                  cursor: 'pointer', transition: 'transform 0.15s',
+                  transition: 'transform 0.15s',
                   display: 'flex', flexDirection: 'column', height: '100%',
                   position: 'relative'
                 }}
@@ -395,7 +387,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   </div>
 
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleFoodClick(food); }}
+                    onClick={() => handleFoodClick(food)}
                     style={{
                       marginTop: 'auto',
                       background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
@@ -473,6 +465,76 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmWizardOrder}
         />
+      )}
+
+      {/* ─── แผงเลือกหมวดหมู่ (เปิดจากปุ่ม 3 ขีด) ─── */}
+      {showCategoryMenu && (
+        <div
+          onClick={() => setShowCategoryMenu(false)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 900,
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#ffffff', width: '100%', maxWidth: '480px',
+              borderTopLeftRadius: '22px', borderTopRightRadius: '22px',
+              padding: '1rem',
+              paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
+              maxHeight: '80dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: '900', color: '#0f172a' }}>
+                {lang === 'th' ? 'หมวดหมู่' : 'Categories'}
+              </h3>
+              <button
+                onClick={() => setShowCategoryMenu(false)}
+                style={{ background: '#f1f5f9', border: 'none', borderRadius: '50%', width: '34px', height: '34px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <X size={18} color="#0f172a" />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              {categories.map(cat => {
+                const isActive = cat.slug === activeCategory;
+                // นับเฉพาะเมนูที่อยู่ในหมวดนั้นจริง ลูกค้าจะได้รู้ว่ากดเข้าไปแล้วมีของ
+                const count = liveMenu.filter(item => {
+                  const primary = item.category || 'food';
+                  const extra = Array.isArray(item.categories) ? item.categories : [];
+                  return primary === cat.slug || extra.includes(cat.slug);
+                }).length;
+                return (
+                  <button
+                    key={cat.slug}
+                    onClick={() => { setActiveCategory(cat.slug); setShowCategoryMenu(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '0.6rem',
+                      padding: '0.85rem 0.9rem', borderRadius: '13px',
+                      border: `2px solid ${isActive ? '#ea580c' : '#e2e8f0'}`,
+                      background: isActive ? '#fff7ed' : '#ffffff',
+                      color: '#0f172a', fontWeight: '800', fontSize: '0.95rem',
+                      fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left', width: '100%'
+                    }}
+                  >
+                    <span style={{ flexShrink: 0, fontSize: '1.15rem' }}>{cat.icon || '🍲'}</span>
+                    <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+                      {lang === 'th' ? cat.name : (cat.nameEn || cat.name)}
+                    </span>
+                    <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#94a3b8', flexShrink: 0 }}>
+                      {count}
+                    </span>
+                    {isActive && <CheckCircle size={17} color="#ea580c" style={{ flexShrink: 0 }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ─── Self-Checkout & PromptPay QR Modal ─── */}
