@@ -338,7 +338,12 @@ const ManagePrinters = () => {
                 <div style={{ background: '#ffffff', border: '1px dashed #fecaca', borderRadius: '10px', padding: '0.85rem 1rem', color: '#475569' }}>
                   <strong style={{ color: '#0f172a' }}>วิธีเปิด Print Server:</strong>
                   <ol style={{ margin: '0.5rem 0 0 1.2rem', padding: 0, lineHeight: 1.7 }}>
-                    <li>ที่เครื่องคอมที่ต่อวงแลนเดียวกับเครื่องพิมพ์ ให้ดับเบิลคลิก <code>start-printer.bat</code></li>
+                    <li>
+                      <strong style={{ color: '#0f172a' }}>แนะนำ — ตั้งครั้งเดียวจบ:</strong> ดับเบิลคลิก <code>install-autostart.bat</code> ครั้งเดียว
+                      จากนั้น Print Server จะเปิดเองทุกครั้งที่เปิดเครื่อง (ทำงานเบื้องหลัง ไม่มีหน้าต่างแสดง)
+                      และถ้าดับเองก็จะเปิดใหม่ให้อัตโนมัติ ไม่ต้องเปิด <code>start-printer.bat</code> อีก
+                    </li>
+                    <li>หรือเปิดครั้งเดียวเฉพาะตอนนี้ ให้ดับเบิลคลิก <code>start-printer.bat</code></li>
                     <li>
                       หรือเปิด Command Prompt ในโฟลเดอร์โปรเจกต์แล้วพิมพ์
                       <code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '5px', margin: '0 0.35rem' }}>node server.js</code>

@@ -247,7 +247,22 @@ app.post('/print', async (req, res) => {
 });
 
 const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Print bridge server running on http://localhost:${PORT}`);
+// ผูกข้อความไว้กับ event 'listening' ไม่ใช่ callback ของ app.listen
+// เพราะ Express 5 เรียก callback ทันทีแม้ bind พอร์ตไม่สำเร็จ
+const server = app.listen(PORT);
+
+server.on('listening', () => {
+  console.log(`[${new Date().toLocaleString('th-TH')}] Print bridge server running on http://localhost:${PORT}`);
   console.log(`Ready to print to LAN ESP/POS thermal printers`);
+});
+
+// ถ้ามี Print Server ตัวอื่นเปิดอยู่แล้ว ให้จบการทำงานเงียบ ๆ
+// (ตัว daemon ที่เปิดอัตโนมัติจะได้ไม่วนเปิดซ้ำ)
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`Port ${PORT} ถูกใช้งานอยู่แล้ว — มี Print Server เปิดอยู่ก่อนหน้า ปิดตัวนี้ลง`);
+    process.exit(0);
+  }
+  console.error('Server error:', err);
+  process.exit(1);
 });
