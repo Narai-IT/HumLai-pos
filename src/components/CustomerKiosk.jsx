@@ -20,6 +20,13 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   const [isPaid, setIsPaid] = useState(false);
   const [orderSentSuccess, setOrderSentSuccess] = useState(false);
 
+  // ── ตรวจสลิปอัตโนมัติ (SlipOK) ──
+  // ลูกค้าสั่งเองต้องพิสูจน์ว่าโอนจริงก่อน ถึงจะส่งออเดอร์เข้าครัวได้
+  const [slipPreview, setSlipPreview] = useState('');   // รูปสลิปที่เลือก (แสดงตัวอย่าง)
+  const [slipChecking, setSlipChecking] = useState(false);
+  const [slipResult, setSlipResult] = useState(null);   // ข้อมูลสลิปที่ผ่านการตรวจแล้ว
+  const [slipError, setSlipError] = useState('');
+
   useEffect(() => {
     if (categories.length > 0 && !categories.some(c => c.slug === activeCategory)) {
       setActiveCategory(categories[0].slug);
@@ -113,12 +120,86 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     }).filter(Boolean));
   };
 
+  // ย่อรูปก่อนส่ง แต่ยังต้องคมพอให้ SlipOK อ่าน QR ในสลิปออก จึงใช้ 1400px / คุณภาพ 0.92
+  const slipToDataUrl = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1400;
+        let { width, height } = img;
+        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height >= width && height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      };
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  // ข้อความบอกสาเหตุที่สลิปไม่ผ่าน — ลูกค้าอ่านเองแล้วแก้ได้โดยไม่ต้องเรียกพนักงาน
+  const slipErrorText = (json) => {
+    const code = json && json.code;
+    if (code === 1012) return lang === 'th' ? 'สลิปนี้ถูกใช้ยืนยันไปแล้ว กรุณาใช้สลิปของรายการนี้' : 'This slip has already been used.';
+    if (code === 1014) return lang === 'th' ? 'ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ' : 'Slip amount does not match the total.';
+    if (code === 1013) return lang === 'th' ? 'บัญชีปลายทางในสลิปไม่ใช่บัญชีของร้าน' : 'The receiving account is not the shop account.';
+    if (code === 1002 || code === 1003) return lang === 'th' ? 'อ่านสลิปไม่ออก กรุณาถ่ายใหม่ให้เห็น QR ในสลิปชัด ๆ' : 'Cannot read the slip. Please retake a clearer photo.';
+    return (json && json.message) || (lang === 'th' ? 'ตรวจสลิปไม่สำเร็จ กรุณาลองใหม่' : 'Slip verification failed.');
+  };
+
+  const handleSlipFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setSlipError('');
+    setSlipResult(null);
+    setSlipChecking(true);
+    try {
+      const dataUrl = await slipToDataUrl(file);
+      setSlipPreview(dataUrl);
+      const base64 = String(dataUrl).split(',')[1];
+
+      const res = await fetch('/api/verify-slip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64, mimeType: 'image/jpeg', amount: cartSubtotal })
+      });
+      const json = await res.json().catch(() => null);
+
+      if (res.ok && json && json.success && json.data) {
+        // กันกรณีที่ SlipOK ไม่ได้เทียบยอดให้ — เทียบซ้ำฝั่งเราอีกชั้น
+        const paid = Number(json.data.amount);
+        if (!isNaN(paid) && Math.abs(paid - cartSubtotal) > 0.01) {
+          setSlipError(lang === 'th'
+            ? `ยอดในสลิป ฿${paid.toLocaleString()} ไม่ตรงกับยอดที่ต้องชำระ ฿${cartSubtotal.toLocaleString()}`
+            : `Slip amount does not match the total.`);
+        } else {
+          setSlipResult(json.data);
+        }
+      } else {
+        setSlipError(slipErrorText(json));
+      }
+    } catch (err) {
+      console.error('verify slip error:', err);
+      setSlipError(lang === 'th' ? 'เชื่อมต่อระบบตรวจสลิปไม่ได้ กรุณาลองใหม่' : 'Cannot reach the verification service.');
+    }
+    setSlipChecking(false);
+  };
+
   const handleConfirmSelfPayment = async () => {
     if (cart.length === 0) return;
+    if (!slipResult) return; // ต้องผ่านการตรวจสลิปก่อนเท่านั้น
     setIsPaid(true);
 
     if (onSendOrder) {
-      await onSendOrder(tableNo, cart, cartSubtotal, 'เงินโอน (QR Self-Order)');
+      const ref = slipResult.transRef ? ` [${slipResult.transRef}]` : '';
+      await onSendOrder(tableNo, cart, cartSubtotal, `เงินโอน (QR ตรวจสลิปแล้ว)${ref}`);
     }
 
     setOrderSentSuccess(true);
@@ -127,6 +208,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       setIsCheckoutOpen(false);
       setIsPaid(false);
       setOrderSentSuccess(false);
+      setSlipPreview('');
+      setSlipResult(null);
+      setSlipError('');
     }, 4000);
   };
 
@@ -511,21 +595,104 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   </div>
                 </div>
 
+                {/* ─── ขั้นตอนบังคับ: แนบสลิปให้ระบบตรวจก่อน ─── */}
+                <div style={{
+                  background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '16px',
+                  padding: '1rem', marginBottom: '1rem'
+                }}>
+                  <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a', marginBottom: '0.15rem' }}>
+                    {lang === 'th' ? 'แนบสลิปเพื่อยืนยันการโอน' : 'Attach your transfer slip'}
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '600', marginBottom: '0.75rem', lineHeight: 1.45 }}>
+                    {lang === 'th'
+                      ? 'สแกน QR แล้วโอนตามยอด จากนั้นถ่ายรูปหรือเลือกสลิปจากเครื่อง ระบบจะตรวจให้อัตโนมัติภายในไม่กี่วินาที'
+                      : 'Pay with the QR above, then upload the slip. It is verified automatically in a few seconds.'}
+                  </div>
+
+                  {slipPreview && (
+                    <img
+                      src={slipPreview}
+                      alt="slip"
+                      style={{
+                        width: '100%', maxHeight: '200px', objectFit: 'contain',
+                        borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '0.65rem', background: '#f8fafc'
+                      }}
+                    />
+                  )}
+
+                  {!slipResult && (
+                    <label
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                        border: '2px dashed #cbd5e1', borderRadius: '12px',
+                        padding: '0.9rem', cursor: slipChecking ? 'wait' : 'pointer',
+                        color: '#0f172a', fontWeight: '800', fontSize: '0.9rem',
+                        background: slipChecking ? '#f1f5f9' : '#ffffff'
+                      }}
+                    >
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={slipChecking}
+                        onChange={handleSlipFile}
+                        style={{ display: 'none' }}
+                      />
+                      {slipChecking
+                        ? (lang === 'th' ? '⏳ กำลังตรวจสลิป...' : '⏳ Verifying slip...')
+                        : (slipPreview
+                            ? (lang === 'th' ? '🔄 เลือกสลิปใหม่' : '🔄 Choose another slip')
+                            : (lang === 'th' ? '📎 เลือก / ถ่ายรูปสลิป' : '📎 Upload slip photo'))}
+                    </label>
+                  )}
+
+                  {slipError && (
+                    <div style={{
+                      marginTop: '0.65rem', background: '#fef2f2', border: '1px solid #fecaca',
+                      color: '#b91c1c', borderRadius: '10px', padding: '0.65rem 0.75rem',
+                      fontSize: '0.82rem', fontWeight: '700', lineHeight: 1.45
+                    }}>
+                      ❌ {slipError}
+                    </div>
+                  )}
+
+                  {slipResult && (
+                    <div style={{
+                      background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '12px',
+                      padding: '0.75rem 0.85rem', fontSize: '0.82rem', color: '#166534', fontWeight: '700', lineHeight: 1.6
+                    }}>
+                      <div style={{ fontWeight: '900', fontSize: '0.9rem', marginBottom: '0.2rem' }}>
+                        ✅ {lang === 'th' ? 'ตรวจสลิปผ่านแล้ว' : 'Slip verified'}
+                      </div>
+                      <div>{lang === 'th' ? 'ยอดที่โอน' : 'Amount'}: ฿{Number(slipResult.amount || 0).toLocaleString()}</div>
+                      {slipResult.sendingBank && <div>{lang === 'th' ? 'ธนาคารต้นทาง' : 'From bank'}: {slipResult.sendingBank}</div>}
+                      {slipResult.transDate && <div>{lang === 'th' ? 'เวลาโอน' : 'Time'}: {slipResult.transDate} {slipResult.transTime || ''}</div>}
+                      {slipResult.transRef && <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Ref: {slipResult.transRef}</div>}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={handleConfirmSelfPayment}
-                  disabled={isPaid}
+                  disabled={isPaid || !slipResult}
                   style={{
                     width: '100%',
-                    background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                    background: (!slipResult || isPaid)
+                      ? '#cbd5e1'
+                      : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
                     color: '#ffffff', border: 'none', borderRadius: '14px',
                     padding: '1rem', fontWeight: '900', fontSize: '1.1rem',
-                    cursor: isPaid ? 'not-allowed' : 'pointer', opacity: isPaid ? 0.7 : 1,
+                    cursor: (isPaid || !slipResult) ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                    boxShadow: '0 8px 20px rgba(22,163,74,0.35)', fontFamily: 'inherit'
+                    boxShadow: (!slipResult || isPaid) ? 'none' : '0 8px 20px rgba(22,163,74,0.35)',
+                    fontFamily: 'inherit'
                   }}
                 >
                   <CheckCircle size={22} />
-                  {isPaid ? (lang === 'th' ? 'กำลังส่งออเดอร์...' : 'Sending order...') : (lang === 'th' ? 'ยืนยันชำระเงินแล้ว & ส่งออเดอร์' : 'Confirm Payment & Send Order')}
+                  {isPaid
+                    ? (lang === 'th' ? 'กำลังส่งออเดอร์...' : 'Sending order...')
+                    : slipResult
+                      ? (lang === 'th' ? 'ส่งออเดอร์เข้าครัว' : 'Send order to kitchen')
+                      : (lang === 'th' ? 'แนบสลิปก่อนจึงจะส่งออเดอร์ได้' : 'Attach a slip to continue')}
                 </button>
               </>
             )}
