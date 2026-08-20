@@ -43,6 +43,8 @@ let baselineDone = false;    // รอบแรกหลังเปิดสว
 let timer = null;
 let polling = false;
 let menuCache = { items: [], at: 0 };
+// สคริปต์ที่ deploy อยู่ยังไม่รู้จัก getKitchenQueue (เวอร์ชันเก่า) → ถอยไปใช้ getLive ตลอดทั้งรอบชีวิตโปรเซส
+let legacyGas = false;
 
 const status = {
   lastPollAt: null,
@@ -93,6 +95,17 @@ const fetchGas = async (action, timeoutMs = 20000) => {
   if (!res.ok) throw new Error(`GAS ตอบกลับ HTTP ${res.status}`);
   const text = await res.text();
   return JSON.parse(text.replace(/^\uFEFF/, ''));
+};
+
+// คิวใบครัวแบบเบา ๆ — ถ้าสคริปต์ที่ deploy ไว้ยังไม่มี action นี้ ให้ถอยไปใช้ getLive แบบเดิม
+const fetchQueue = async () => {
+  if (!legacyGas) {
+    const data = await fetchGas('getKitchenQueue');
+    if (!data || data.error !== 'Unknown GET action') return data;
+    legacyGas = true;
+    console.warn('[auto-print] Apps Script ที่ deploy อยู่ยังไม่รู้จัก getKitchenQueue — ใช้ getLive แทน (deploy สคริปต์เวอร์ชันใหม่จะเบากว่า)');
+  }
+  return await fetchGas('getLive');
 };
 
 // เมนูใช้หาว่าแต่ละรายการต้องไปออกที่เครื่องไหน (printerId) — เปลี่ยนไม่บ่อย cache ไว้ 5 นาที
@@ -216,7 +229,7 @@ export const pollOnce = async ({ force = false } = {}) => {
   if (polling) return { skipped: 'รอบก่อนยังทำงานอยู่' };
   polling = true;
   try {
-    const data = await fetchGas('getLive');
+    const data = await fetchQueue();
     status.lastPollAt = new Date().toISOString();
     status.lastError = null;
 

@@ -54,6 +54,14 @@ function authorizeDrive() {
   return msg;
 }
 
+// ชีตที่สร้างไว้ตั้งแต่ก่อนมีคอลัมน์ใหม่ อาจมีคอลัมน์ไม่พอให้เขียนหัวตารางชุดใหม่
+// (เขียนเกินขอบเขตชีตจะ throw) จึงต้องขยายคอลัมน์ให้พอก่อน
+function ensureColumns(sheet, count) {
+  var max = sheet.getMaxColumns();
+  if (max < count) sheet.insertColumnsAfter(max, count - max);
+  return sheet;
+}
+
 function getOrCreateSheet(ss, sheetName, headers) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -70,7 +78,7 @@ function initializeSheets() {
     orderSheet.getRange(1, 13).setValue('Quantity');
   }
   getOrCreateSheet(ss, 'Categories', ['slug', 'name', 'nameEn', 'icon', 'isActive', 'hasPopup1', 'popup1Category', 'popup1Items', 'popup1Min', 'popup1Max', 'popup1ItemsMax', 'popup1Free', 'hasPopup2', 'popup2Category', 'popup2Items', 'popup2Min', 'popup2Max', 'popup2ItemsMax', 'popup2Free', 'hasPopup3', 'popup3Category', 'popup3Items', 'popup3Min', 'popup3Max', 'popup3ItemsMax', 'popup3Free', 'hasPopup4', 'popup4Category', 'popup4Items', 'popup4Min', 'popup4Max', 'popup4ItemsMax', 'popup4Free', 'hasPopup5', 'popup5Category', 'popup5Items', 'popup5Min', 'popup5Max', 'popup5ItemsMax', 'popup5Free', 'hasPopup6', 'popup6Category', 'popup6Items', 'popup6Min', 'popup6Max', 'popup6ItemsMax', 'popup6Free', 'hasDining']);
-  getOrCreateSheet(ss, 'Menu', ['id', 'category', 'name', 'nameEn', 'description', 'descriptionEn', 'price', 'image', 'isActive', 'bundledItems', 'popupConfig', 'prices', 'categories']);
+  getOrCreateSheet(ss, 'Menu', ['id', 'category', 'name', 'nameEn', 'description', 'descriptionEn', 'price', 'image', 'isActive', 'bundledItems', 'popupConfig', 'prices', 'categories', 'printerId']);
   getOrCreateSheet(ss, 'Promotions', ['id', 'name', 'nameEn', 'price', 'origPrice']);
   getOrCreateSheet(ss, 'TableOrders', ['TableNumber', 'SessionId', 'ItemName', 'ItemNameEn', 'ItemPrice', 'Quantity', 'Options', 'Timestamp', 'Status', 'RecordedBy']);
   getOrCreateSheet(ss, 'Users', ['id', 'username', 'pin', 'canCheckout', 'isAdmin', 'isCashier', 'branch']);
@@ -247,6 +255,23 @@ function doGet(e) {
       // บิลที่ลูกค้าจ่ายเองจากคีออสไม่ได้เกิดบนเครื่องขาย ถ้าไม่ส่งมาด้วยยอดสรุปกะจะขาดไป
       payments:    getSheetDataAsObjects(ss, 'PaymentSummary', 300)
     });
+  }
+
+  // ── คิวใบครัว — ให้ Print Server ดึงไปพิมพ์เอง ──
+  // อ่านชีตเดียวและตัดเหลือเฉพาะบิลที่ยังไม่เสร็จ (ออเดอร์ที่ลูกค้าสั่งเองผ่าน QR)
+  // แยกจาก getLive เพราะตัวนั้นอ่าน 3 ชีตทุกรอบ ถ้าให้ Print Server ยิงทั้งวันจะกินโควตาเวลารันของ
+  // Apps Script โดยใช่เหตุ — ตัวนี้ส่งกลับเฉพาะที่ต้องใช้พิมพ์
+  if (action === 'getKitchenQueue') {
+    var queueRows = getSheetDataAsObjects(ss, 'Orders', 200);
+    var pendingRows = [];
+    var pendingNums = {};
+    queueRows.forEach(function(row) {
+      if (String(row.Status || '').toLowerCase() === 'pending' && row.OrderNumber) pendingNums[row.OrderNumber] = true;
+    });
+    queueRows.forEach(function(row) {
+      if (row.OrderNumber && pendingNums[row.OrderNumber]) pendingRows.push(row);
+    });
+    return _bomJson({ orders: pendingRows });
   }
 
   // ── ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน อ่านจาก cache 5 นาที ──
@@ -747,15 +772,16 @@ function doPost(e) {
     var sheet = ss.getSheetByName('Menu');
     var item = postData.item;
     if (!item || !item.id) return _bomJson({ success: false });
-    // Ensure the header includes the popupConfig/prices/categories columns (migration for old sheets)
-    var menuHeaders = ['id', 'category', 'name', 'nameEn', 'description', 'descriptionEn', 'price', 'image', 'isActive', 'bundledItems', 'popupConfig', 'prices', 'categories'];
+    // Ensure the header includes the popupConfig/prices/categories/printerId columns (migration for old sheets)
+    var menuHeaders = ['id', 'category', 'name', 'nameEn', 'description', 'descriptionEn', 'price', 'image', 'isActive', 'bundledItems', 'popupConfig', 'prices', 'categories', 'printerId'];
+    ensureColumns(sheet, menuHeaders.length);
     sheet.getRange(1, 1, 1, menuHeaders.length).setValues([menuHeaders]);
     var data = sheet.getDataRange().getValues();
     var foundIndex = -1;
     for (var i = 1; i < data.length; i++) {
       if (data[i][0] == item.id) { foundIndex = i + 1; break; }
     }
-    var rowData = [item.id, item.category || 'food', item.name || '', item.nameEn || '', item.description || '', item.descriptionEn || '', item.price || 0, item.image || '', item.isActive !== false, item.bundledItems ? JSON.stringify(item.bundledItems) : '[]', item.popupConfig ? JSON.stringify(item.popupConfig) : '{}', item.prices ? JSON.stringify(item.prices) : '[]', item.categories ? JSON.stringify(item.categories) : '[]'];
+    var rowData = [item.id, item.category || 'food', item.name || '', item.nameEn || '', item.description || '', item.descriptionEn || '', item.price || 0, item.image || '', item.isActive !== false, item.bundledItems ? JSON.stringify(item.bundledItems) : '[]', item.popupConfig ? JSON.stringify(item.popupConfig) : '{}', item.prices ? JSON.stringify(item.prices) : '[]', item.categories ? JSON.stringify(item.categories) : '[]', item.printerId || ''];
     if (foundIndex !== -1) sheet.getRange(foundIndex, 1, 1, rowData.length).setValues([rowData]);
     else sheet.appendRow(rowData);
     return _bomJson({ success: true });
@@ -772,10 +798,11 @@ function doPost(e) {
 
   if (action === 'saveMenu') {
     var sheet = ss.getSheetByName('Menu');
+    ensureColumns(sheet, 14); // id..categories + printerId
     sheet.clearContents();
-    sheet.appendRow(['id', 'category', 'name', 'nameEn', 'description', 'descriptionEn', 'price', 'image', 'isActive', 'bundledItems', 'popupConfig', 'prices', 'categories']);
+    sheet.appendRow(['id', 'category', 'name', 'nameEn', 'description', 'descriptionEn', 'price', 'image', 'isActive', 'bundledItems', 'popupConfig', 'prices', 'categories', 'printerId']);
     (postData.items || []).forEach(function(item) {
-      sheet.appendRow([item.id || Date.now(), item.category || 'food', item.name || '', item.nameEn || '', item.description || '', item.descriptionEn || '', item.price || 0, item.image || '', item.isActive !== false, item.bundledItems ? JSON.stringify(item.bundledItems) : '[]', item.popupConfig ? JSON.stringify(item.popupConfig) : '{}', item.prices ? JSON.stringify(item.prices) : '[]', item.categories ? JSON.stringify(item.categories) : '[]']);
+      sheet.appendRow([item.id || Date.now(), item.category || 'food', item.name || '', item.nameEn || '', item.description || '', item.descriptionEn || '', item.price || 0, item.image || '', item.isActive !== false, item.bundledItems ? JSON.stringify(item.bundledItems) : '[]', item.popupConfig ? JSON.stringify(item.popupConfig) : '{}', item.prices ? JSON.stringify(item.prices) : '[]', item.categories ? JSON.stringify(item.categories) : '[]', item.printerId || '']);
     });
     return _bomJson({ success: true });
   }
