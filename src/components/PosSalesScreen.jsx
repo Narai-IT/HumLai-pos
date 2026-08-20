@@ -114,6 +114,9 @@ const PosSalesScreen = ({
     return '';
   };
 
+  // รายการในบิลที่ถูกแตะ เพื่อเลือกว่าจะพิมพ์ซ้ำหรือยกเลิก
+  const [actionItem, setActionItem] = useState(null);
+
   // จำนวนลูกค้าของโต๊ะที่กำลังจะเปิด (ถามเฉพาะโต๊ะทานที่ร้านที่ยังว่าง)
   const [pendingTable, setPendingTable] = useState(null);
   const [guestCount, setGuestCount] = useState(1);
@@ -491,27 +494,22 @@ const PosSalesScreen = ({
                   </span>
                 </div>
                 {sentItems.map((o, idx) => (
-                  <div key={`${o.SessionId}-${o.ItemName}-${idx}`} className="pos2-line-item sent">
+                  <div
+                    key={`${o.SessionId}-${o.ItemName}-${idx}`}
+                    className="pos2-line-item sent tappable"
+                    onClick={() => setActionItem(o)}
+                    title={t('แตะเพื่อพิมพ์ซ้ำหรือยกเลิกรายการ', 'Tap to reprint or cancel')}
+                  >
                     <div className="pos2-line-top">
                       <div className="pos2-line-name">
                         <span className="pos2-qty-badge">{Number(o.Quantity) || 1}×</span> {o.ItemName}
                       </div>
-                      <button
-                        className="pos2-icon-btn"
-                        title={t('ลบรายการนี้ออกจากบิล', 'Remove from bill')}
-                        onClick={() => {
-                          if (window.confirm(t(`ลบ "${o.ItemName}" ออกจากบิลโต๊ะ ${tableNumber}?`, `Remove "${o.ItemName}" from the bill?`))) {
-                            onDeleteTableItem(o);
-                          }
-                        }}
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <span className="pos2-more-dots"><MoreHorizontal size={16} /></span>
                     </div>
                     {o.Options && <div className="pos2-line-opt">{o.Options}</div>}
                     <div className="pos2-line-bottom">
                       <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>
-                        {t('ส่งครัวแล้ว', 'sent')}
+                        {t('ส่งครัวแล้ว · แตะเพื่อจัดการ', 'sent · tap to manage')}
                       </span>
                       <div className="pos2-line-price">
                         ฿{((Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1)).toLocaleString()}
@@ -596,6 +594,47 @@ const PosSalesScreen = ({
           </div>
         </aside>
       </div>
+
+      {/* ── เมนูจัดการรายการในบิล: พิมพ์ซ้ำ / ยกเลิก ── */}
+      {actionItem && (
+        <div className="pos2-modal-overlay" onClick={() => setActionItem(null)}>
+          <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{actionItem.ItemName}</h3>
+            <p>
+              {Number(actionItem.Quantity) || 1} {t('รายการ', 'pcs')} · ฿
+              {((Number(actionItem.ItemPrice) || 0) * (Number(actionItem.Quantity) || 1)).toLocaleString()}
+              {actionItem.Options ? ` · ${actionItem.Options}` : ''}
+            </p>
+
+            <div className="pos2-action-list">
+              <button
+                className="pos2-action"
+                onClick={() => { onPrintKitchen([actionItem]); setActionItem(null); }}
+              >
+                <Printer size={17} /> {t('พิมพ์ใบครัวซ้ำ (เฉพาะรายการนี้)', 'Reprint this item')}
+              </button>
+              <button
+                className="pos2-action danger"
+                onClick={() => {
+                  if (window.confirm(t(
+                    `ยกเลิก "${actionItem.ItemName}" ออกจากบิลโต๊ะ ${tableNumber}?\n(ครัวอาจทำไปแล้ว — ควรแจ้งครัวด้วย)`,
+                    `Cancel "${actionItem.ItemName}" from this bill?`
+                  ))) {
+                    onDeleteTableItem(actionItem);
+                    setActionItem(null);
+                  }
+                }}
+              >
+                <Trash2 size={17} /> {t('ยกเลิกรายการนี้', 'Cancel this item')}
+              </button>
+            </div>
+
+            <div className="pos2-modal-actions">
+              <button className="pos2-btn" onClick={() => setActionItem(null)}>{t('ปิด', 'Close')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── จำนวนลูกค้าตอนเปิดโต๊ะใหม่ — ขึ้นบนบิลตอนเช็คบิล ── */}
       {pendingTable && (
