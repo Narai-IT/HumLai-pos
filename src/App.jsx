@@ -29,6 +29,7 @@ const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
 import './index.css';
+import { sendPrintJob } from './utils/printServer';
 
 const MENU_ITEMS = [];
 
@@ -1024,11 +1025,9 @@ function App() {
       // Print receipt
       const receiptIP = localStorage.getItem('printer_receipt_ip');
       if (receiptIP) {
-        fetch(`http://${window.location.hostname}:3001/print`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ip: receiptIP, printerType: 'receipt', orderData: newOrder })
-        }).catch(err => console.error('Silent print failed:', err));
+        sendPrintJob({ ip: receiptIP, printerType: 'receipt', orderData: newOrder })
+          .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
+          .catch(err => console.error('Silent print failed:', err));
       }
     } catch (e) { }
   };
