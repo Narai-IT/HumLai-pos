@@ -9,7 +9,10 @@ import {
   setPrintServerUrl,
   isLocalhostUrl,
   LOCAL_PRINT_SERVER_URL,
-  PRINT_SERVER_EVENT
+  PRINT_SERVER_EVENT,
+  getAutoPrint,
+  saveAutoPrint,
+  runAutoPrintNow
 } from '../../utils/printServer';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
@@ -51,6 +54,11 @@ const ManagePrinters = () => {
   const [scanError, setScanError] = useState(null);
   const [showScanOptions, setShowScanOptions] = useState(false);
   const [scanOptions, setScanOptions] = useState({ subnet: '', from: '1', to: '254', port: '9100' });
+
+  // Auto print (Print Server ดึงออเดอร์ QR มาพิมพ์เอง)
+  const [autoPrint, setAutoPrint] = useState(null);   // { config, status } จาก Print Server
+  const [autoPrintBusy, setAutoPrintBusy] = useState(false);
+  const [autoPrintMsg, setAutoPrintMsg] = useState(null); // { ok, text }
 
   const isScanningRef = useRef(false);
   isScanningRef.current = isScanning;
@@ -127,10 +135,60 @@ const ManagePrinters = () => {
     } catch (e) {}
   };
 
+  // ---------- Auto print (Print Server ดึงออเดอร์เอง) ----------
+  const refreshAutoPrint = useCallback(async () => {
+    const res = await getAutoPrint();
+    setAutoPrint(res && res.success ? res : null);
+    return res;
+  }, []);
+
+  useEffect(() => {
+    if (health.status === 'online') refreshAutoPrint();
+    else setAutoPrint(null);
+  }, [health.status, refreshAutoPrint]);
+
+  // ส่งค่าที่ตั้งไว้ในหน้านี้ (รายการเครื่องพิมพ์ + URL ของ Apps Script) ไปเก็บที่ Print Server
+  // Print Server จะได้ดึงออเดอร์และจับคู่เครื่องพิมพ์ได้เองแม้ไม่มีใครเปิดหน้าเว็บ
+  const pushAutoPrint = async (patch = {}) => {
+    setAutoPrintBusy(true);
+    setAutoPrintMsg(null);
+    const res = await saveAutoPrint({ gasUrl: GAS_URL, printers, ...patch });
+    setAutoPrintBusy(false);
+    if (res && res.success) {
+      setAutoPrint(res);
+      setAutoPrintMsg({ ok: true, text: res.config.enabled ? 'บันทึกแล้ว — Print Server กำลังเฝ้าออเดอร์ให้' : 'ปิดการพิมพ์อัตโนมัติแล้ว' });
+    } else {
+      setAutoPrintMsg({ ok: false, text: (res && res.error) || 'ตั้งค่าไม่สำเร็จ' });
+    }
+    setTimeout(() => setAutoPrintMsg(null), 5000);
+  };
+
+  const runAutoPrintOnce = async () => {
+    setAutoPrintBusy(true);
+    setAutoPrintMsg(null);
+    const res = await runAutoPrintNow();
+    setAutoPrintBusy(false);
+    if (res && res.success) {
+      const r = res.result || {};
+      const text = r.skipped
+        ? `ข้ามรอบนี้ — ${r.skipped}`
+        : r.baseline !== undefined
+          ? `เริ่มเฝ้าออเดอร์แล้ว (ข้ามบิลค้าง ${r.baseline} ใบ)`
+          : `ตรวจแล้ว — พิมพ์ ${r.printed || 0} บิล (บิลรอครัวทั้งหมด ${r.pending || 0} บิล)`;
+      setAutoPrintMsg({ ok: true, text });
+      refreshAutoPrint();
+    } else {
+      setAutoPrintMsg({ ok: false, text: (res && (res.error || (res.result && res.result.error))) || 'ดึงออเดอร์ไม่สำเร็จ' });
+    }
+    setTimeout(() => setAutoPrintMsg(null), 6000);
+  };
+
   // ---------- Printer list ----------
   const handleSave = () => {
     localStorage.setItem('printers_config', JSON.stringify(printers));
     window.dispatchEvent(new Event('printers_changed'));
+    // เปิดพิมพ์อัตโนมัติไว้ = Print Server ถือรายการเครื่องพิมพ์ชุดของตัวเอง ต้องอัปเดตตามด้วย
+    if (autoPrint?.config?.enabled) pushAutoPrint();
     fetch(GAS_URL, {
       method: 'POST',
       mode: 'no-cors',
@@ -406,6 +464,96 @@ const ManagePrinters = () => {
                 </button>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* ---------- Auto print: Print Server ดึงออเดอร์ QR มาพิมพ์เอง ---------- */}
+        <div style={{
+          background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px',
+          padding: '1rem', marginBottom: '1.25rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+            <Printer size={18} style={{ color: '#ea580c' }} />
+            <span style={{ fontWeight: 800, color: '#0f172a', fontSize: '0.98rem' }}>พิมพ์ออเดอร์ลูกค้าสั่งเอง (QR) อัตโนมัติ</span>
+            {autoPrint?.config?.enabled && (
+              <span style={{ background: '#dcfce7', color: '#166534', fontWeight: 800, fontSize: '0.72rem', padding: '0.15rem 0.5rem', borderRadius: '999px' }}>
+                กำลังทำงาน
+              </span>
+            )}
+          </div>
+
+          <div style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 600, lineHeight: 1.55, marginBottom: '0.75rem' }}>
+            ออเดอร์ที่ลูกค้าสแกน QR สั่งเอง เกิดบนมือถือลูกค้า จึงสั่งเครื่องพิมพ์ในร้านเองไม่ได้ —
+            เปิดสวิตช์นี้แล้ว Print Server เครื่องนี้จะคอยดึงออเดอร์จากระบบมาพิมพ์เข้าครัวให้เอง
+            โดยไม่ต้องเปิดหน้า “ครัว” ค้างไว้ (ควรเปิดที่เครื่องเดียวพอ ไม่งั้นใบจะออกซ้ำ)
+          </div>
+
+          {health.status !== 'online' ? (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: '10px', padding: '0.7rem 0.85rem', fontSize: '0.82rem', fontWeight: 700 }}>
+              ต้องเชื่อมต่อ Print Server ให้ได้ก่อน จึงจะตั้งค่าส่วนนี้ได้
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.65rem' }}>
+                <button
+                  onClick={() => pushAutoPrint({ enabled: !autoPrint?.config?.enabled })}
+                  disabled={autoPrintBusy}
+                  style={{
+                    background: autoPrint?.config?.enabled ? '#dc2626' : '#16a34a',
+                    color: '#fff', border: 'none', borderRadius: '10px',
+                    padding: '0.55rem 1rem', fontWeight: 800, fontSize: '0.85rem',
+                    cursor: autoPrintBusy ? 'wait' : 'pointer', fontFamily: 'inherit'
+                  }}
+                >
+                  {autoPrint?.config?.enabled ? 'ปิดการพิมพ์อัตโนมัติ' : 'เปิดการพิมพ์อัตโนมัติ'}
+                </button>
+                <button
+                  onClick={() => pushAutoPrint()}
+                  disabled={autoPrintBusy}
+                  style={{
+                    background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '10px',
+                    padding: '0.55rem 1rem', fontWeight: 700, fontSize: '0.85rem',
+                    cursor: autoPrintBusy ? 'wait' : 'pointer', fontFamily: 'inherit'
+                  }}
+                >
+                  ส่งรายการเครื่องพิมพ์ล่าสุดไปให้ Print Server
+                </button>
+                <button
+                  onClick={runAutoPrintOnce}
+                  disabled={autoPrintBusy}
+                  style={{
+                    background: '#ffffff', color: '#0f172a', border: '1px solid #cbd5e1', borderRadius: '10px',
+                    padding: '0.55rem 1rem', fontWeight: 700, fontSize: '0.85rem',
+                    cursor: autoPrintBusy ? 'wait' : 'pointer', fontFamily: 'inherit'
+                  }}
+                >
+                  ตรวจออเดอร์เดี๋ยวนี้
+                </button>
+              </div>
+
+              {autoPrintMsg && (
+                <div style={{
+                  background: autoPrintMsg.ok ? '#f0fdf4' : '#fef2f2',
+                  border: `1px solid ${autoPrintMsg.ok ? '#bbf7d0' : '#fecaca'}`,
+                  color: autoPrintMsg.ok ? '#166534' : '#b91c1c',
+                  borderRadius: '10px', padding: '0.6rem 0.8rem', fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.65rem'
+                }}>
+                  {autoPrintMsg.ok ? '✅' : '❌'} {autoPrintMsg.text}
+                </div>
+              )}
+
+              {autoPrint?.status && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.5rem', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>
+                  <div>รอบตรวจ: ทุก {autoPrint.status.pollSeconds} วินาที</div>
+                  <div>เครื่องพิมพ์ที่ส่งไปแล้ว: {autoPrint.status.printerCount} เครื่อง</div>
+                  <div>พิมพ์ไปแล้วรอบนี้: {autoPrint.status.printedCount} บิล</div>
+                  <div>ตรวจล่าสุด: {autoPrint.status.lastPollAt ? new Date(autoPrint.status.lastPollAt).toLocaleTimeString('th-TH') : '—'}</div>
+                  {autoPrint.status.lastError && (
+                    <div style={{ gridColumn: '1 / -1', color: '#b91c1c' }}>ผิดพลาดล่าสุด: {autoPrint.status.lastError}</div>
+                  )}
+                </div>
+              )}
+            </>
           )}
         </div>
 

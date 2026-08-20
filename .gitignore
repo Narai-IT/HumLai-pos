@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Print Server — ค่าตั้งและสถานะการพิมพ์อัตโนมัติ เก็บไว้ในเครื่องที่รันเท่านั้น
+print-auto-config.json
+print-auto-state.json

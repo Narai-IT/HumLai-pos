@@ -157,3 +157,37 @@ export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData }, t
     return { success: false, error: PRINT_SERVER_OFFLINE_MSG };
   }
 };
+
+// ===============================================================
+// Auto Print — ให้ Print Server ดึงออเดอร์จากชีตมาพิมพ์เอง
+// ---------------------------------------------------------------
+// ใช้กับออเดอร์ที่ลูกค้าสั่งผ่าน QR ซึ่งเกิดบนมือถือลูกค้า สั่งเครื่องพิมพ์
+// ในร้านเองไม่ได้ ปกติต้องรอให้มีเครื่องเปิดหน้า "ครัว" ค้างไว้
+// ย้ายหน้าที่นี้ไปให้ Print Server ที่รันค้างอยู่แล้วทำแทน
+// ===============================================================
+
+const autoPrintFetch = async (path, options = {}, timeoutMs = 10000) => {
+  const url = getPrintServerUrl();
+  if (isMixedContentBlocked(url)) return { success: false, error: MIXED_CONTENT_MSG };
+  try {
+    const response = await fetchWithTimeout(`${url}${path}`, options, timeoutMs);
+    const data = await response.json().catch(() => null);
+    if (!data) return { success: false, error: `Print Server ตอบกลับ HTTP ${response.status}` };
+    return data;
+  } catch (e) {
+    return { success: false, error: PRINT_SERVER_OFFLINE_MSG };
+  }
+};
+
+// อ่านค่าที่ Print Server เก็บไว้ + สถานะการทำงานล่าสุด
+export const getAutoPrint = () => autoPrintFetch('/auto-print');
+
+// ส่งค่าตั้งต้นไปเก็บที่ Print Server (รายการเครื่องพิมพ์ + URL ของ Apps Script)
+export const saveAutoPrint = (payload) => autoPrintFetch('/auto-print', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload)
+});
+
+// สั่งให้ดึงออเดอร์เดี๋ยวนี้เลยหนึ่งรอบ ไม่ต้องรอครบเวลา
+export const runAutoPrintNow = () => autoPrintFetch('/auto-print/run', { method: 'POST' }, 30000);
