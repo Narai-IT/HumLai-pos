@@ -67,8 +67,15 @@ export const groupItemsByPrinter = (items = [], allMenu = [], printers = getPrin
   return { groups: Array.from(groups.values()), unrouted };
 };
 
+// เครื่องพิมพ์ครัว/บาร์ ตั้งได้ว่าจะพิมพ์รวมใบเดียว หรือแยกใบละรายการ
+// (ตั้งที่ จัดการหลังบ้าน > ตั้งค่าเครื่องพิมพ์) ไม่ได้ตั้ง = รวมใบเดียวเหมือนเดิม
+// เลือกได้เฉพาะครัวกับบาร์ — ใบเสร็จต้องรวมใบเดียวเสมอ ถึงจะมีค่าค้างอยู่ก็ไม่สน
+const SEPARATE_ALLOWED_TYPES = ['kitchen', 'bar'];
+export const printsSeparately = (printer) =>
+  !!printer && printer.printMode === 'separate' && SEPARATE_ALLOWED_TYPES.includes(printer.type);
+
 // พิมพ์ใบครัวของออเดอร์ แยกใบไปตามเครื่องพิมพ์ของแต่ละเมนู
-// คืนค่า { success, printed, total, error }
+// คืนค่า { success, printed, total, error } โดย total = จำนวน "ใบ" ที่สั่งพิมพ์
 export const printKitchenOrder = async (order, allMenu = []) => {
   const printers = getPrinters();
   if (printers.length === 0) {
@@ -80,13 +87,19 @@ export const printKitchenOrder = async (order, allMenu = []) => {
     return { success: false, printed: 0, total: 0, error: 'ไม่พบเครื่องพิมพ์ที่ใช้งานได้ (ยังไม่ได้ระบุ IP Address)' };
   }
 
-  const results = await Promise.all(groups.map(async ({ printer, items }) => {
-    const res = await sendPrintJob({
-      ip: printer.ip,
-      printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
-      orderData: { ...order, items }
-    });
-    return { printer, ...res };
+  const results = [];
+  // ยิงขนานกันได้เฉพาะข้ามเครื่อง — งานของเครื่องเดียวกันต้องส่งทีละใบรอให้จบก่อน
+  // เพราะเครื่องความร้อนรับงานได้ทีละงาน ยิงพร้อมกันหลายใบมีสิทธิ์พิมพ์ปนกันหรือหล่นหาย
+  await Promise.all(groups.map(async ({ printer, items }) => {
+    const tickets = printsSeparately(printer) ? items.map(item => [item]) : [items];
+    for (const ticketItems of tickets) {
+      const res = await sendPrintJob({
+        ip: printer.ip,
+        printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
+        orderData: { ...order, items: ticketItems }
+      });
+      results.push({ printer, ...res });
+    }
   }));
 
   const failed = results.filter(r => !r.success);

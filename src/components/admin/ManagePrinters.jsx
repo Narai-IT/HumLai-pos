@@ -21,7 +21,16 @@ const PRINTER_TYPES = [
   { value: 'other', label: 'อื่นๆ (Other)' },
 ];
 
-const DEFAULT_PRINTER = (ip = '') => ({ id: Date.now(), name: '', ip, type: 'kitchen' });
+// ครัว/บาร์บางร้านอยากได้ใบละรายการ เพื่อแปะติดจานหรือแยกให้คนทำคนละคน
+const PRINT_MODES = [
+  { value: 'combined', label: 'รวมใบเดียว (ทุกรายการอยู่ในใบเดียว)' },
+  { value: 'separate', label: 'แยกใบ — 1 รายการต่อ 1 ใบ' },
+];
+
+// เฉพาะครัวกับบาร์ที่เลือกได้ ใบเสร็จต้องรวมใบเดียวเสมอ
+const CAN_CHOOSE_PRINT_MODE = ['kitchen', 'bar'];
+
+const DEFAULT_PRINTER = (ip = '') => ({ id: Date.now(), name: '', ip, type: 'kitchen', printMode: 'combined' });
 
 const HEALTH_POLL_MS = 20000;
 
@@ -589,6 +598,24 @@ const ManagePrinters = () => {
                       </select>
                     </div>
                   </div>
+
+                  {CAN_CHOOSE_PRINT_MODE.includes(printer.type) && (
+                    <div className="admin-form-group" style={{ margin: '0 0 0.75rem 0' }}>
+                      <label style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600 }}>รูปแบบการพิมพ์</label>
+                      <select
+                        value={printer.printMode || 'combined'}
+                        onChange={e => updatePrinter(printer.id, 'printMode', e.target.value)}
+                        style={inputStyle}
+                      >
+                        {PRINT_MODES.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                      <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.3rem', lineHeight: 1.45 }}>
+                        {(printer.printMode || 'combined') === 'separate'
+                          ? 'ออเดอร์ 3 รายการ = พิมพ์ 3 ใบ เหมาะกับครัวที่แบ่งกันทำคนละอย่าง หรือแปะใบติดจาน (ใช้กระดาษมากกว่า)'
+                          : 'ออเดอร์ 3 รายการ = พิมพ์ 1 ใบ เห็นทั้งโต๊ะในใบเดียว'}
+                      </div>
+                    </div>
+                  )}
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <button
