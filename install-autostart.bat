@@ -1,0 +1,63 @@
+@echo off
+chcp 65001 >nul
+setlocal
+title HumLai POS - ตั้งค่าเปิด Print Server อัตโนมัติ
+color 0A
+
+echo =========================================
+echo    ตั้งค่าให้ PRINT SERVER เปิดเองอัตโนมัติ
+echo =========================================
+echo.
+
+where node >nul 2>&1
+if errorlevel 1 (
+  echo [ผิดพลาด] ไม่พบ Node.js ในเครื่องนี้
+  echo ติดตั้งจาก https://nodejs.org ก่อน แล้วรันไฟล์นี้อีกครั้ง
+  echo.
+  pause
+  exit /b 1
+)
+
+if not exist "%~dp0print-server-daemon.vbs" (
+  echo [ผิดพลาด] ไม่พบไฟล์ print-server-daemon.vbs
+  echo ต้องวางไฟล์นี้ไว้ในโฟลเดอร์โปรเจกต์เดียวกับ server.js
+  echo.
+  pause
+  exit /b 1
+)
+
+set "SCRIPTDIR=%~dp0"
+set "LNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HumLai Print Server.lnk"
+
+echo กำลังสร้างทางลัดในโฟลเดอร์ Startup...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$dir=$env:SCRIPTDIR; $lnk=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\HumLai Print Server.lnk'; $s=(New-Object -ComObject WScript.Shell).CreateShortcut($lnk); $s.TargetPath='wscript.exe'; $s.Arguments=[char]34+(Join-Path $dir 'print-server-daemon.vbs')+[char]34; $s.WorkingDirectory=$dir; $s.Description='HumLai POS Print Server'; $s.Save()"
+
+if not exist "%LNK%" (
+  echo [ผิดพลาด] สร้างทางลัดไม่สำเร็จ
+  echo.
+  pause
+  exit /b 1
+)
+echo    สร้างเรียบร้อย
+echo.
+
+echo กำลังเปิด Print Server ตอนนี้เลย...
+start "" wscript.exe "%~dp0print-server-daemon.vbs"
+
+echo.
+echo =========================================
+echo    เสร็จสิ้น
+echo =========================================
+echo.
+echo    - Print Server ทำงานอยู่แล้วตอนนี้ (ไม่มีหน้าต่างแสดง)
+echo    - เปิดเครื่องครั้งต่อไปจะเริ่มทำงานเองอัตโนมัติ
+echo    - ไม่ต้องเปิด start-printer.bat อีกต่อไป
+echo    - ถ้า server ดับเอง จะถูกเปิดใหม่ให้ภายใน 5 วินาที
+echo    - บันทึกการทำงานอยู่ที่ logs\print-server.log
+echo.
+echo    ไปที่หน้า "ตั้งค่าเครื่องพิมพ์" แล้วกด "ตรวจสอบอีกครั้ง"
+echo    สถานะควรเปลี่ยนเป็นสีเขียวภายในไม่กี่วินาที
+echo.
+echo    ถ้าต้องการยกเลิก ให้รัน uninstall-autostart.bat
+echo.
+pause
