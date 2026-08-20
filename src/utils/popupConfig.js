@@ -72,3 +72,12 @@ export const resolvePopupSource = (food, categories = []) => {
   if (hasItemPopupConfig(food)) return food;
   return categories.find(c => c.slug === food.category) || {};
 };
+
+// True when a menu item carries its own popup steps — used to open a nested
+// popup when the item is picked inside another item's popup.
+export const hasOwnPopupSteps = (item) => {
+  if (!item) return false;
+  const cfg = flattenPopupConfig(item);
+  if (!hasItemPopupConfig(cfg)) return false;
+  return POPUP_NUMS.some(n => cfg[`hasPopup${n}`] === true);
+};

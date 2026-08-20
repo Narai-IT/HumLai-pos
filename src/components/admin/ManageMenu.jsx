@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Printer, FlaskConical, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
-import { emptyPopupFields, extractPopupConfig, flattenPopupConfig } from '../../utils/popupConfig';
+import { emptyPopupFields, extractPopupConfig, flattenPopupConfig, hasOwnPopupSteps } from '../../utils/popupConfig';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
 
@@ -803,7 +803,15 @@ const ManageMenu = () => {
                                     {menuItems.filter(m => m.category === editingItem[categoryProp]).map(it => (
                                       <div key={it.id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
                                         <input type="checkbox" checked={(editingItem[itemsProp] || []).includes(it.id)} onChange={() => handlePopupItemToggle(itemsProp, it.id)} style={{ width: 'auto', margin: 0 }} />
-                                        <span style={{ flex: 1 }}>{it.name}</span>
+                                        <span style={{ flex: 1 }}>
+                                          {it.name}
+                                          {/* เมนูนี้มีป๊อปอัพของตัวเอง → ตอนขายจะเด้งป๊อปอัพซ้อนให้เลือกตัวเลือกย่อย */}
+                                          {hasOwnPopupSteps(it) && (
+                                            <span style={{ marginLeft: '0.4rem', fontSize: '0.68rem', fontWeight: 700, color: '#16a34a', background: 'rgba(34,197,94,0.15)', borderRadius: 4, padding: '0.05rem 0.35rem' }}>
+                                              {lang === 'th' ? 'มีป๊อปอัพซ้อน' : 'nested popup'}
+                                            </span>
+                                          )}
+                                        </span>
                                         {editingItem[repeatProp] !== false && (
                                           <>
                                             <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{lang === 'th' ? 'max/รายการ:' : 'max/item:'}</span>

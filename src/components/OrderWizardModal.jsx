@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
-import { resolvePopupSource, getPriceOptions } from '../utils/popupConfig';
+import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps } from '../utils/popupConfig';
 
 const DINING_OPTIONS = [
   { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' },
@@ -12,9 +12,11 @@ const DINING_OPTIONS = [
 const TAKEHOME_ALIASES = ['takehome', 'take home', 'takeaway', 'ห่อกลับบ้าน', 'กลับบ้าน', 'ห่อกลับ'];
 const DELI_ALIASES = ['deli', 'delivery', 'เดลิเวอรี่', 'lineman', 'grab', 'shopee'];
 const norm = (v) => String(v || '').trim().toLowerCase();
+// ความลึกสูงสุดของป๊อปอัพซ้อนป๊อปอัพ — กันการตั้งค่าที่วนหากันเองจนซ้อนไม่รู้จบ
+const MAX_POPUP_DEPTH = 3;
 const isChannelPrice = (name) => TAKEHOME_ALIASES.includes(norm(name)) || DELI_ALIASES.includes(norm(name));
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true }) => {
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [] }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedPopup1, setSelectedPopup1] = useState({});
   const [selectedPopup2, setSelectedPopup2] = useState({});
@@ -23,6 +25,11 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const [selectedPopup5, setSelectedPopup5] = useState({});
   const [selectedPopup6, setSelectedPopup6] = useState({});
   const [selectedDining, setSelectedDining] = useState(DINING_OPTIONS[0]);
+  // ตัวเลือกย่อยของแต่ละครั้งที่เลือก (ป๊อปอัพซ้อนป๊อปอัพ)
+  // รูปแบบ: { [popupNum]: { [itemId]: [ { selectedPrice, allPopups }, ... ] } }
+  const [subOptions, setSubOptions] = useState({});
+  // เมนูในป๊อปอัพที่กำลังเปิดป๊อปอัพของตัวเองอยู่
+  const [nestedPending, setNestedPending] = useState(null);
 
   const allPriceOptions = getPriceOptions(food);
   // ราคาที่ให้เลือกในขั้นตอน "เลือกราคา/ขนาด" = ตัดราคาช่องทางขาย (Takehome/Deli) ออก
@@ -64,7 +71,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
     const itemsMaxMap = categoryConfig[itemsMaxField] || {};
     const allowRepeat = categoryConfig[allowRepeatField] !== false;
-    return { namesTh, namesEn, items, minSelect: categoryConfig[minField] || 0, maxSelect: categoryConfig[maxField] || 0, itemsMaxMap, allowRepeat };
+    return { namesTh, namesEn, items, minSelect: categoryConfig[minField] || 0, maxSelect: categoryConfig[maxField] || 0, itemsMaxMap, allowRepeat, isFree };
   };
 
   const pop1Config = resolvePopupConfig('hasPopup1', 'popup1Min', 'popup1Category', 'popup1Items', null, 'popup1Free', 'popup1Max', 'popup1ItemsMax', 'popup1AllowRepeat');
@@ -74,28 +81,145 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const pop5Config = resolvePopupConfig('hasPopup5', 'popup5Min', 'popup5Category', 'popup5Items', null, 'popup5Free', 'popup5Max', 'popup5ItemsMax', 'popup5AllowRepeat');
   const pop6Config = resolvePopupConfig('hasPopup6', 'popup6Min', 'popup6Category', 'popup6Items', null, 'popup6Free', 'popup6Max', 'popup6ItemsMax', 'popup6AllowRepeat');
 
+  // ── ตารางรวมของแต่ละขั้นตอนป๊อปอัพ (1..6) ─────────────────
+  const stepConfigs = { 1: pop1Config, 2: pop2Config, 3: pop3Config, 4: pop4Config, 5: pop5Config, 6: pop6Config };
+  const stepQtyMaps = { 1: selectedPopup1, 2: selectedPopup2, 3: selectedPopup3, 4: selectedPopup4, 5: selectedPopup5, 6: selectedPopup6 };
+  const stepSetters = { 1: setSelectedPopup1, 2: setSelectedPopup2, 3: setSelectedPopup3, 4: setSelectedPopup4, 5: setSelectedPopup5, 6: setSelectedPopup6 };
+
   const getQty = (qtyMap, id) => qtyMap[id] || 0;
   const totalQty = (qtyMap) => Object.values(qtyMap).reduce((s, v) => s + v, 0);
-  const expandQty = (qtyMap, items) => {
+
+  // ตัวเลือกย่อยของเมนูที่เลือกไว้ในขั้นตอนนี้ (แต่ละครั้งที่เลือกเก็บแยกกัน)
+  const getSubList = (stepNum, itemId) => ((subOptions[stepNum] || {})[itemId] || []);
+
+  // สรุปชื่อของตัวเลือกย่อย รวมรายการซ้ำเป็นจำนวน เช่น "ชีส ×2"
+  const groupSubs = (subs) => {
+    const grouped = [];
+    subs.forEach(sub => {
+      const found = grouped.find(g => g.name === sub.name);
+      if (found) found.count += 1;
+      else grouped.push({ name: sub.name, nameEn: sub.nameEn || sub.name, count: 1 });
+    });
+    return grouped;
+  };
+
+  const subLabel = (details, useTh = true) => {
+    if (!details) return '';
+    const parts = [];
+    if (details.selectedPrice && details.selectedPrice.name) parts.push(details.selectedPrice.name);
+    groupSubs(details.allPopups || []).forEach(g => {
+      const name = useTh ? g.name : g.nameEn;
+      parts.push(g.count > 1 ? `${name} ×${g.count}` : name);
+    });
+    return parts.join(', ');
+  };
+
+  // เมนูในป๊อปอัพที่ถูกเลือก 1 ครั้ง → รายการหลัก + ตัวเลือกย่อยจากป๊อปอัพซ้อน เรียงต่อกันแบบแบนราบ
+  // ชื่อของทุกรายการยังเป็นชื่อเมนูจริง บิล/ใบครัว/รายงานจึงจับคู่ชื่อได้เหมือนเดิม
+  // ส่วนความสัมพันธ์ "อยู่ใต้รายการไหน" เก็บไว้ที่ parentPopupId / subPopups
+  const buildEntries = (item, details) => {
+    if (!details) return [item];
+    const subs = details.allPopups || [];
+    const chosen = details.selectedPrice;
+    const suffix = [chosen && chosen.name ? chosen.name : '', ...subs.map(sub => sub.id)].filter(Boolean).join('+');
+    const parentId = suffix ? `${item.id}__${suffix}` : item.id;
+    const parent = {
+      ...item,
+      id: parentId,
+      baseId: item.baseId || item.id,
+      price: chosen ? (Number(chosen.price) || 0) : (Number(item.price) || 0),
+      priceName: chosen ? (chosen.name || '') : (item.priceName || ''),
+      selectedPrice: chosen || null,
+      subPopups: subs
+    };
+    const entries = [parent];
+    // ชื่อราคา/ขนาดที่เลือก แสดงเป็นบรรทัดตัวเลือก (ราคาถูกคิดไว้ที่รายการหลักแล้ว)
+    if (chosen && chosen.name) {
+      entries.push({
+        id: `${parentId}__price`, name: chosen.name, nameEn: chosen.name, price: 0,
+        parentPopupId: parentId, isNestedOption: true, isOptionLabel: true
+      });
+    }
+    subs.forEach(sub => entries.push({ ...sub, parentPopupId: parentId, isNestedOption: true }));
+    return entries;
+  };
+
+  const expandStep = (stepNum, config, qtyMap) => {
     const result = [];
-    items.forEach(item => {
+    config.items.forEach(item => {
       const q = qtyMap[item.id] || 0;
-      for (let i = 0; i < q; i++) result.push(item);
+      const picks = getSubList(stepNum, item.id);
+      for (let i = 0; i < q; i++) result.push(...buildEntries(item, picks[i]));
     });
     return result;
   };
-  const addQty = (setter, qtyMap, id, maxSelect, itemMaxSelect) => {
-    const current = getQty(qtyMap, id);
-    if (maxSelect > 0 && totalQty(qtyMap) >= maxSelect) return;
-    if (itemMaxSelect > 0 && current >= itemMaxSelect) return;
-    setter({ ...qtyMap, [id]: current + 1 });
+
+  // ราคารวมของการเลือก 1 ครั้ง (รายการหลัก + ตัวเลือกย่อย) — ใช้โชว์บนการ์ด
+  const instanceTotal = (item, details) =>
+    buildEntries(item, details).reduce((sum, entry) => sum + (Number(entry.price) || 0), 0);
+
+  const perItemMaxOf = (config, itemId) => (config.allowRepeat === false ? 1 : ((config.itemsMaxMap || {})[itemId] || 0));
+
+  const canAddMore = (config, qtyMap, itemId) => {
+    if (config.maxSelect > 0 && totalQty(qtyMap) >= config.maxSelect) return false;
+    const perItemMax = perItemMaxOf(config, itemId);
+    if (perItemMax > 0 && getQty(qtyMap, itemId) >= perItemMax) return false;
+    return true;
   };
-  const removeQty = (setter, qtyMap, id) => {
+
+  // กันวนซ้ำไม่รู้จบ: เมนูที่เป็นต้นทางของป๊อปอัพอยู่แล้ว หรือซ้อนลึกเกินไป จะไม่เปิดซ้อนอีก
+  const chain = [...ancestorIds, food && food.id].filter(v => v !== undefined && v !== null).map(String);
+  const canOpenNested = (item) =>
+    depth < MAX_POPUP_DEPTH && hasOwnPopupSteps(item) && !chain.includes(String(item.id));
+
+  // เลือกเมนูในป๊อปอัพ — ถ้าเมนูนั้นมีป๊อปอัพของตัวเอง ให้เปิดป๊อปอัพซ้อนขึ้นมาก่อน
+  const handlePick = (stepNum, config, item) => {
+    const qtyMap = stepQtyMaps[stepNum];
+    if (!canAddMore(config, qtyMap, item.id)) return;
+    if (canOpenNested(item)) {
+      // ป๊อปอัพที่ตั้งเป็น "ฟรี" ไม่ควรให้เลือกราคาซ้อนเข้ามา
+      const nestedFood = config.isFree ? { ...item, prices: [], price: 0 } : item;
+      setNestedPending({ stepNum, item, food: nestedFood });
+      return;
+    }
+    stepSetters[stepNum](prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
+  };
+
+  // ยืนยันตัวเลือกย่อยจากป๊อปอัพซ้อน = นับเป็นการเลือกเมนูนั้น 1 ครั้ง พร้อมตัวเลือกของครั้งนั้น
+  const handleNestedConfirm = (nestedFood, details) => {
+    if (!nestedPending) return;
+    const { stepNum, item } = nestedPending;
+    stepSetters[stepNum](prev => ({ ...prev, [item.id]: (prev[item.id] || 0) + 1 }));
+    setSubOptions(prev => {
+      const stepMap = { ...(prev[stepNum] || {}) };
+      stepMap[item.id] = [...(stepMap[item.id] || []), details];
+      return { ...prev, [stepNum]: stepMap };
+    });
+    setNestedPending(null);
+  };
+
+  const removeQty = (stepNum, id) => {
+    const qtyMap = stepQtyMaps[stepNum];
     const current = getQty(qtyMap, id);
     if (current <= 0) return;
     const next = { ...qtyMap, [id]: current - 1 };
     if (next[id] === 0) delete next[id];
-    setter(next);
+    stepSetters[stepNum](next);
+    // ตัดตัวเลือกย่อยของครั้งล่าสุดออกไปด้วย
+    setSubOptions(prev => {
+      const stepMap = { ...(prev[stepNum] || {}) };
+      const list = stepMap[id];
+      if (!list || list.length === 0) return prev;
+      const trimmed = list.slice(0, -1);
+      if (trimmed.length === 0) delete stepMap[id];
+      else stepMap[id] = trimmed;
+      return { ...prev, [stepNum]: stepMap };
+    });
+  };
+
+  const clearStep = (stepNum) => {
+    stepSetters[stepNum]({});
+    setSubOptions(prev => ({ ...prev, [stepNum]: {} }));
   };
 
   const validSteps = [
@@ -144,14 +268,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     if (!isFirstStep) setCurrentStepIndex(currentStepIndex - 1);
   };
 
-  const getExpandedPopups = () => [
-    ...expandQty(selectedPopup1, pop1Config.items),
-    ...expandQty(selectedPopup2, pop2Config.items),
-    ...expandQty(selectedPopup3, pop3Config.items),
-    ...expandQty(selectedPopup4, pop4Config.items),
-    ...expandQty(selectedPopup5, pop5Config.items),
-    ...expandQty(selectedPopup6, pop6Config.items)
-  ];
+  const getExpandedPopups = () => [1, 2, 3, 4, 5, 6]
+    .flatMap(n => expandStep(n, stepConfigs[n], stepQtyMaps[n]));
 
   const diningAsked = validSteps.indexOf(7) !== -1;
   const isTakeaway = diningAsked && selectedDining.id === 'takeaway';
@@ -178,7 +296,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     });
   };
 
-  const renderPopupStep = (config, qtyMap, setter) => {
+  const renderPopupStep = (stepNum, config, qtyMap) => {
     const total = totalQty(qtyMap);
     const atMax = config.maxSelect > 0 && total >= config.maxSelect;
     return (
@@ -204,7 +322,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             <div
               className={`option-card ${total === 0 ? 'selected' : ''}`}
               style={{ background: total === 0 ? '#fff7ed' : '#ffffff', border: `2px solid ${total === 0 ? '#ea580c' : '#cbd5e1'}` }}
-              onClick={() => setter({})}
+              onClick={() => clearStep(stepNum)}
             >
               <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? 'ไม่รับ (ข้าม)' : 'No Thanks'}</div>
               <div className="option-price" style={{ color: '#64748b' }}>-</div>
@@ -212,10 +330,13 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
           )}
           {config.items.length > 0 ? config.items.map(addon => {
             const qty = getQty(qtyMap, addon.id);
-            const perItemMax = config.allowRepeat === false ? 1 : ((config.itemsMaxMap || {})[addon.id] || 0);
+            const perItemMax = perItemMaxOf(config, addon.id);
             const itemAtMax = perItemMax > 0 && qty >= perItemMax;
             const cardDisabled = (atMax && qty === 0) || itemAtMax;
             const isSelected = qty > 0;
+            // เมนูตัวเลือกที่มีป๊อปอัพของตัวเอง = กดแล้วเปิดป๊อปอัพซ้อนให้เลือกต่อ
+            const nested = canOpenNested(addon);
+            const picks = getSubList(stepNum, addon.id);
             return (
               <div
                 key={addon.id}
@@ -225,7 +346,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                   background: isSelected ? '#fff7ed' : '#ffffff',
                   border: `2px solid ${isSelected ? '#ea580c' : '#cbd5e1'}`
                 }}
-                onClick={() => addQty(setter, qtyMap, addon.id, config.maxSelect, perItemMax)}
+                onClick={() => handlePick(stepNum, config, addon)}
               >
                 {qty > 0 && (
                   <div
@@ -239,7 +360,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     }}
                   >
                     <div
-                      onClick={e => { e.stopPropagation(); removeQty(setter, qtyMap, addon.id); }}
+                      onClick={e => { e.stopPropagation(); removeQty(stepNum, addon.id); }}
                       style={{
                         background: '#ef4444', color: 'white',
                         width: '22px', height: '22px', display: 'flex',
@@ -254,9 +375,33 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     }}>{qty}</div>
                   </div>
                 )}
-                <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? addon.name : addon.nameEn}</div>
+                <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>
+                  {lang === 'th' ? addon.name : addon.nameEn}
+                  {nested && (
+                    <span style={{ marginLeft: '0.35rem', fontSize: '0.65rem', fontWeight: 800, color: '#c2410c', background: '#ffedd5', borderRadius: '999px', padding: '0.1rem 0.4rem', whiteSpace: 'nowrap' }}>
+                      {lang === 'th' ? 'มีตัวเลือกย่อย' : 'has options'}
+                    </span>
+                  )}
+                </div>
+                {/* ตัวเลือกย่อยที่เลือกไว้ของแต่ละครั้ง */}
+                {picks.length > 0 && (
+                  <div style={{ marginTop: '2px', textAlign: 'left' }}>
+                    {picks.map((details, pi) => {
+                      const label = subLabel(details, lang === 'th');
+                      return (
+                        <div key={pi} style={{ fontSize: '0.7rem', color: '#475569', fontWeight: 600, lineHeight: 1.35 }}>
+                          ↳ {label || (lang === 'th' ? 'ไม่มีตัวเลือกเพิ่ม' : 'no extras')}
+                          <span style={{ color: '#ea580c', fontWeight: 800, marginLeft: '0.25rem' }}>
+                            ฿{instanceTotal(addon, details).toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                 <div className="option-price" style={{ color: '#ea580c', fontWeight: '800' }}>
                   {addon.price > 0 ? `+฿${addon.price}` : ''}
+                  {nested && addon.price <= 0 && picks.length === 0 ? (lang === 'th' ? 'กดเพื่อเลือก' : 'tap to choose') : ''}
                 </div>
               </div>
             );
@@ -271,7 +416,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <>
+    <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1000 + depth * 10 }}>
       <div className="modal-content wizard-modal" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', color: '#0f172a', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }}>
         <div className="modal-header">
           <div className="wizard-progress">
@@ -318,12 +464,12 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             </div>
           )}
 
-          {step === 1 && renderPopupStep(pop1Config, selectedPopup1, setSelectedPopup1)}
-          {step === 2 && renderPopupStep(pop2Config, selectedPopup2, setSelectedPopup2)}
-          {step === 3 && renderPopupStep(pop3Config, selectedPopup3, setSelectedPopup3)}
-          {step === 4 && renderPopupStep(pop4Config, selectedPopup4, setSelectedPopup4)}
-          {step === 5 && renderPopupStep(pop5Config, selectedPopup5, setSelectedPopup5)}
-          {step === 6 && renderPopupStep(pop6Config, selectedPopup6, setSelectedPopup6)}
+          {step === 1 && renderPopupStep(1, pop1Config, selectedPopup1)}
+          {step === 2 && renderPopupStep(2, pop2Config, selectedPopup2)}
+          {step === 3 && renderPopupStep(3, pop3Config, selectedPopup3)}
+          {step === 4 && renderPopupStep(4, pop4Config, selectedPopup4)}
+          {step === 5 && renderPopupStep(5, pop5Config, selectedPopup5)}
+          {step === 6 && renderPopupStep(6, pop6Config, selectedPopup6)}
 
           {step === 7 && (
             <div className="wizard-step">
@@ -382,6 +528,23 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
         </div>
       </div>
     </div>
+
+    {/* ป๊อปอัพซ้อน — เมนูที่เลือกในป๊อปอัพนี้มีป๊อปอัพของตัวเอง */}
+    {nestedPending && (
+      <OrderWizardModal
+        food={nestedPending.food}
+        lang={lang}
+        liveMenu={liveMenu}
+        categories={categories}
+        basePrice={Number(nestedPending.food.price) || 0}
+        askDining={false}
+        depth={depth + 1}
+        ancestorIds={chain}
+        onClose={() => setNestedPending(null)}
+        onConfirm={handleNestedConfirm}
+      />
+    )}
+    </>
   );
 };
 
