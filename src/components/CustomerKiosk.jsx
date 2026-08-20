@@ -147,13 +147,31 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     reader.readAsDataURL(file);
   });
 
-  // ข้อความบอกสาเหตุที่สลิปไม่ผ่าน — ลูกค้าอ่านเองแล้วแก้ได้โดยไม่ต้องเรียกพนักงาน
+  // ข้อความบอกสาเหตุที่สลิปไม่ผ่าน — แยกเป็น 2 กลุ่ม
+  //   ก) ลูกค้าแก้เองได้ (ถ่ายใหม่ / โอนใหม่ให้ยอดตรง)
+  //   ข) ปัญหาฝั่งร้าน (คีย์ผิด แพ็กเกจหมด ตั้งบัญชีผิด) → ต้องบอกให้เรียกพนักงาน ลูกค้าถ่ายใหม่กี่ครั้งก็ไม่หาย
+  // รหัสอ้างอิงจากตารางของ SlipOK — อย่าสลับ 1013 (ยอดไม่ตรง) กับ 1014 (บัญชีผู้รับไม่ใช่ของร้าน)
+  const SLIP_ERRORS = {
+    1000: ['ไม่พบข้อมูลในสลิป กรุณาเลือกรูปสลิปใหม่', 'No slip data found. Please pick the slip image again.'],
+    1001: ['ตั้งค่าระบบตรวจสลิปของร้านไม่ถูกต้อง กรุณาแจ้งพนักงาน', 'Shop verification setup error. Please call our staff.'],
+    1002: ['ระบบตรวจสลิปของร้านยังตั้งค่าไม่ถูกต้อง กรุณาแจ้งพนักงาน', 'Shop verification key error. Please call our staff.'],
+    1003: ['ระบบตรวจสลิปของร้านหมดอายุ กรุณาแจ้งพนักงาน', 'The shop verification service has expired. Please call our staff.'],
+    1004: ['โควตาตรวจสลิปของร้านหมด กรุณาแจ้งพนักงาน', 'The shop verification quota ran out. Please call our staff.'],
+    1005: ['ไฟล์ที่เลือกไม่ใช่รูปภาพ กรุณาเลือกรูปสลิป (.jpg .png)', 'That file is not an image. Please pick a slip photo.'],
+    1006: ['รูปสลิปไม่ถูกต้อง กรุณาถ่าย/เลือกใหม่', 'Invalid slip image. Please try another photo.'],
+    1007: ['ไม่พบ QR ในรูปสลิป กรุณาถ่ายใหม่ให้เห็น QR ชัด ๆ', 'No QR found on the slip. Retake a clearer photo.'],
+    1008: ['รูปนี้ไม่ใช่สลิปการโอนเงิน กรุณาเลือกรูปสลิปที่ถูกต้อง', 'This is not a transfer slip. Please pick the right image.'],
+    1009: ['ระบบธนาคารขัดข้องชั่วคราว กรุณาลองใหม่ในอีก 15 นาที', 'The bank system is temporarily down. Please retry in 15 minutes.'],
+    1010: ['ธนาคารนี้ต้องรอสักครู่หลังโอน กรุณารอ 1-2 นาทีแล้วลองใหม่', 'This bank needs a moment after transfer. Please retry shortly.'],
+    1011: ['ไม่พบรายการโอนนี้ หรือสลิปหมดอายุแล้ว', 'Transfer not found or the slip has expired.'],
+    1012: ['สลิปนี้ถูกใช้ยืนยันไปแล้ว กรุณาใช้สลิปของรายการนี้', 'This slip has already been used.'],
+    1013: ['ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ', 'Slip amount does not match the total.'],
+    1014: ['บัญชีปลายทางในสลิปไม่ใช่บัญชีของร้าน กรุณาสแกน QR ในหน้านี้เท่านั้น', 'The receiving account is not the shop account. Please use the QR on this page.']
+  };
+
   const slipErrorText = (json) => {
-    const code = json && json.code;
-    if (code === 1012) return lang === 'th' ? 'สลิปนี้ถูกใช้ยืนยันไปแล้ว กรุณาใช้สลิปของรายการนี้' : 'This slip has already been used.';
-    if (code === 1014) return lang === 'th' ? 'ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ' : 'Slip amount does not match the total.';
-    if (code === 1013) return lang === 'th' ? 'บัญชีปลายทางในสลิปไม่ใช่บัญชีของร้าน' : 'The receiving account is not the shop account.';
-    if (code === 1002 || code === 1003) return lang === 'th' ? 'อ่านสลิปไม่ออก กรุณาถ่ายใหม่ให้เห็น QR ในสลิปชัด ๆ' : 'Cannot read the slip. Please retake a clearer photo.';
+    const hit = SLIP_ERRORS[json && json.code];
+    if (hit) return lang === 'th' ? hit[0] : hit[1];
     return (json && json.message) || (lang === 'th' ? 'ตรวจสลิปไม่สำเร็จ กรุณาลองใหม่' : 'Slip verification failed.');
   };
 

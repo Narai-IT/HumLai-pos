@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     const form = new FormData();
     form.append('files', new Blob([bytes], { type: mimeType || 'image/jpeg' }), 'slip.jpg');
-    // ส่งยอดไปด้วย ให้ SlipOK เทียบยอดในสลิปกับยอดที่ต้องจ่ายให้เอง (ผิดยอดจะได้ code 1014)
+    // ส่งยอดไปด้วย ให้ SlipOK เทียบยอดในสลิปกับยอดที่ต้องจ่ายให้เอง (ยอดไม่ตรงจะได้ code 1013)
     if (amount !== undefined && amount !== null && amount !== '') form.append('amount', String(amount));
     form.append('log', 'true'); // เก็บประวัติไว้ในระบบ SlipOK เผื่อไล่ตรวจย้อนหลัง
 
