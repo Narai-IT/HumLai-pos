@@ -208,7 +208,8 @@ app.post('/print', async (req, res) => {
           }
           const popups = [...(item.allPopups || []), ...(item.addOns || [])];
           popups.forEach(p => {
-             printer.println(`   ↳ ${p.name}`);
+             // ตัวเลือกย่อยจากป๊อปอัพซ้อน ย่อหน้าลึกกว่าเพื่อให้เห็นว่าอยู่ใต้รายการก่อนหน้า
+             printer.println(p.isNestedOption ? `      • ${p.name}` : `   ↳ ${p.name}`);
           });
           if (item.promo && item.promo.id !== 'none') {
              printer.println(`   ↳ ${item.promo.name}`);
