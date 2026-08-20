@@ -1,0 +1,443 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  RefreshCw, LogOut, Settings, Trash2, Plus, Minus,
+  MoreHorizontal, LayoutGrid, Globe, Receipt
+} from 'lucide-react';
+import FoodCard from './FoodCard';
+import './PosSalesScreen.css';
+
+// ประเภทการขาย — ค่าที่ส่งออกคือ customerType ซึ่งเป็นตัวกำหนดชุดราคาของทุกเมนู
+// '' = ราคาปกติ, 'Takehome' = ราคาห่อกลับบ้าน, 'Deli' = ราคาเดลิเวอรี่
+export const SALE_TYPES = [
+  { value: '',         th: '🍽️ ทานที่ร้าน',  en: '🍽️ Dine-in' },
+  { value: 'Takehome', th: '🛍️ ห่อกลับบ้าน', en: '🛍️ Takeaway' },
+  { value: 'Deli',     th: '🛵 เดลิเวอรี่',   en: '🛵 Delivery' }
+];
+
+// โต๊ะที่มีของค้างนานเกินเท่านี้ (นาที) จะขึ้นสีส้มเตือน
+const LATE_MINUTES = 90;
+
+const sameTable = (a, b) =>
+  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+
+const PosSalesScreen = ({
+  lang, setLang,
+  tableNumber, onSelectTable,
+  tableOrders = [],
+  liveMenu = [], categories = [], itemInCategory,
+  activeCategory, setActiveCategory,
+  cart = [],
+  onOrderClick, onUpdateQuantity, onRemoveFromCart, onUpdateNote, onClearCart,
+  onSendOrder,
+  resolvePrice,
+  customerType, setCustomerType,
+  customerName, setCustomerName,
+  settings = {},
+  isAdmin, isCashier, branch, currentUser,
+  onLogout, onRefresh, isRefreshing,
+  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onDecreaseQuantity
+}) => {
+  const t = (th, en) => (lang === 'th' ? th : en);
+
+  // ── โต๊ะที่ตั้งค่าไว้หลังบ้าน (แหล่งเดียวกับหน้าเลือกโต๊ะ) ──
+  const [configuredTables, setConfiguredTables] = useState([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('pos_tables_config') || '[]');
+      if (Array.isArray(saved) && saved.length > 0) setConfiguredTables(saved.filter(x => x.active !== false));
+    } catch { /* ไม่มีค่าที่ตั้งไว้ → ใช้ค่าเริ่มต้นด้านล่าง */ }
+  }, []);
+
+  const zones = useMemo(() => {
+    if (configuredTables.length > 0) {
+      return {
+        DineIn:   configuredTables.filter(x => x.zone === 'DineIn' || !x.zone).map(x => x.name),
+        Takehome: configuredTables.filter(x => x.zone === 'Takehome').map(x => x.name),
+        Delivery: configuredTables.filter(x => x.zone === 'Delivery').map(x => x.name),
+        VIP:      configuredTables.filter(x => x.zone === 'VIP').map(x => x.name)
+      };
+    }
+    return {
+      DineIn:   Array.from({ length: 16 }, (_, i) => String(i + 1)),
+      Takehome: ['Takehome 1', 'Takehome 2', 'Takehome 3', 'Takehome 4', 'Takehome 5'],
+      Delivery: ['LineMan', 'Grab', 'Shopee'],
+      VIP:      []
+    };
+  }, [configuredTables]);
+
+  const [zone, setZone] = useState('DineIn');
+  const tablesInZone = zones[zone] || [];
+
+  // เปิดมาให้เห็นโซนของโต๊ะที่กำลังคีย์อยู่ และกันค้างอยู่โซนที่ไม่มีโต๊ะเลย
+  useEffect(() => {
+    const order = ['DineIn', 'Takehome', 'Delivery', 'VIP'];
+    const zoneOfCurrent = order.find(z => (zones[z] || []).some(n => sameTable(n, tableNumber)));
+    if (zoneOfCurrent) { setZone(zoneOfCurrent); return; }
+    if ((zones[zone] || []).length === 0) {
+      const firstFilled = order.find(z => (zones[z] || []).length > 0);
+      if (firstFilled) setZone(firstFilled);
+    }
+    // เจตนาไม่ใส่ zone ใน deps — ไม่งั้นจะเด้งกลับทุกครั้งที่ผู้ใช้กดสลับโซนเอง
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zones, tableNumber]);
+
+  // สถานะโต๊ะ: ว่าง / มีลูกค้า / ค้างเกิน 90 นาที
+  const tableState = (name) => {
+    const rows = tableOrders.filter(o => sameTable(o.TableNumber, name) && o.Status !== 'paid');
+    if (rows.length === 0) return { status: 'free', count: 0, mins: 0 };
+    let earliest = null;
+    rows.forEach(r => {
+      const ts = new Date(r.Timestamp).getTime();
+      if (!isNaN(ts) && (earliest === null || ts < earliest)) earliest = ts;
+    });
+    const mins = earliest ? Math.floor((Date.now() - earliest) / 60000) : 0;
+    return { status: mins > LATE_MINUTES ? 'late' : 'busy', count: rows.length, mins };
+  };
+
+  // ชุดราคาที่ควรใช้เมื่อเลือกโต๊ะในโซนนั้น ๆ
+  const priceTypeForTable = (name) => {
+    const cfg = configuredTables.find(x => sameTable(x.name, name));
+    if (cfg) {
+      if (cfg.priceTier === 'takehome') return 'Takehome';
+      if (cfg.priceTier === 'deli') return 'Deli';
+      return '';
+    }
+    const s = String(name).toLowerCase();
+    if (s.startsWith('takehome') || s.includes('กลับบ้าน')) return 'Takehome';
+    if (['lineman', 'grab', 'shopee', 'deli', 'delivery'].some(d => s.includes(d))) return 'Deli';
+    return '';
+  };
+
+  const handleTableClick = (name) => {
+    if (sameTable(name, tableNumber)) return;
+    if (cart.length > 0 && !window.confirm(t(
+      'ยังมีรายการในตะกร้าที่ยังไม่ได้ส่ง ถ้าเปลี่ยนโต๊ะรายการจะถูกล้าง ต้องการเปลี่ยนหรือไม่?',
+      'The cart still has unsent items. Switching tables clears them. Continue?'
+    ))) return;
+    setCustomerType(priceTypeForTable(name));
+    onSelectTable(name);
+  };
+
+  // ── ค้นหาเมนูแล้วกดเพิ่มลงตะกร้าได้เลย ──
+  const [query, setQuery] = useState('');
+  const searchResults = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return liveMenu
+      .filter(m => String(m.name || '').toLowerCase().includes(q) || String(m.nameEn || '').toLowerCase().includes(q))
+      .slice(0, 20);
+  }, [query, liveMenu]);
+
+  // ── ตะกร้า ──
+  const unitPrice = (item) => {
+    let p = Number(item.food.price) || 0;
+    (item.allPopups || []).forEach(a => { p += Number(a.price) || 0; });
+    if (item.promo && item.promo.price) p += Number(item.promo.price) || 0;
+    return p;
+  };
+  const subtotal = cart.reduce((s, i) => s + unitPrice(i) * (i.quantity || 1), 0);
+  const scRate  = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
+  const vatRate = settings?.vat?.enabled ? (settings.vat.rate || 0) : 0;
+  const serviceCharge = Math.round(subtotal * scRate) / 100;
+  const vat = Math.round((subtotal + serviceCharge) * vatRate) / 100;
+  const grandTotal = subtotal + serviceCharge + vat;
+
+  const optionText = (item) => {
+    const parts = [];
+    const grouped = [];
+    (item.allPopups || []).forEach(p => {
+      const label = lang === 'th' ? p.name : (p.nameEn || p.name);
+      const found = grouped.find(g => g.label === label);
+      if (found) found.count += 1; else grouped.push({ label, count: 1 });
+    });
+    grouped.forEach(g => parts.push(g.count > 1 ? `${g.label} ×${g.count}` : g.label));
+    if (item.dining && item.dining.name) parts.push(item.dining.name);
+    if (item.customerName) parts.push(`${t('ลูกค้า', 'Customer')}: ${item.customerName}`);
+    return parts.join(' · ');
+  };
+
+  // ── เมนู "เพิ่มเติม" บนแถบบน ──
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [moreOpen]);
+
+  const visibleCats = categories.filter(c => liveMenu.some(i => itemInCategory(i, c.slug)));
+  const gridItems = liveMenu.filter(i => itemInCategory(i, activeCategory));
+
+  return (
+    <div className="pos2">
+      {/* ── แถบบนสุด ── */}
+      <header className="pos2-top">
+        <div className="pos2-brand">
+          <img src="/logo.png" alt="logo" className="pos2-logo" />
+          <span className="pos2-shop">{t('ข้าวมันไก่หำไหล', 'Hum Lai Chicken Rice')}</span>
+          {tableNumber && <span className="pos2-table-badge">{t('โต๊ะ', 'Table')} {tableNumber}</span>}
+        </div>
+
+        <div className="pos2-top-right">
+          <button className="pos2-btn" onClick={() => onSelectTable('')} title={t('กลับไปหน้าเลือกโต๊ะ', 'Back to tables')}>
+            <LayoutGrid size={15} /> {t('เลือกโต๊ะ', 'Tables')}
+          </button>
+          <button className="pos2-btn" onClick={onOpenBill}>
+            <Receipt size={15} /> {t('สรุปบิล', 'Bill')}
+          </button>
+          {(isAdmin || isCashier) && (
+            <button className="pos2-btn" onClick={onOpenAdmin}>
+              <Settings size={15} /> {t('หลังบ้าน', 'Admin')}
+            </button>
+          )}
+
+          <div className="pos2-more" ref={moreRef}>
+            <button className="pos2-btn" onClick={() => setMoreOpen(o => !o)}>
+              <MoreHorizontal size={15} /> {t('เพิ่มเติม', 'More')}
+            </button>
+            {moreOpen && (
+              <div className="pos2-more-menu">
+                <button onClick={() => { setMoreOpen(false); onRefresh(); }}>
+                  <RefreshCw size={15} /> {isRefreshing ? t('กำลังโหลด...', 'Loading...') : t('รีเฟรชข้อมูล', 'Refresh')}
+                </button>
+                <button onClick={() => { setMoreOpen(false); onOpenSummary('daily'); }}>📊 {t('สรุปยอดขายวันนี้', 'Today sales')}</button>
+                <button onClick={() => { setMoreOpen(false); onOpenSummary('range'); }}>📅 {t('สรุปยอดขายระหว่างวัน', 'Sales by range')}</button>
+                <button onClick={() => { setMoreOpen(false); onOpenWaste(); }}>🗑️ {t('บันทึกการทิ้ง', 'Waste')}</button>
+                <button onClick={() => { setMoreOpen(false); onOpenKiosk(); }}>📱 {t('หน้าลูกค้าสั่งเอง', 'Customer kiosk')}</button>
+                <button onClick={() => { setMoreOpen(false); setLang(lang === 'th' ? 'en' : 'th'); }}>
+                  <Globe size={15} /> {lang === 'th' ? 'English' : 'ภาษาไทย'}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="pos2-user">
+            <b>{currentUser?.username || branch || '-'}</b>
+            <span>{branch}</span>
+          </div>
+          <button
+            className="pos2-btn danger"
+            onClick={() => { if (window.confirm(t(`ออกจากระบบสาขา "${branch}"?`, 'Log out?'))) onLogout(); }}
+          >
+            <LogOut size={15} /> {t('ออกจากระบบ', 'Log out')}
+          </button>
+        </div>
+      </header>
+
+      <div className="pos2-body">
+        <div className="pos2-main">
+          {/* ── แถบโต๊ะ ── */}
+          <div className="pos2-card pos2-tables">
+            <div className="pos2-tables-head">
+              <div className="pos2-legend">
+                <strong style={{ color: '#0f172a' }}>🪑 {t('โต๊ะ', 'Tables')}</strong>
+                <span><i className="pos2-dot-free" />{t('ว่าง', 'Free')}</span>
+                <span><i className="pos2-dot-busy" />{t('มีลูกค้า', 'Occupied')}</span>
+                <span><i className="pos2-dot-late" />{t(`เกิน ${LATE_MINUTES} นาที`, `Over ${LATE_MINUTES} min`)}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                {[
+                  { key: 'DineIn',   label: t('ทานที่ร้าน', 'Dine-in') },
+                  { key: 'Takehome', label: t('ห่อกลับบ้าน', 'Takeaway') },
+                  { key: 'Delivery', label: t('Delivery', 'Delivery') },
+                  { key: 'VIP',      label: 'VIP' }
+                ].filter(z => (zones[z.key] || []).length > 0).map(z => (
+                  <button
+                    key={z.key}
+                    className={`pos2-btn ${zone === z.key ? 'primary' : ''}`}
+                    onClick={() => setZone(z.key)}
+                  >
+                    {z.label}
+                  </button>
+                ))}
+                <button className="pos2-btn" onClick={onRefresh} disabled={isRefreshing} title={t('รีเฟรช', 'Refresh')}>
+                  <RefreshCw size={15} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
+                </button>
+              </div>
+            </div>
+
+            <div className="pos2-table-list">
+              {tablesInZone.map(name => {
+                const st = tableState(name);
+                const current = sameTable(name, tableNumber);
+                return (
+                  <button
+                    key={name}
+                    className={`pos2-table ${st.status} ${current ? 'current' : ''}`}
+                    onClick={() => handleTableClick(name)}
+                  >
+                    <b>{name}</b>
+                    <small>
+                      {st.status === 'free'
+                        ? t('ว่าง', 'Free')
+                        : `${st.count} ${t('รายการ', 'items')} · ${st.mins} ${t('นาที', 'min')}`}
+                    </small>
+                    {st.count > 0 && <span className="pos2-table-count">{st.count}</span>}
+                  </button>
+                );
+              })}
+              {tablesInZone.length === 0 && (
+                <span style={{ color: '#94a3b8', fontSize: '0.8rem', fontWeight: 700, padding: '0.4rem' }}>
+                  {t('ยังไม่ได้ตั้งค่าโต๊ะในโซนนี้', 'No tables configured in this zone')}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* ── หมวดหมู่ ── */}
+          <div className="pos2-cats">
+            {visibleCats.map(cat => (
+              <button
+                key={cat.slug}
+                className={`pos2-chip ${activeCategory === cat.slug ? 'active' : ''}`}
+                onClick={() => setActiveCategory(cat.slug)}
+              >
+                {cat.icon} {lang === 'th' ? cat.name : (cat.nameEn || cat.name)}
+              </button>
+            ))}
+          </div>
+
+          {/* ── ตารางเมนู ── */}
+          <div className="pos2-grid-wrap">
+            <div className="pos-food-grid">
+              {gridItems.map(item => (
+                <FoodCard
+                  key={item.id}
+                  food={item}
+                  lang={lang}
+                  displayPrice={Number(resolvePrice(item)?.price) || 0}
+                  onOrderClick={onOrderClick}
+                  onDecreaseClick={onDecreaseQuantity}
+                  cartQuantity={cart.filter(c => c.food.id === item.id).reduce((s, c) => s + (c.quantity || 1), 0)}
+                />
+              ))}
+            </div>
+            {gridItems.length === 0 && (
+              <div className="pos2-empty">{t('ไม่มีรายการในหมวดหมู่นี้', 'No items in this category')}</div>
+            )}
+          </div>
+        </div>
+
+        {/* ── ตะกร้าด้านขวา ── */}
+        <aside className="pos2-cart">
+          <div className="pos2-cart-head">
+            <select
+              className="pos2-type-select"
+              value={customerType}
+              onChange={(e) => setCustomerType(e.target.value)}
+              title={t('ประเภทการขาย — กำหนดชุดราคาของทุกเมนู', 'Sale type — sets the price tier')}
+            >
+              {SALE_TYPES.map(o => (
+                <option key={o.value} value={o.value}>{lang === 'th' ? o.th : o.en}</option>
+              ))}
+            </select>
+            <button
+              className="pos2-clear"
+              onClick={() => {
+                if (cart.length === 0) return;
+                if (window.confirm(t('ล้างรายการในตะกร้าทั้งหมด?', 'Clear the whole cart?'))) onClearCart();
+              }}
+            >
+              {t('ล้าง', 'Clear')}
+            </button>
+          </div>
+
+          <div className="pos2-cart-tools">
+            <div className="pos2-search">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('🔍 พิมพ์ค้นหาเมนู แล้วกดเพื่อเพิ่ม', '🔍 Search a menu item to add')}
+              />
+              {searchResults.length > 0 && (
+                <div className="pos2-results">
+                  {searchResults.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { onOrderClick(m); setQuery(''); }}
+                    >
+                      <span>{lang === 'th' ? m.name : (m.nameEn || m.name)}</span>
+                      <b>฿{Number(resolvePrice(m)?.price || 0).toLocaleString()}</b>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <input
+              className="pos2-custname"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder={t('ชื่อลูกค้า (ถ้ามี)', 'Customer name (optional)')}
+            />
+          </div>
+
+          <div className="pos2-cart-items">
+            {cart.length === 0 ? (
+              <div className="pos2-cart-empty">{t('ยังไม่มีรายการ — แตะเมนูเพื่อเพิ่ม', 'No items yet — tap a menu item')}</div>
+            ) : cart.map(item => (
+              <div key={item.cartId} className="pos2-line-item">
+                <div className="pos2-line-top">
+                  <div className="pos2-line-name">
+                    {lang === 'th' ? item.food.name : (item.food.nameEn || item.food.name)}
+                    {item.food.priceName && <span className="pos2-tag">{item.food.priceName}</span>}
+                  </div>
+                  <button className="pos2-icon-btn" onClick={() => onRemoveFromCart(item.cartId)} title={t('ลบ', 'Remove')}>
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                {optionText(item) && <div className="pos2-line-opt">{optionText(item)}</div>}
+                <div className="pos2-line-bottom">
+                  <div className="pos2-qty">
+                    <button onClick={() => onUpdateQuantity(item.cartId, -1)} disabled={(item.quantity || 1) <= 1}><Minus size={14} /></button>
+                    <span>{item.quantity || 1}</span>
+                    <button onClick={() => onUpdateQuantity(item.cartId, 1)}><Plus size={14} /></button>
+                  </div>
+                  <div className="pos2-line-price">฿{(unitPrice(item) * (item.quantity || 1)).toLocaleString()}</div>
+                </div>
+                <input
+                  className="pos2-note"
+                  value={item.note || ''}
+                  onChange={(e) => onUpdateNote(item.cartId, e.target.value)}
+                  placeholder={t('📝 หมายเหตุ เช่น ไม่ใส่ผัก', '📝 Note e.g. no veggies')}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="pos2-cart-foot">
+            <div className="pos2-sum">
+              <span>{t('ยอดรวม', 'Subtotal')}</span><b>฿{subtotal.toLocaleString()}</b>
+            </div>
+            {serviceCharge > 0 && (
+              <div className="pos2-sum">
+                <span>{t(`เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, `Service ${settings.serviceCharge.rate}%`)}</span>
+                <b>+฿{serviceCharge.toLocaleString()}</b>
+              </div>
+            )}
+            {vat > 0 && (
+              <div className="pos2-sum">
+                <span>{t(`VAT ${settings.vat.rate}%`, `VAT ${settings.vat.rate}%`)}</span>
+                <b>+฿{vat.toLocaleString()}</b>
+              </div>
+            )}
+            <div className="pos2-grand">
+              <span>{t('สุทธิ', 'Total')}</span>
+              <b>฿{grandTotal.toLocaleString()}</b>
+            </div>
+            <div className="pos2-actions">
+              <button className="pos2-send" onClick={onSendOrder} disabled={cart.length === 0}>
+                ✅ {t('ส่งรายการอาหาร', 'Send order')}
+              </button>
+              <button className="pos2-bill" onClick={onOpenBill}>
+                🧾 {t('ชำระเงิน', 'Payment')}
+              </button>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+};
+
+export default PosSalesScreen;

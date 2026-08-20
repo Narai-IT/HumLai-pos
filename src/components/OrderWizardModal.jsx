@@ -7,7 +7,14 @@ const DINING_OPTIONS = [
   { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' }
 ];
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0 }) => {
+// ชื่อราคาที่เป็น "ช่องทางขาย" ไม่ใช่ขนาด/ตัวเลือกของเมนู
+// แยกออกจากขั้นตอนเลือกราคา เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
+const TAKEHOME_ALIASES = ['takehome', 'take home', 'takeaway', 'ห่อกลับบ้าน', 'กลับบ้าน', 'ห่อกลับ'];
+const DELI_ALIASES = ['deli', 'delivery', 'เดลิเวอรี่', 'lineman', 'grab', 'shopee'];
+const norm = (v) => String(v || '').trim().toLowerCase();
+const isChannelPrice = (name) => TAKEHOME_ALIASES.includes(norm(name)) || DELI_ALIASES.includes(norm(name));
+
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedPopup1, setSelectedPopup1] = useState({});
   const [selectedPopup2, setSelectedPopup2] = useState({});
@@ -17,11 +24,15 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const [selectedPopup6, setSelectedPopup6] = useState({});
   const [selectedDining, setSelectedDining] = useState(DINING_OPTIONS[0]);
 
-  const priceOptions = getPriceOptions(food);
+  const allPriceOptions = getPriceOptions(food);
+  // ราคาที่ให้เลือกในขั้นตอน "เลือกราคา/ขนาด" = ตัดราคาช่องทางขาย (Takehome/Deli) ออก
+  const priceOptions = allPriceOptions.filter(o => !isChannelPrice(o.name));
   const hasMultiplePrices = priceOptions.length > 1;
+  // ราคาห่อกลับบ้านของเมนูนี้ (ถ้าตั้งไว้) — ใช้ตอนลูกค้าเลือกห่อกลับ
+  const takehomePrice = allPriceOptions.find(o => TAKEHOME_ALIASES.includes(norm(o.name)));
 
   const [selectedPrice, setSelectedPrice] = useState(() => {
-    const opts = getPriceOptions(food);
+    const opts = priceOptions.length > 0 ? priceOptions : allPriceOptions;
     const match = opts.find(o => Number(o.price) === Number(basePrice));
     return match || opts[0];
   });
@@ -95,7 +106,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     categoryConfig.hasPopup4 === true ? 4 : null,
     categoryConfig.hasPopup5 === true ? 5 : null,
     categoryConfig.hasPopup6 === true ? 6 : null,
-    (!isDrink && categoryConfig.hasDining !== false) ? 7 : null
+    (askDining && !isDrink && categoryConfig.hasDining !== false) ? 7 : null
   ].filter(s => s !== null);
 
   const step = validSteps[currentStepIndex] || 1;
@@ -142,15 +153,26 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     ...expandQty(selectedPopup6, pop6Config.items)
   ];
 
+  const diningAsked = validSteps.indexOf(7) !== -1;
+  const isTakeaway = diningAsked && selectedDining.id === 'takeaway';
+
+  // ราคาฐานที่จะใช้จริง — เลือกห่อกลับบ้านแล้วเมนูมีราคา Takehome ตั้งไว้ ให้คิดราคานั้นแทน
+  const effectivePrice = () => {
+    if (isTakeaway && takehomePrice) return takehomePrice;
+    if (hasMultiplePrices) return selectedPrice;
+    return null; // ไม่ระบุ = ใช้ราคาตามที่หน้าขายส่งมา (basePrice)
+  };
+
   const currentTotal = () => {
-    let total = hasMultiplePrices ? (Number(selectedPrice?.price) || 0) : (Number(basePrice) || Number(food?.price) || 0);
+    const chosen = effectivePrice();
+    let total = chosen ? (Number(chosen.price) || 0) : (Number(basePrice) || Number(food?.price) || 0);
     getExpandedPopups().forEach(a => { total += Number(a.price) || 0; });
     return total;
   };
 
   const handleSubmit = () => {
     onConfirm(food, {
-      selectedPrice: hasMultiplePrices ? selectedPrice : null,
+      selectedPrice: effectivePrice(),
       allPopups: getExpandedPopups(),
       dining: isDrink ? { id: 'drink', name: 'เครื่องดื่ม', nameEn: 'Drinks' } : selectedDining
     });
@@ -307,19 +329,35 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             <div className="wizard-step">
               <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? 'การรับประทาน' : 'Dining Option'}</h3>
               <div className="options-grid cols-2">
-                {DINING_OPTIONS.map(option => (
+                {DINING_OPTIONS.map(option => {
+                  // ราคาที่จะถูกใช้จริงถ้าเลือกตัวเลือกนี้ — ห่อกลับบ้านจะสลับไปใช้ราคา Takehome
+                  const optPrice = (option.id === 'takeaway' && takehomePrice)
+                    ? Number(takehomePrice.price) || 0
+                    : (hasMultiplePrices ? (Number(selectedPrice?.price) || 0) : (Number(basePrice) || Number(food?.price) || 0));
+                  return (
                   <div
                     key={option.id}
                     className={`option-card large ${selectedDining.id === option.id ? 'selected' : ''}`}
                     onClick={() => setSelectedDining(option)}
                     style={{ background: selectedDining.id === option.id ? '#fff7ed' : '#ffffff', border: `2px solid ${selectedDining.id === option.id ? '#ea580c' : '#cbd5e1'}` }}
                   >
+                    <div>
                     <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? option.name : option.nameEn}</div>
+                    <div className="option-price" style={{ color: '#ea580c', fontWeight: 800, marginTop: '4px' }}>
+                      ฿{optPrice.toLocaleString()}
+                      {option.id === 'takeaway' && takehomePrice && (
+                        <span style={{ marginLeft: '0.35rem', fontSize: '0.72rem', fontWeight: 700, color: '#c2410c' }}>
+                          ({lang === 'th' ? 'ราคาห่อกลับ' : 'takeaway price'})
+                        </span>
+                      )}
+                    </div>
+                    </div>
                     <div className="radio-circle" style={{ borderColor: selectedDining.id === option.id ? '#ea580c' : '#cbd5e1' }}>
                       {selectedDining.id === option.id && <div className="radio-fill" style={{ background: '#ea580c' }} />}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

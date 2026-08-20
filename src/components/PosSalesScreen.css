@@ -1,0 +1,279 @@
+/* ── หน้าขาย (POS) เลย์เอาต์แบบ 3 ส่วน: แถบบน / เมนูตรงกลาง / ตะกร้าด้านขวา ── */
+/* เปลี่ยนสีหลักของหน้าขายทั้งหน้าได้ที่ตัวแปรเดียวด้านล่างนี้ */
+.pos2 {
+  --pos2-primary: #15803d;
+  --pos2-primary-dark: #166534;
+  --pos2-primary-soft: #dcfce7;
+  --pos2-line: #e2e8f0;
+  --pos2-bg: #f1f5f9;
+
+  /* เต็มจอจริง ๆ — ตัดผลของ padding ที่ .app-container ใส่ไว้ให้หน้าอื่น */
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--pos2-bg);
+  overflow: hidden;
+}
+
+/* ── แถบบนสุด ── */
+.pos2-top {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0.9rem;
+  background: #ffffff;
+  border-bottom: 1px solid var(--pos2-line);
+}
+.pos2-brand { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
+.pos2-logo { height: 36px; width: 36px; object-fit: contain; border-radius: 8px; }
+.pos2-shop { font-size: 1.05rem; font-weight: 900; color: var(--pos2-primary); white-space: nowrap; }
+.pos2-table-badge {
+  background: var(--pos2-primary-soft);
+  color: var(--pos2-primary-dark);
+  border: 1px solid var(--pos2-primary);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.pos2-top-right { display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; justify-content: flex-end; }
+.pos2-user { text-align: right; line-height: 1.15; }
+.pos2-user b { display: block; font-size: 0.82rem; color: #0f172a; font-weight: 800; }
+.pos2-user span { font-size: 0.72rem; color: #64748b; }
+
+.pos2-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1.5px solid var(--pos2-line);
+  background: #ffffff;
+  color: #0f172a;
+  white-space: nowrap;
+}
+.pos2-btn:hover { background: #f8fafc; }
+.pos2-btn.primary { background: var(--pos2-primary); border-color: var(--pos2-primary); color: #ffffff; }
+.pos2-btn.primary:hover { background: var(--pos2-primary-dark); }
+.pos2-btn.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
+.pos2-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* เมนู "เพิ่มเติม" */
+.pos2-more { position: relative; }
+.pos2-more-menu {
+  position: absolute; right: 0; top: calc(100% + 6px);
+  background: #ffffff;
+  border: 1px solid var(--pos2-line);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+  padding: 0.35rem;
+  z-index: 60;
+  min-width: 218px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.pos2-more-menu button {
+  display: flex; align-items: center; gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: none; border: none;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  font-size: 0.85rem; font-weight: 700; font-family: inherit;
+  color: #0f172a; cursor: pointer;
+}
+.pos2-more-menu button:hover { background: #f1f5f9; }
+
+/* ── ตัวเนื้อหา ── */
+.pos2-body {
+  flex: 1;
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.7rem;
+  min-height: 0;
+}
+.pos2-main { flex: 1; display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; min-height: 0; }
+
+.pos2-card {
+  background: #ffffff;
+  border: 1px solid var(--pos2-line);
+  border-radius: 14px;
+}
+
+/* ── แถบโต๊ะ ── */
+.pos2-tables { padding: 0.6rem 0.7rem; flex-shrink: 0; }
+.pos2-tables-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.5rem;
+}
+.pos2-legend { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; font-size: 0.74rem; color: #64748b; font-weight: 700; }
+.pos2-legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.pos2-dot-free { background: #cbd5e1; }
+.pos2-dot-busy { background: #16a34a; }
+.pos2-dot-late { background: #f59e0b; }
+
+.pos2-table-list { display: flex; gap: 0.45rem; overflow-x: auto; padding-bottom: 2px; }
+.pos2-table {
+  flex: 0 0 auto;
+  min-width: 92px;
+  text-align: left;
+  border-radius: 10px;
+  border: 1.5px solid var(--pos2-line);
+  background: #ffffff;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-family: inherit;
+  position: relative;
+}
+.pos2-table:hover { border-color: #94a3b8; }
+.pos2-table b { display: block; font-size: 0.95rem; font-weight: 900; color: #0f172a; }
+.pos2-table small { font-size: 0.68rem; color: #64748b; font-weight: 700; }
+.pos2-table.busy { border-color: #16a34a; background: #f0fdf4; }
+.pos2-table.late { border-color: #f59e0b; background: #fffbeb; }
+.pos2-table.current { border-color: var(--pos2-primary); box-shadow: 0 0 0 2px var(--pos2-primary-soft); }
+.pos2-table-count {
+  position: absolute; top: -7px; right: -7px;
+  min-width: 19px; height: 19px; padding: 0 4px;
+  border-radius: 999px;
+  background: #b91c1c; color: #fff;
+  font-size: 0.66rem; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid #fff;
+}
+
+/* ── หมวดหมู่ (ชิป) ── */
+.pos2-cats { display: flex; gap: 0.4rem; overflow-x: auto; flex-shrink: 0; padding-bottom: 2px; }
+.pos2-chip {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  border: 1.5px solid var(--pos2-line);
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem; font-weight: 800; font-family: inherit;
+  cursor: pointer; white-space: nowrap;
+}
+.pos2-chip:hover { border-color: #94a3b8; }
+.pos2-chip.active { background: var(--pos2-primary); border-color: var(--pos2-primary); color: #ffffff; }
+
+/* ── ตารางเมนู ── */
+.pos2-grid-wrap { flex: 1; overflow-y: auto; min-height: 0; padding-right: 2px; }
+.pos2-empty { padding: 2.5rem 1rem; text-align: center; color: #94a3b8; font-weight: 700; }
+
+/* ── ตะกร้าด้านขวา ── */
+.pos2-cart {
+  width: 340px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: #ffffff;
+  border: 1px solid var(--pos2-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.pos2-cart-head {
+  background: var(--pos2-primary);
+  color: #ffffff;
+  padding: 0.55rem 0.7rem;
+  display: flex; align-items: center; gap: 0.5rem;
+}
+.pos2-type-select {
+  flex: 1;
+  border-radius: 8px;
+  border: none;
+  padding: 0.42rem 0.5rem;
+  font-size: 0.88rem; font-weight: 800; font-family: inherit;
+  color: #0f172a; background: #ffffff; cursor: pointer;
+}
+.pos2-clear {
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.45);
+  color: #fff; border-radius: 8px; padding: 0.35rem 0.6rem;
+  font-size: 0.76rem; font-weight: 800; font-family: inherit; cursor: pointer;
+}
+.pos2-clear:hover { background: rgba(255,255,255,0.28); }
+
+.pos2-cart-tools { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--pos2-line); display: flex; flex-direction: column; gap: 0.4rem; }
+.pos2-search { position: relative; }
+.pos2-search input, .pos2-custname {
+  width: 100%; box-sizing: border-box;
+  border: 1.5px solid var(--pos2-line); border-radius: 9px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.85rem; font-weight: 600; font-family: inherit; color: #0f172a;
+  outline: none; background: #ffffff;
+}
+.pos2-search input:focus, .pos2-custname:focus { border-color: var(--pos2-primary); }
+.pos2-results {
+  position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+  background: #fff; border: 1px solid var(--pos2-line); border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(15,23,42,0.14);
+  max-height: 260px; overflow-y: auto; z-index: 50;
+}
+.pos2-results button {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  width: 100%; text-align: left;
+  background: none; border: none; border-bottom: 1px solid #f1f5f9;
+  padding: 0.55rem 0.6rem; cursor: pointer; font-family: inherit;
+}
+.pos2-results button:hover { background: #f0fdf4; }
+.pos2-results span { font-size: 0.84rem; font-weight: 700; color: #0f172a; }
+.pos2-results b { font-size: 0.84rem; font-weight: 800; color: var(--pos2-primary); white-space: nowrap; }
+
+.pos2-cart-items { flex: 1; overflow-y: auto; padding: 0.5rem 0.6rem; display: flex; flex-direction: column; gap: 0.5rem; min-height: 0; }
+.pos2-cart-empty { margin-top: 2rem; text-align: center; color: #94a3b8; font-size: 0.86rem; font-weight: 700; }
+.pos2-line-item { border: 1px solid var(--pos2-line); border-radius: 11px; padding: 0.5rem 0.55rem; background: #f8fafc; }
+.pos2-line-top { display: flex; justify-content: space-between; gap: 0.4rem; }
+.pos2-line-name { font-size: 0.86rem; font-weight: 800; color: #0f172a; line-height: 1.3; }
+.pos2-tag {
+  margin-left: 0.3rem; font-size: 0.66rem; font-weight: 800;
+  color: var(--pos2-primary-dark); background: var(--pos2-primary-soft);
+  border-radius: 5px; padding: 0.05rem 0.3rem; white-space: nowrap;
+}
+.pos2-line-opt { font-size: 0.73rem; color: #64748b; font-weight: 600; margin-top: 2px; line-height: 1.35; }
+.pos2-line-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 0.4rem; gap: 0.4rem; }
+.pos2-qty { display: flex; align-items: center; background: #fff; border: 1px solid var(--pos2-line); border-radius: 8px; }
+.pos2-qty button { background: none; border: none; padding: 0.25rem 0.4rem; cursor: pointer; color: #0f172a; display: flex; }
+.pos2-qty button:disabled { opacity: 0.3; cursor: not-allowed; }
+.pos2-qty span { min-width: 22px; text-align: center; font-weight: 800; font-size: 0.85rem; }
+.pos2-line-price { font-weight: 900; color: var(--pos2-primary); font-size: 0.95rem; }
+.pos2-icon-btn { background: none; border: none; cursor: pointer; color: #ef4444; padding: 0.25rem; display: flex; }
+.pos2-note {
+  width: 100%; box-sizing: border-box; margin-top: 0.4rem;
+  border: 1px dashed #cbd5e1; border-radius: 7px;
+  padding: 0.35rem 0.45rem;
+  font-size: 0.76rem; font-family: inherit; font-weight: 600; color: #0f172a;
+  background: #fff; outline: none;
+}
+
+.pos2-cart-foot { border-top: 1px solid var(--pos2-line); padding: 0.6rem 0.7rem; background: #f8fafc; }
+.pos2-sum { display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700; color: #475569; margin-bottom: 0.25rem; }
+.pos2-sum b { color: #0f172a; font-weight: 800; }
+.pos2-grand { display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid var(--pos2-line); padding-top: 0.45rem; margin-top: 0.35rem; }
+.pos2-grand span { font-size: 0.95rem; font-weight: 900; color: #0f172a; }
+.pos2-grand b { font-size: 1.35rem; font-weight: 900; color: var(--pos2-primary); }
+.pos2-actions { display: flex; gap: 0.4rem; margin-top: 0.6rem; }
+.pos2-send {
+  flex: 2; border: none; border-radius: 10px;
+  background: var(--pos2-primary); color: #fff;
+  padding: 0.75rem; font-size: 0.92rem; font-weight: 900; font-family: inherit; cursor: pointer;
+}
+.pos2-send:hover { background: var(--pos2-primary-dark); }
+.pos2-send:disabled { background: #cbd5e1; cursor: not-allowed; }
+.pos2-bill {
+  flex: 1; border-radius: 10px; cursor: pointer; font-family: inherit;
+  border: 1.5px solid var(--pos2-primary); background: #fff; color: var(--pos2-primary);
+  font-size: 0.85rem; font-weight: 800;
+}
+
+/* ── จอเล็ก: ตะกร้าลงมาต่อท้ายเมนู แล้วให้ทั้งหน้าเลื่อนในกรอบเดียว ── */
+@media (max-width: 1024px) {
+  .pos2-body { flex-direction: column; overflow-y: auto; }
+  .pos2-main { min-height: 0; }
+  .pos2-grid-wrap { overflow: visible; flex: none; }
+  .pos2-cart { width: auto; flex-shrink: 0; }
+  .pos2-cart-items { max-height: 45vh; }
+  .pos2-top { flex-wrap: wrap; gap: 0.4rem; }
+}

@@ -1,10 +1,8 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
-import { ShoppingCart, ClipboardList, Store, Globe, ShoppingBag, RefreshCw, LogOut, LayoutGrid } from 'lucide-react';
-import FoodCard from './components/FoodCard';
 import OrderWizardModal from './components/OrderWizardModal';
-import CartModal from './components/CartModal';
 import TableSelection from './components/TableSelection';
+import PosSalesScreen from './components/PosSalesScreen';
 import PaymentApprovalListener from './components/PaymentApprovalListener';
 import TableOrderView from './components/TableOrderView';
 import LoginScreen from './components/LoginScreen';
@@ -561,11 +559,9 @@ function App() {
 
   const [selectedFood, setSelectedFood] = useState(null);
   const [cart, setCart] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
 
   React.useEffect(() => {
     setCart([]);
-    setIsCartOpen(false);
   }, [tableNumber]);
 
   // รายการ "ประเภทลูกค้า / ช่องทาง" ทั้งหมด (ราคาขายปกติ / TAKEHOME / DELI)
@@ -590,12 +586,18 @@ function App() {
     return opts.find(o => (o.name || '').trim() === 'ปกติ') || opts[0];
   };
 
+  // ถามเรื่อง "ทานที่ร้าน / ห่อกลับบ้าน" เฉพาะตอนขายแบบทานที่ร้าน
+  // (ถ้าหัวตะกร้าเลือก Takehome/Deli ไว้แล้ว ถือว่ารู้ชุดราคาแน่นอน ไม่ต้องถามซ้ำ)
+  const askDining = customerType === '';
+
   const handleOrderClick = (food) => {
     const cats = allCategories.length > 0 ? allCategories : categories;
     const cfg = resolvePopupSource(food, cats);
     const hasPopups = [1, 2, 3, 4, 5, 6].some(i => cfg[`hasPopup${i}`] === true);
+    // เมนูที่ไม่ใช่เครื่องดื่มและไม่ได้ปิดคำถามไว้ ต้องเปิด popup เพื่อถามการรับประทาน
+    const needsDining = askDining && food.category !== 'drink' && cfg.hasDining !== false;
 
-    if (hasPopups) {
+    if (hasPopups || needsDining) {
       setSelectedFood(food);
     } else {
       // ไม่มี popup → เพิ่มลงตะกร้าทันทีตามราคาของ "ประเภทลูกค้า/ช่องทาง" ที่เลือกไว้ที่หัวโต๊ะ (ปกติ / Takehome / Deli)
@@ -649,7 +651,6 @@ function App() {
     }
     setCart(newCart);
     setSelectedFood(null);
-    setIsCartOpen(true);
   };
 
   const handleUpdateQuantity = (cartId, delta) => {
@@ -758,7 +759,6 @@ function App() {
 
     setTableOrders(prev => [...prev, ...newLocalItems]);
     setCart([]);
-    setIsCartOpen(false);
     navigate('/table-orders');
 
     try {
@@ -1193,211 +1193,44 @@ function App() {
               onCloseShift={() => setShiftModalMode('close')}
             />
           ) : (
-            <div className="pos-layout">
-              {/* ─── POS Header ─── */}
-              <header className="pos-header">
-                <div className="pos-header-left">
-                  <button
-                    className="pos-header-btn"
-                    onClick={() => {
-                      if (cart.length > 0) {
-                        if (window.confirm(lang === 'th' ? 'มีรายการอาหารในตะกร้าที่ยังไม่ได้ส่ง ต้องการกลับไปหน้าเลือกโต๊ะหรือไม่?' : 'Cart is not empty. Go back to table selection?')) {
-                          setTableNumber('');
-                        }
-                      } else {
-                        setTableNumber('');
-                      }
-                    }}
-                    style={{
-                      background: '#fef08a',
-                      border: '1.5px solid #eab308',
-                      color: '#000000',
-                      fontWeight: '800',
-                      padding: '0.45rem 0.85rem',
-                      borderRadius: '10px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.4rem'
-                    }}
-                    title={lang === 'th' ? 'กลับไปหน้าเลือกโต๊ะ' : 'Back to Table Selection'}
-                  >
-                    <LayoutGrid size={16} color="#854d0e" />
-                    <span>{lang === 'th' ? '🪑 เลือกโต๊ะ' : 'Tables'}</span>
-                  </button>
-                  <img
-                    src="/logo.png"
-                    alt="Logo"
-                    className="pos-logo"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      if (window.confirm(lang === 'th' ? 'ต้องการสลับโต๊ะ/กลับหน้าเลือกคิว?' : 'Switch table/go back to selection?')) {
-                        setTableNumber('');
-                      }
-                    }}
-                  />
-                  <div className="pos-header-info">
-                    <span className="pos-restaurant-name">ข้าวมันไก่หำไหล</span>
-                    <span className="pos-table-label">{lang === 'th' ? `โต๊ะ ${tableNumber}` : `Table ${tableNumber}`}</span>
-                  </div>
-                </div>
-                <div className="pos-header-right">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginRight: '0.5rem' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap' }}>
-                      👤 {lang === 'th' ? 'ประเภทลูกค้า' : 'Customer'}
-                    </span>
-                    <select
-                      value={customerType}
-                      onChange={(e) => setCustomerType(e.target.value)}
-                      style={{
-                        padding: '0.5rem 0.75rem', borderRadius: '8px',
-                        background: '#ffffff', color: '#0f172a',
-                        border: '2px solid #cbd5e1', fontSize: '0.9rem',
-                        fontWeight: 700, cursor: 'pointer', maxWidth: '240px'
-                      }}
-                    >
-                      <option value="" style={{ color: '#000000', fontWeight: 'bold' }}>🪑 ราคาขายปกติ</option>
-                      <option value="Takehome" style={{ color: '#000000', fontWeight: 'bold' }}>🛍️ TAKEHOME</option>
-                      <option value="Deli" style={{ color: '#000000', fontWeight: 'bold' }}>🛵 DELI</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={customerName}
-                      onChange={(e) => setCustomerName(e.target.value)}
-                      placeholder={lang === 'th' ? 'ชื่อลูกค้า (ถ้ามี)' : 'Customer name (optional)'}
-                      style={{
-                        padding: '0.5rem 0.75rem', borderRadius: '8px',
-                        background: '#ffffff', color: '#0f172a',
-                        border: '2px solid #cbd5e1', fontSize: '0.9rem',
-                        fontWeight: 600, width: '150px'
-                      }}
-                    />
-                  </div>
-                  <button className="pos-header-btn" onClick={() => navigate('/table-orders')} style={{ background: '#1e293b', color: '#ffffff', border: '1px solid #0f172a', fontWeight: '700' }}>
-                    🧾 {lang === 'th' ? 'สรุปบิล' : 'Bill Summary'}
-                  </button>
-                  <button
-                    className="pos-header-btn"
-                    onClick={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
-                    style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', border: '1px solid #d97706', fontWeight: '800' }}
-                    title={lang === 'th' ? 'เปิดหน้าสั่งเองสำหรับลูกค้า' : 'Open Customer Kiosk View'}
-                  >
-                    📱 {lang === 'th' ? 'หน้าลูกค้าสั่งเอง (Kiosk)' : 'Customer Kiosk'}
-                  </button>
-                  <button className="pos-header-btn" onClick={() => navigate('/waste')} style={{ background: '#dc2626', border: '1px solid #991b1b', color: '#ffffff', fontWeight: '700' }}>
-                    🗑️ {lang === 'th' ? 'ทิ้ง (Waste)' : 'Waste'}
-                  </button>
-                  <button className="pos-header-btn" onClick={() => { setSalesSummaryMode('daily'); setShowSalesSummaryModal(true); }} style={{ background: '#7c3aed', border: '1px solid #6d28d9', color: '#ffffff', fontWeight: '700' }}>
-                    📊 {lang === 'th' ? 'สรุปยอดขายวันนี้' : 'Today Sales'}
-                  </button>
-                  <button className="pos-header-btn" onClick={() => { setSalesSummaryMode('range'); setShowSalesSummaryModal(true); }} style={{ background: '#0284c7', border: '1px solid #0369a1', color: '#ffffff', fontWeight: '700' }}>
-                    📅 {lang === 'th' ? 'สรุปยอดขายระหว่างวัน' : 'Sales Range'}
-                  </button>
-                  <button
-                    onClick={refreshTableOrders}
-                    disabled={isRefreshing}
-                    className="pos-header-btn"
-                    style={{ background: '#0f172a', border: '1px solid #020617', color: '#ffffff', fontWeight: '700' }}
-                  >
-                    <RefreshCw size={14} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
-                    {isRefreshing ? (lang === 'th' ? 'กำลังโหลด...' : 'Loading...') : (lang === 'th' ? 'รีเฟรช' : 'Refresh')}
-                  </button>
-
-                  {/* ปุ่มเข้าหลังบ้าน — เห็นเฉพาะแอดมินเท่านั้น */}
-                  {isAdmin && (
-                    <button
-                      className="pos-header-btn"
-                      onClick={() => navigate('/admin')}
-                      style={{ background: '#ea580c', border: '1px solid #c2410c', color: '#ffffff', fontWeight: '700' }}
-                    >
-                      ⚙️ {lang === 'th' ? 'จัดการหลังบ้าน' : 'Admin Panel'}
-                    </button>
-                  )}
-                  <button className="pos-header-btn" onClick={() => setLang(lang === 'th' ? 'en' : 'th')} style={{ background: '#f1f5f9', border: '1.5px solid #94a3b8', color: '#0f172a', fontWeight: '700' }}>
-                    <Globe size={14} /> {lang === 'th' ? 'TH' : 'EN'}
-                  </button>
-                  <button
-                    className="pos-header-btn"
-                    onClick={() => { if (window.confirm(lang === 'th' ? `ออกจากระบบสาขา "${branch}"?` : 'Log out?')) handleLogout(); }}
-                    style={{ background: '#b91c1c', border: '1px solid #7f1d1d', color: '#ffffff', fontWeight: '700' }}
-                  >
-                    <LogOut size={14} /> {lang === 'th' ? `ออกจากระบบ (${branch})` : 'Logout'}
-                  </button>
-                  <button className="pos-cart-btn" onClick={() => setIsCartOpen(true)}>
-                    <ShoppingBag size={20} />
-                    <div className="pos-cart-info">
-                      <span className="pos-cart-count">{cart.reduce((s, i) => s + (i.quantity || 1), 0)} {lang === 'th' ? 'รายการ' : 'items'}</span>
-                      <span className="pos-cart-total">฿{getCartTotal().toLocaleString()}</span>
-                    </div>
-                    {cart.length > 0 && (
-                      <span className="pos-cart-badge">{cart.reduce((s, i) => s + (i.quantity || 1), 0)}</span>
-                    )}
-                  </button>
-                </div>
-              </header>
-
-              <div className="pos-body">
-                {/* ─── Category Sidebar ─── */}
-                <aside className="pos-sidebar">
-                  <div className="pos-sidebar-header">{lang === 'th' ? 'หมวดหมู่' : 'Categories'}</div>
-                  {categories
-                    .filter(cat => liveMenu.some(i => itemInCategory(i, cat.slug)))
-                    .map(cat => {
-                      const count = liveMenu.filter(i => itemInCategory(i, cat.slug)).length;
-                      return (
-                        <button
-                          key={cat.slug}
-                          className={`pos-cat-btn ${activeCategory === cat.slug ? 'active' : ''}`}
-                          onClick={() => setActiveCategory(cat.slug)}
-                        >
-                          <span className="pos-cat-icon">{cat.icon}</span>
-                          <div className="pos-cat-text">
-                            <span className="pos-cat-name">{lang === 'th' ? cat.name : cat.nameEn}</span>
-                            <span className="pos-cat-count">{count} {lang === 'th' ? 'รายการ' : 'items'}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
-                </aside>
-
-                {/* ─── Food Grid ─── */}
-                <main className="pos-main">
-                  {(() => {
-                    const activeCat = categories.find(c => c.slug === activeCategory);
-                    const filteredItems = liveMenu.filter(i => itemInCategory(i, activeCategory));
-                    return (
-                      <>
-                        <div className="pos-section-header">
-                          <div className="pos-section-title">
-                            <span className="pos-section-icon">{activeCat?.icon}</span>
-                            <h2>{lang === 'th' ? activeCat?.name : activeCat?.nameEn}</h2>
-                          </div>
-                          <span className="pos-item-count">{filteredItems.length} {lang === 'th' ? 'รายการ' : 'items'}</span>
-                        </div>
-                        <div className="pos-food-grid">
-                          {filteredItems.map(item => (
-                            <FoodCard
-                              key={item.id}
-                              food={item}
-                              lang={lang}
-                              displayPrice={Number(resolvePrice(item)?.price) || 0}
-                              onOrderClick={handleOrderClick}
-                              onDecreaseClick={handleDecreaseQuantity}
-                              cartQuantity={cart.filter(c => c.food.id === item.id).reduce((sum, c) => sum + (c.quantity || 1), 0)}
-                            />
-                          ))}
-                          {filteredItems.length === 0 && (
-                            <div className="pos-empty-category">
-                              <span>{lang === 'th' ? 'ไม่มีรายการในหมวดหมู่นี้' : 'No items in this category'}</span>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </main>
-              </div>
-            </div>
+            <PosSalesScreen
+              lang={lang}
+              setLang={setLang}
+              tableNumber={tableNumber}
+              onSelectTable={setTableNumber}
+              tableOrders={tableOrders}
+              liveMenu={liveMenu}
+              categories={categories}
+              itemInCategory={itemInCategory}
+              activeCategory={activeCategory}
+              setActiveCategory={setActiveCategory}
+              cart={cart}
+              onOrderClick={handleOrderClick}
+              onDecreaseQuantity={handleDecreaseQuantity}
+              onUpdateQuantity={handleUpdateQuantity}
+              onRemoveFromCart={handleRemoveFromCart}
+              onUpdateNote={handleUpdateCartNote}
+              onClearCart={() => setCart([])}
+              onSendOrder={handleSendOrderToTable}
+              resolvePrice={resolvePrice}
+              customerType={customerType}
+              setCustomerType={setCustomerType}
+              customerName={customerName}
+              setCustomerName={setCustomerName}
+              settings={posSettings}
+              isAdmin={isAdmin}
+              isCashier={isCashier}
+              branch={branch}
+              currentUser={currentUser}
+              onLogout={handleLogout}
+              onRefresh={refreshTableOrders}
+              isRefreshing={isRefreshing}
+              onOpenBill={() => navigate('/table-orders')}
+              onOpenAdmin={() => navigate('/admin')}
+              onOpenWaste={() => navigate('/waste')}
+              onOpenSummary={(mode) => { setSalesSummaryMode(mode); setShowSalesSummaryModal(true); }}
+              onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
+            />
           )
         } />
 
@@ -1459,21 +1292,9 @@ function App() {
           liveMenu={allMenu.length > 0 ? allMenu : liveMenu}
           categories={allCategories.length > 0 ? allCategories : categories}
           basePrice={Number(resolvePrice(selectedFood)?.price) || 0}
+          askDining={askDining}
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmOrder}
-        />
-      )}
-
-      {isCartOpen && (
-        <CartModal
-          cart={cart}
-          lang={lang}
-          onClose={() => setIsCartOpen(false)}
-          onRemove={handleRemoveFromCart}
-          onUpdateQuantity={handleUpdateQuantity}
-          onUpdateNote={handleUpdateCartNote}
-          onCheckout={handleSendOrderToTable}
-          settings={posSettings}
         />
       )}
 
