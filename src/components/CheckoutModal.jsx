@@ -27,11 +27,12 @@ const calcCharges = (subtotal, settings = {}, discount = null) => {
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
-  settings = {}, discounts = []
+  settings = {}, discounts = [], initialDiscount = null
 }) => {
   const [paymentStep, setPaymentStep] = useState('summary');
   const [cashInput, setCashInput] = useState('');
-  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
+  const [selectedDiscount, setSelectedDiscount] = useState(initialDiscount);
 
   const [qrApproved, setQrApproved] = useState(true);
   const [approverName] = useState('');

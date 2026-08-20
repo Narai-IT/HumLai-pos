@@ -30,7 +30,7 @@ const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
-import { getPrinterByType, getPrinters, printKitchenOrder } from './utils/printerRouting';
+import { getPrinterByType, getPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 
 const MENU_ITEMS = [];
 
@@ -351,6 +351,7 @@ function App() {
   const [checkoutItems, setCheckoutItems] = useState([]);
   const [checkoutTotal, setCheckoutTotal] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [checkoutDiscount, setCheckoutDiscount] = useState(null);
   const [showSalesSummaryModal, setShowSalesSummaryModal] = useState(false);
   const [salesSummaryMode, setSalesSummaryMode] = useState('daily'); // 'daily' | 'range'
 
@@ -921,10 +922,22 @@ function App() {
   // =============================================
   // NEW: Open checkout from table view
   // =============================================
-  const handleOpenCheckoutFromTable = (items, total) => {
+  const handleOpenCheckoutFromTable = (items, total, discount = null) => {
     setCheckoutItems(items);
     setCheckoutTotal(total);
+    setCheckoutDiscount(discount);
     setIsCheckoutOpen(true);
+  };
+
+  // พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนชำระเงิน (ไม่เปิดลิ้นชักเก็บเงิน)
+  const handlePrintPreBill = async (order) => {
+    const res = await printPreBill(order);
+    if (res.success) {
+      setSaveAlert({ type: 'success', msg: '🧾 พิมพ์ใบแจ้งยอดให้ลูกค้าแล้ว' });
+      setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
+    } else {
+      setSaveAlert({ type: 'error', msg: `⚠️ พิมพ์ใบแจ้งยอดไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
+    }
   };
 
   // =============================================
@@ -1389,6 +1402,8 @@ function App() {
               onCheckout={handleOpenCheckoutFromTable}
               onDeleteTableItem={handleDeleteTableItem}
               onPrintKitchen={handlePrintKitchenAgain}
+              onPrintPreBill={handlePrintPreBill}
+              discounts={posDiscounts}
               resolvePrice={resolvePrice}
               customerType={customerType}
               setCustomerType={setCustomerType}
@@ -1517,6 +1532,7 @@ function App() {
             onComplete={handleCheckoutComplete}
             settings={checkoutSettings}
             discounts={posDiscounts}
+            initialDiscount={checkoutDiscount}
             users={users}
             currentUser={currentUser}
             tableNo={tableNumber}

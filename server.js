@@ -162,11 +162,18 @@ app.post('/print', async (req, res) => {
     printer.println("กะเพรา 10 หน้า");
     printer.println("--------------------------------");
     
+    // ใบแจ้งยอด = ให้ลูกค้าตรวจก่อนจ่าย หน้าตาเหมือนใบเสร็จแต่ยังไม่ใช่ใบเสร็จ
+    // และต้องไม่เปิดลิ้นชักเก็บเงิน เพราะยังไม่ได้รับเงิน
+    const isPreBill = printerType === 'prebill';
+
     if (printerType === 'kitchen') {
       printer.setTextDoubleHeight();
       printer.setTextDoubleWidth();
       printer.println("ใบสั่งทำอาหาร (KITCHEN)");
       printer.setTextNormal();
+    } else if (isPreBill) {
+      printer.println("ใบแจ้งยอด (CHECK BILL)");
+      printer.println("*** ยังไม่ชำระเงิน ***");
     } else {
       printer.println("ใบเสร็จรับเงิน (RECEIPT)");
     }
@@ -220,19 +227,28 @@ app.post('/print', async (req, res) => {
 
     printer.println("--------------------------------");
     
-    if (printerType === 'receipt') {
+    if (printerType === 'receipt' || isPreBill) {
+      // บรรทัดสรุป (ยอดอาหาร / ส่วนลด / เซอร์วิสชาร์จ / VAT) ส่งมาจากหน้าเว็บ
+      // ให้ฝั่งนี้พิมพ์ตามที่ส่งมา จะได้ไม่ต้องคำนวณซ้ำสองที่แล้วเลขไม่ตรงกัน
+      if (Array.isArray(orderData.summary) && orderData.summary.length > 0) {
+        printer.alignRight();
+        orderData.summary.forEach(row => {
+          printer.println(`${row.label}: ${row.value}`);
+        });
+      }
       printer.alignRight();
       printer.println(`TOTAL: B ${orderData.total || 0}`);
       printer.println("--------------------------------");
       printer.alignCenter();
-      printer.println("Thank you!");
+      printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : "Thank you!");
     } else {
       printer.alignCenter();
       printer.println("*** END OF TICKET ***");
     }
 
     printer.cut();
-    
+
+    // เปิดลิ้นชักเฉพาะใบเสร็จจริงเท่านั้น — ใบแจ้งยอดยังไม่ได้รับเงิน
     if (printerType === 'receipt') {
       printer.openCashDrawer();
     }

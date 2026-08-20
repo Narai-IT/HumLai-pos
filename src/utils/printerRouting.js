@@ -112,3 +112,17 @@ export const printKitchenOrder = async (order, allMenu = []) => {
       : null
   };
 };
+
+// ─────────────────────────────────────────────
+// ใบแจ้งยอด (check bill) — ให้ลูกค้าตรวจรายการและยอดก่อนจ่าย
+// ใช้เครื่องประเภทใบเสร็จเป็นหลัก ไม่มีก็ใช้เครื่องแรกที่มี IP
+// printerType 'prebill' บอก Print Server ว่าอย่าเปิดลิ้นชักเก็บเงิน
+// ─────────────────────────────────────────────
+export const printPreBill = async (order) => {
+  const printers = getPrinters();
+  const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+  if (!printer) {
+    return { success: false, error: 'ยังไม่ได้ตั้งค่าเครื่องพิมพ์ใบเสร็จ — ไปที่ จัดการหลังบ้าน > ตั้งค่าเครื่องพิมพ์' };
+  }
+  return await sendPrintJob({ ip: printer.ip, printerType: 'prebill', orderData: order });
+};

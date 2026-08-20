@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RefreshCw, LogOut, Settings, Trash2, Plus, Minus,
-  MoreHorizontal, Globe, Receipt, Printer
+  MoreHorizontal, Globe, Receipt, Printer, Tag, X
 } from 'lucide-react';
 import FoodCard from './FoodCard';
 import './PosSalesScreen.css';
@@ -28,7 +28,8 @@ const PosSalesScreen = ({
   activeCategory, setActiveCategory,
   cart = [],
   onOrderClick, onUpdateQuantity, onRemoveFromCart, onUpdateNote, onClearCart,
-  onSendOrder, onCheckout, onDeleteTableItem, onPrintKitchen,
+  onSendOrder, onCheckout, onDeleteTableItem, onPrintKitchen, onPrintPreBill,
+  discounts = [],
   resolvePrice,
   customerType, setCustomerType,
   customerName, setCustomerName,
@@ -191,11 +192,53 @@ const PosSalesScreen = ({
   );
 
   const subtotal = sentTotal + cartTotal;
+
+  // ส่วนลดที่พนักงานเลือกไว้ก่อนถึงหน้าชำระเงิน
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [showDiscounts, setShowDiscounts] = useState(false);
+  // เปลี่ยนโต๊ะ = คนละบิล ส่วนลดของโต๊ะเก่าต้องไม่ติดมา
+  useEffect(() => { setSelectedDiscount(null); }, [tableNumber]);
+
+  // ลำดับการคิดเหมือนหน้าชำระเงินเป๊ะ: ลดจากยอดอาหารก่อน แล้วค่อยบวกเซอร์วิสชาร์จและ VAT
+  const discountAmount = !selectedDiscount ? 0
+    : selectedDiscount.type === 'percent'
+      ? Math.round(subtotal * (Number(selectedDiscount.value) || 0)) / 100
+      : Math.min(Number(selectedDiscount.value) || 0, subtotal);
+  const afterDiscount = subtotal - discountAmount;
+
   const scRate  = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
   const vatRate = settings?.vat?.enabled ? (settings.vat.rate || 0) : 0;
-  const serviceCharge = Math.round(subtotal * scRate) / 100;
-  const vat = Math.round((subtotal + serviceCharge) * vatRate) / 100;
-  const grandTotal = subtotal + serviceCharge + vat;
+  const serviceCharge = Math.round(afterDiscount * scRate) / 100;
+  const vat = Math.round((afterDiscount + serviceCharge) * vatRate) / 100;
+  const grandTotal = afterDiscount + serviceCharge + vat;
+
+  // ใบแจ้งยอดให้ลูกค้าตรวจก่อนจ่าย — พิมพ์เฉพาะของที่เข้าบิลแล้ว
+  const handlePrintPreBill = () => {
+    if (sentItems.length === 0) {
+      alert(t('ยังไม่มีรายการในบิล', 'Nothing on the bill yet.'));
+      return;
+    }
+    const summary = [{ label: 'ยอดอาหาร', value: `B ${subtotal.toLocaleString()}` }];
+    if (discountAmount > 0) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-B ${discountAmount.toLocaleString()}` });
+    if (serviceCharge > 0) summary.push({ label: `Service ${settings.serviceCharge.rate}%`, value: `B ${serviceCharge.toLocaleString()}` });
+    if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: `B ${vat.toLocaleString()}` });
+
+    const guests = (() => { try { return localStorage.getItem('customer_count_' + tableNumber) || ''; } catch { return ''; } })();
+    onPrintPreBill({
+      orderNumber: `โต๊ะ ${tableNumber}`,
+      customerDetails: { name: `โต๊ะ ${tableNumber}${guests ? ` (${guests} ท่าน)` : ''}` },
+      items: sentItems.map(o => {
+        const qty = Number(o.Quantity) || 1;
+        return {
+          isFlattened: true,
+          name: qty > 1 ? `${o.ItemName} (x${qty})` : o.ItemName,
+          subItems: o.Options ? String(o.Options).split(', ').filter(Boolean) : []
+        };
+      }),
+      summary,
+      total: grandTotal.toLocaleString()
+    });
+  };
 
   // ชำระเงินได้เฉพาะของที่ส่งครัวแล้ว — ของในตะกร้าที่ยังไม่ส่งจะไม่อยู่ในบิล
   // ถ้าปล่อยให้กดชำระทั้งที่ยังมีของค้างในตะกร้า ของนั้นจะหายไปพร้อมการปิดโต๊ะ
@@ -211,7 +254,7 @@ const PosSalesScreen = ({
       alert(t('โต๊ะนี้ยังไม่มีรายการอาหารที่ต้องชำระ', 'This table has nothing to pay for yet.'));
       return;
     }
-    onCheckout(sentItems, sentTotal);
+    onCheckout(sentItems, sentTotal, selectedDiscount);
   };
 
   const optionText = (item) => {
@@ -559,12 +602,39 @@ const PosSalesScreen = ({
           </div>
 
           <div className="pos2-cart-foot">
+            <div className="pos2-tool-row">
+              <button
+                className="pos2-tool"
+                onClick={() => setShowDiscounts(true)}
+                title={t('เลือกส่วนลดให้บิลนี้', 'Apply a discount')}
+              >
+                <Tag size={14} />
+                {selectedDiscount
+                  ? `${selectedDiscount.name} (-฿${discountAmount.toLocaleString()})`
+                  : t('เพิ่มส่วนลด', 'Add discount')}
+              </button>
+              <button
+                className="pos2-tool"
+                onClick={handlePrintPreBill}
+                disabled={sentItems.length === 0}
+                title={t('พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนชำระเงิน', 'Print a check bill for the customer')}
+              >
+                <Printer size={14} /> {t('ใบแจ้งยอด', 'Check bill')}
+              </button>
+            </div>
+
             <div className="pos2-sum">
               <span>{t('ส่งครัวแล้ว', 'Sent')}</span><b>฿{sentTotal.toLocaleString()}</b>
             </div>
             {cart.length > 0 && (
               <div className="pos2-sum" style={{ color: '#b45309' }}>
                 <span>{t('ยังไม่ส่ง', 'Not sent')}</span><b style={{ color: '#b45309' }}>฿{cartTotal.toLocaleString()}</b>
+              </div>
+            )}
+            {discountAmount > 0 && (
+              <div className="pos2-sum" style={{ color: '#15803d' }}>
+                <span>{t('ส่วนลด', 'Discount')} {selectedDiscount?.name || ''}</span>
+                <b style={{ color: '#15803d' }}>-฿{discountAmount.toLocaleString()}</b>
               </div>
             )}
             {serviceCharge > 0 && (
@@ -594,6 +664,52 @@ const PosSalesScreen = ({
           </div>
         </aside>
       </div>
+
+      {/* ── เลือกส่วนลดของบิลนี้ ── */}
+      {showDiscounts && (
+        <div className="pos2-modal-overlay" onClick={() => setShowDiscounts(false)}>
+          <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{t('ส่วนลด', 'Discount')}</h3>
+            <p>{t(`คิดจากยอดอาหาร ฿${subtotal.toLocaleString()}`, `Applied to ฿${subtotal.toLocaleString()}`)}</p>
+
+            <div className="pos2-action-list">
+              {discounts.length === 0 && (
+                <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 700, padding: '0.5rem 0' }}>
+                  {t('ยังไม่ได้ตั้งส่วนลดไว้ — ตั้งได้ที่ จัดการหลังบ้าน > ตั้งค่า', 'No discounts configured yet.')}
+                </div>
+              )}
+              {discounts.map((d, i) => {
+                const amount = d.type === 'percent'
+                  ? Math.round(subtotal * (Number(d.value) || 0)) / 100
+                  : Math.min(Number(d.value) || 0, subtotal);
+                const active = selectedDiscount && selectedDiscount.name === d.name && selectedDiscount.value === d.value;
+                return (
+                  <button
+                    key={`${d.name}-${i}`}
+                    className={`pos2-action ${active ? 'active' : ''}`}
+                    onClick={() => { setSelectedDiscount(d); setShowDiscounts(false); }}
+                  >
+                    <Tag size={16} />
+                    <span style={{ flex: 1 }}>
+                      {d.name} {d.type === 'percent' ? `(${d.value}%)` : ''}
+                    </span>
+                    <b style={{ color: '#15803d' }}>-฿{amount.toLocaleString()}</b>
+                  </button>
+                );
+              })}
+              {selectedDiscount && (
+                <button className="pos2-action danger" onClick={() => { setSelectedDiscount(null); setShowDiscounts(false); }}>
+                  <X size={16} /> {t('ไม่ใช้ส่วนลด', 'Remove discount')}
+                </button>
+              )}
+            </div>
+
+            <div className="pos2-modal-actions">
+              <button className="pos2-btn" onClick={() => setShowDiscounts(false)}>{t('ปิด', 'Close')}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── เมนูจัดการรายการในบิล: พิมพ์ซ้ำ / ยกเลิก ── */}
       {actionItem && (
