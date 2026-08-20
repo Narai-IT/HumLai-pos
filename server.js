@@ -6,74 +6,126 @@ import pkg from 'node-thermal-printer';
 
 const { printer: ThermalPrinter, types: PrinterTypes } = pkg;
 
+const SERVER_NAME = 'humlai-print-server';
+const SERVER_VERSION = '1.1.0';
+const DEFAULT_PRINTER_PORT = 9100;
+
 const app = express();
 app.use(cors());
 app.use(express.json()); // For handling JSON payloads
 
-// LAN Printer Discovery endpoint (Scans port 9100 across 1..254)
+// รายการ IPv4 ของทุกการ์ดแลน/ไวไฟบนเครื่องนี้ (ข้าม loopback)
+const getLocalIPv4s = () => {
+  const interfaces = os.networkInterfaces();
+  const found = [];
+  for (const name in interfaces) {
+    for (const details of interfaces[name] || []) {
+      if (details.family === 'IPv4' && !details.internal) {
+        found.push({ name, address: details.address, netmask: details.netmask });
+      }
+    }
+  }
+  return found;
+};
+
+const toBaseIp = (ip) => `${ip.split('.').slice(0, 3).join('.')}.`;
+
+// รับได้ทั้ง "192.168.1", "192.168.1.", "192.168.1.0" และ "192.168.1.0/24"
+const normalizeSubnet = (raw) => {
+  const value = String(raw || '').trim().replace(/\/\d+$/, '');
+  if (!value) return null;
+  const parts = value.split('.').filter(part => part !== '');
+  if (parts.length < 3) return null;
+  const octets = parts.slice(0, 3);
+  if (!octets.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255)) return null;
+  return `${octets.join('.')}.`;
+};
+
+const clampInt = (raw, fallback, min, max) => {
+  const value = parseInt(raw, 10);
+  if (Number.isNaN(value)) return fallback;
+  return Math.min(max, Math.max(min, value));
+};
+
+// Health check — ให้หน้าเว็บเช็คได้ว่า Print Server เปิดอยู่ไหม
+app.get('/health', (req, res) => {
+  const localIps = getLocalIPv4s();
+  res.json({
+    success: true,
+    service: SERVER_NAME,
+    version: SERVER_VERSION,
+    localIps,
+    subnets: [...new Set(localIps.map(entry => toBaseIp(entry.address)))],
+    defaultPort: DEFAULT_PRINTER_PORT
+  });
+});
+
+// LAN Printer Discovery endpoint
+// Query (ไม่ใส่ก็ได้): subnet=192.168.1. | from=1 | to=254 | port=9100 | timeout=600
 app.get('/scan-printers', async (req, res) => {
   try {
-    const interfaces = os.networkInterfaces();
-    let localIp = null;
-    for (const dev in interfaces) {
-      for (const details of interfaces[dev]) {
-        if (details.family === 'IPv4' && !details.internal) {
-          localIp = details.address;
-          break;
-        }
-      }
-      if (localIp) break;
+    const localIps = getLocalIPv4s();
+    const requestedSubnet = normalizeSubnet(req.query.subnet);
+
+    if (req.query.subnet && !requestedSubnet) {
+      return res.status(400).json({ success: false, error: `รูปแบบวงแลนไม่ถูกต้อง: ${req.query.subnet} (ตัวอย่างที่ถูก: 192.168.1.)` });
     }
 
-    if (!localIp) {
-      return res.status(500).json({ success: false, error: 'Could not determine local LAN IP address' });
+    if (!requestedSubnet && localIps.length === 0) {
+      return res.status(500).json({ success: false, error: 'หา IP วงแลนของเครื่องนี้ไม่เจอ — ตรวจสอบว่าเสียบสาย LAN หรือต่อ Wi-Fi อยู่' });
     }
 
-    const ipParts = localIp.split('.');
-    const baseIp = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.`;
+    const localIp = localIps.length > 0 ? localIps[0].address : null;
+    const baseIp = requestedSubnet || toBaseIp(localIp);
 
-    const foundPrinters = [];
-    const scanPort = 9100;
-    const timeoutMs = 600;
+    const from = clampInt(req.query.from, 1, 1, 254);
+    const to = clampInt(req.query.to, 254, from, 254);
+    const scanPort = clampInt(req.query.port, DEFAULT_PRINTER_PORT, 1, 65535);
+    const timeoutMs = clampInt(req.query.timeout, 600, 100, 5000);
 
     const scanHost = (targetIp) => {
       return new Promise((resolve) => {
         const socket = new net.Socket();
+        let settled = false;
+        const finish = (result) => {
+          if (settled) return;
+          settled = true;
+          socket.destroy();
+          resolve(result);
+        };
+
         socket.setTimeout(timeoutMs);
-
-        socket.on('connect', () => {
-          socket.destroy();
-          resolve({ ip: targetIp, port: scanPort });
-        });
-
-        socket.on('timeout', () => {
-          socket.destroy();
-          resolve(null);
-        });
-
-        socket.on('error', () => {
-          socket.destroy();
-          resolve(null);
-        });
-
+        socket.on('connect', () => finish({ ip: targetIp, port: scanPort }));
+        socket.on('timeout', () => finish(null));
+        socket.on('error', () => finish(null));
         socket.connect(scanPort, targetIp);
       });
     };
 
-    const ips = Array.from({ length: 254 }, (_, i) => `${baseIp}${i + 1}`);
+    const ips = [];
+    for (let i = from; i <= to; i++) ips.push(`${baseIp}${i}`);
+
+    const foundPrinters = [];
     const chunkSize = 50;
     for (let i = 0; i < ips.length; i += chunkSize) {
       const chunk = ips.slice(i, i + chunkSize);
       const results = await Promise.all(chunk.map(ip => scanHost(ip)));
-      results.forEach(res => {
-        if (res) foundPrinters.push(res);
+      results.forEach(result => {
+        if (result) foundPrinters.push(result);
       });
     }
+
+    console.log(`Scanned ${baseIp}${from}-${to} on port ${scanPort} — found ${foundPrinters.length} printer(s)`);
 
     res.json({
       success: true,
       localIp,
+      localIps,
       baseIp,
+      from,
+      to,
+      port: scanPort,
+      scanned: ips.length,
       printers: foundPrinters
     });
   } catch (err) {

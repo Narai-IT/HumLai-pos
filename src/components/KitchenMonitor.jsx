@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChefHat, Clock, PlusCircle, CheckCircle, XCircle, Printer } from 'lucide-react';
+import { sendPrintJob } from '../utils/printServer';
 
 const OrderTimer = ({ timestamp }) => {
   const [elapsed, setElapsed] = useState(0);
@@ -57,17 +58,8 @@ const KitchenMonitor = ({ orders, onUpdateOrderStatus, onNewOrder }) => {
       alert('ไม่ได้ตั้งค่า IP เครื่องปริ้นสำหรับห้องครัว กรุณาไปที่ตังค่าแอดมิน');
       return;
     }
-    try {
-      const response = await fetch(`http://${window.location.hostname}:3001/print`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ip: kitchenIP, printerType: 'kitchen', orderData: order })
-      });
-      const result = await response.json();
-      if (!result.success) alert('ปริ้นไม่สำเร็จ: ' + result.error);
-    } catch (e) {
-      alert('เชื่อมต่อ Print Server ไม่ได้ (กรุณาให้แน่ใจว่า node server.js รันอยู่)');
-    }
+    const result = await sendPrintJob({ ip: kitchenIP, printerType: 'kitchen', orderData: order });
+    if (!result.success) alert('ปริ้นไม่สำเร็จ: ' + result.error);
   };
 
   const calculateAggregate = () => {
