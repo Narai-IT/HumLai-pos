@@ -82,17 +82,22 @@ const PosSalesScreen = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [zones, tableNumber]);
 
-  // สถานะโต๊ะ: ว่าง / มีลูกค้า / ค้างเกิน 90 นาที
+  // สถานะโต๊ะ: ว่าง / มีลูกค้า / ค้างเกิน 90 นาที / จ่ายมาแล้วจากคีออส
+  // รายการที่ Status = 'paid' คือลูกค้าสแกน QR สั่งเองและโอนมาแล้ว — โต๊ะยังมีคนนั่งอยู่
+  // จึงต้องนับเป็นโต๊ะไม่ว่าง แต่ไม่ใช่ยอดที่ต้องไปเก็บเงิน
   const tableState = (name) => {
-    const rows = tableOrders.filter(o => sameTable(o.TableNumber, name) && o.Status !== 'paid');
-    if (rows.length === 0) return { status: 'free', count: 0, mins: 0 };
+    const rows = tableOrders.filter(o => sameTable(o.TableNumber, name));
+    if (rows.length === 0) return { status: 'free', count: 0, mins: 0, paidCount: 0 };
+    const unpaid = rows.filter(o => o.Status !== 'paid');
+    const paidCount = rows.length - unpaid.length;
     let earliest = null;
     rows.forEach(r => {
       const ts = new Date(r.Timestamp).getTime();
       if (!isNaN(ts) && (earliest === null || ts < earliest)) earliest = ts;
     });
     const mins = earliest ? Math.floor((Date.now() - earliest) / 60000) : 0;
-    return { status: mins > LATE_MINUTES ? 'late' : 'busy', count: rows.length, mins };
+    if (unpaid.length === 0) return { status: 'prepaid', count: rows.length, mins, paidCount };
+    return { status: mins > LATE_MINUTES ? 'late' : 'busy', count: rows.length, mins, paidCount };
   };
 
   // ชุดราคาที่ควรใช้เมื่อเลือกโต๊ะในโซนนั้น ๆ
@@ -288,6 +293,7 @@ const PosSalesScreen = ({
                 <span><i className="pos2-dot-free" />{t('ว่าง', 'Free')}</span>
                 <span><i className="pos2-dot-busy" />{t('มีลูกค้า', 'Occupied')}</span>
                 <span><i className="pos2-dot-late" />{t(`เกิน ${LATE_MINUTES} นาที`, `Over ${LATE_MINUTES} min`)}</span>
+                <span><i className="pos2-dot-prepaid" />{t('ลูกค้าจ่ายเองแล้ว', 'Paid via kiosk')}</span>
               </div>
               <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
                 {[
@@ -335,7 +341,9 @@ const PosSalesScreen = ({
                     <small>
                       {st.status === 'free'
                         ? t('ว่าง', 'Free')
-                        : `${st.count} ${t('รายการ', 'items')} · ${st.mins} ${t('นาที', 'min')}`}
+                        : st.status === 'prepaid'
+                          ? `💳 ${t('จ่ายแล้ว', 'Paid')} · ${st.count} ${t('รายการ', 'items')}`
+                          : `${st.count} ${t('รายการ', 'items')} · ${st.mins} ${t('นาที', 'min')}`}
                     </small>
                     {st.count > 0 && <span className="pos2-table-count">{st.count}</span>}
                   </button>

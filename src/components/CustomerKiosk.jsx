@@ -19,6 +19,11 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [isPaid, setIsPaid] = useState(false);
   const [orderSentSuccess, setOrderSentSuccess] = useState(false);
+  const [orderNumber, setOrderNumber] = useState('');   // เลขบิลที่ระบบออกให้ ใช้อ้างอิงกับพนักงาน
+  const [sendError, setSendError] = useState('');       // บันทึกออเดอร์ไม่สำเร็จ (ลูกค้าจ่ายไปแล้ว)
+  const [needStaff, setNeedStaff] = useState(false);    // ส่งออเดอร์ได้ แต่ต้องให้พนักงานยืนยันยอดให้
+  // รหัสอ้างอิงการชำระครั้งนี้ — ส่งค่าเดิมทุกครั้งที่กดส่งซ้ำ ระบบหลังบ้านจะได้ไม่ออกบิลซ้อน
+  const paySessionRef = React.useRef('');
 
   // ── ตรวจสลิปอัตโนมัติ (SlipOK) ──
   // ลูกค้าสั่งเองต้องพิสูจน์ว่าโอนจริงก่อน ถึงจะส่งออเดอร์เข้าครัวได้
@@ -195,23 +200,47 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   const handleConfirmSelfPayment = async () => {
     if (cart.length === 0) return;
     if (!slipResult) return; // ต้องผ่านการตรวจสลิปก่อนเท่านั้น
+    if (isPaid) return;      // กดรัว ๆ ไม่ให้ส่งซ้อน
+    setSendError('');
     setIsPaid(true);
 
-    if (onSendOrder) {
-      const ref = slipResult.transRef ? ` [${slipResult.transRef}]` : '';
-      await onSendOrder(tableNo, cart, cartSubtotal, `เงินโอน (QR ตรวจสลิปแล้ว)${ref}`);
+    if (!paySessionRef.current) {
+      paySessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     }
 
+    let result = { success: true, orderNumber: '' };
+    if (onSendOrder) {
+      const ref = slipResult.transRef ? ` [${slipResult.transRef}]` : '';
+      result = (await onSendOrder(
+        tableNo, cart, cartSubtotal, `เงินโอน (QR ตรวจสลิปแล้ว)${ref}`, paySessionRef.current
+      )) || { success: true };
+    }
+
+    // ลูกค้าโอนเงินไปแล้ว ถ้าบันทึกไม่ผ่านห้ามปิดจอเงียบ ๆ — ค้างจอไว้ให้กดส่งซ้ำหรือเรียกพนักงาน
+    if (result.success === false) {
+      setIsPaid(false);
+      setSendError(lang === 'th'
+        ? 'ชำระเงินสำเร็จแล้ว แต่ส่งออเดอร์เข้าระบบไม่สำเร็จ — กดปุ่มส่งอีกครั้ง ถ้ายังไม่ได้กรุณาแจ้งพนักงานพร้อมแสดงหน้านี้'
+        : 'Payment verified but the order could not be sent. Please tap send again, or show this screen to our staff.');
+      return;
+    }
+
+    setOrderNumber(result.orderNumber || '');
+    // ระบบร้านยังบันทึกบิลอัตโนมัติไม่ได้ → ออเดอร์ถึงครัวแล้ว แต่ต้องให้พนักงานยืนยันการชำระให้
+    setNeedStaff(result.needStaff === true);
     setOrderSentSuccess(true);
     setTimeout(() => {
       setCart([]);
       setIsCheckoutOpen(false);
       setIsPaid(false);
       setOrderSentSuccess(false);
+      setOrderNumber('');
+      setNeedStaff(false);
       setSlipPreview('');
       setSlipResult(null);
       setSlipError('');
-    }, 4000);
+      paySessionRef.current = '';
+    }, 6000);
   };
 
   const activeCat = categories.find(c => c.slug === activeCategory) || categories[0];
@@ -532,7 +561,22 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                 </p>
                 <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '1rem', color: '#166534', fontWeight: '700' }}>
                   🪑 {lang === 'th' ? `โต๊ะ ${tableNo}` : `Table ${tableNo}`} · {lang === 'th' ? 'ยอดชำระ' : 'Paid'} ฿{cartSubtotal.toLocaleString()}
+                  {orderNumber && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.95rem', letterSpacing: '0.5px' }}>
+                      🧾 {lang === 'th' ? 'เลขที่บิล' : 'Bill no.'} <strong>{orderNumber}</strong>
+                    </div>
+                  )}
+                  <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', fontWeight: '600', opacity: 0.85 }}>
+                    {lang === 'th' ? 'ชำระเรียบร้อยแล้ว ไม่ต้องจ่ายซ้ำที่เคาน์เตอร์' : 'Already paid — no need to pay again at the counter.'}
+                  </div>
                 </div>
+                {needStaff && (
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '0.85rem 1rem', color: '#92400e', fontWeight: '700', fontSize: '0.85rem', marginTop: '0.75rem', lineHeight: 1.5 }}>
+                    ⚠️ {lang === 'th'
+                      ? 'กรุณาแจ้งพนักงานว่าชำระผ่าน QR แล้ว พร้อมแสดงสลิปนี้ตอนปิดโต๊ะ'
+                      : 'Please tell our staff you already paid by QR and show this slip when the table is closed.'}
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -677,6 +721,16 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                     </div>
                   )}
                 </div>
+
+                {sendError && (
+                  <div style={{
+                    background: '#fef2f2', border: '1.5px solid #fecaca', color: '#b91c1c',
+                    borderRadius: '12px', padding: '0.85rem 1rem', marginBottom: '0.75rem',
+                    fontSize: '0.85rem', fontWeight: '700', lineHeight: 1.5
+                  }}>
+                    ⚠️ {sendError}
+                  </div>
+                )}
 
                 <button
                   onClick={handleConfirmSelfPayment}

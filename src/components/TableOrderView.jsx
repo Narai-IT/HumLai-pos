@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Plus, CreditCard, Trash2, ChevronLeft, RefreshCw, Split, AlertTriangle, LayoutGrid } from 'lucide-react';
+import { ShoppingBag, Plus, CreditCard, Trash2, ChevronLeft, RefreshCw, Split, AlertTriangle, LayoutGrid, CheckCircle2 } from 'lucide-react';
 
 const calcCharges = (subtotal, settings = {}) => {
   const scRate = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
@@ -28,7 +28,8 @@ const TableOrderView = ({
   setCustomerType,
   customerName = '',
   setCustomerName,
-  customerTypeOptions = ['']
+  customerTypeOptions = [''],
+  onCloseTable
 }) => {
   const [showActionModal, setShowActionModal] = useState(false);
   const [actionType, setActionType] = useState(''); // 'move' | 'merge' | 'split'
@@ -41,13 +42,16 @@ const TableOrderView = ({
   const [editCustomerCount, setEditCustomerCount] = useState(1);
 
   // Group items for display
-  const pendingItems = (tableOrders || []).filter(
-    o => String(o.TableNumber) === String(tableNumber) && o.Status !== 'paid'
-  );
+  const rowsOfTable = (tableOrders || []).filter(o => String(o.TableNumber) === String(tableNumber));
+  // รายการที่ยังต้องเก็บเงิน (พนักงานรับออเดอร์ให้)
+  const pendingItems = rowsOfTable.filter(o => o.Status !== 'paid');
+  // รายการที่ลูกค้าสแกน QR สั่งเองและโอนเงินมาแล้ว — โชว์ให้พนักงานเห็นว่าโต๊ะนี้สั่งอะไรไว้
+  // แต่ห้ามเอาไปรวมยอดที่ต้องเก็บ ไม่งั้นลูกค้าโดนเก็บเงินซ้ำ
+  const paidItems = rowsOfTable.filter(o => o.Status === 'paid');
 
-  const totalAmount = pendingItems.reduce((sum, item) => {
-    return sum + (Number(item.ItemPrice) || 0) * (Number(item.Quantity) || 1);
-  }, 0);
+  const sumRows = (rows) => rows.reduce((sum, item) => sum + (Number(item.ItemPrice) || 0) * (Number(item.Quantity) || 1), 0);
+  const totalAmount = sumRows(pendingItems);
+  const paidTotal = sumRows(paidItems);
 
   const { sc, vat, grand } = calcCharges(totalAmount, settings);
 
@@ -173,7 +177,7 @@ const TableOrderView = ({
             <div style={{ display: 'flex', gap: '6px' }}>
               <button
                 onClick={() => openAction('move')}
-                disabled={pendingItems.length === 0}
+                disabled={rowsOfTable.length === 0}
                 style={{
                   background: 'rgba(56,189,248,0.2)',
                   border: '1px solid rgba(56,189,248,0.4)',
@@ -182,15 +186,15 @@ const TableOrderView = ({
                   padding: '3px 10px',
                   fontSize: '0.78rem',
                   fontWeight: '700',
-                  cursor: pendingItems.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: pendingItems.length === 0 ? 0.4 : 1
+                  cursor: rowsOfTable.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: rowsOfTable.length === 0 ? 0.4 : 1
                 }}
               >
                 {lang === 'th' ? 'ย้ายโต๊ะ' : 'Move'}
               </button>
               <button
                 onClick={() => openAction('merge')}
-                disabled={pendingItems.length === 0}
+                disabled={rowsOfTable.length === 0}
                 style={{
                   background: 'rgba(52,211,153,0.2)',
                   border: '1px solid rgba(52,211,153,0.4)',
@@ -199,15 +203,15 @@ const TableOrderView = ({
                   padding: '3px 10px',
                   fontSize: '0.78rem',
                   fontWeight: '700',
-                  cursor: pendingItems.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: pendingItems.length === 0 ? 0.4 : 1
+                  cursor: rowsOfTable.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: rowsOfTable.length === 0 ? 0.4 : 1
                 }}
               >
                 {lang === 'th' ? 'รวมโต๊ะ' : 'Merge'}
               </button>
               <button
                 onClick={() => openAction('split')}
-                disabled={pendingItems.length === 0}
+                disabled={rowsOfTable.length === 0}
                 style={{
                   background: 'rgba(192,132,252,0.2)',
                   border: '1px solid rgba(192,132,252,0.4)',
@@ -216,8 +220,8 @@ const TableOrderView = ({
                   padding: '3px 10px',
                   fontSize: '0.78rem',
                   fontWeight: '700',
-                  cursor: pendingItems.length === 0 ? 'not-allowed' : 'pointer',
-                  opacity: pendingItems.length === 0 ? 0.4 : 1,
+                  cursor: rowsOfTable.length === 0 ? 'not-allowed' : 'pointer',
+                  opacity: rowsOfTable.length === 0 ? 0.4 : 1,
                   display: 'flex', alignItems: 'center', gap: '3px'
                 }}
               >
@@ -226,7 +230,9 @@ const TableOrderView = ({
             </div>
           </div>
           <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8', marginTop: '2px' }}>
-            {lang === 'th' ? `${pendingItems.length} รายการ` : `${pendingItems.length} items`}
+            {lang === 'th'
+              ? `${rowsOfTable.length} รายการ${paidItems.length > 0 ? ` (จ่ายแล้ว ${paidItems.length})` : ''}`
+              : `${rowsOfTable.length} items${paidItems.length > 0 ? ` (${paidItems.length} paid)` : ''}`}
           </p>
         </div>
         <button
@@ -291,7 +297,7 @@ const TableOrderView = ({
 
       {/* Order Items List */}
       <div style={{ flex: 1, padding: '1rem 1.25rem', overflowY: 'auto', paddingBottom: '200px' }}>
-        {pendingItems.length === 0 ? (
+        {rowsOfTable.length === 0 ? (
           <div style={{
             display: 'flex',
             flexDirection: 'column',
@@ -309,7 +315,7 @@ const TableOrderView = ({
               {lang === 'th' ? 'กดปุ่มสั่งเพิ่มด้านล่างเพื่อสั่งอาหาร' : 'Tap the add button below to order'}
             </p>
           </div>
-        ) : (
+        ) : pendingItems.length === 0 ? null : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             <label style={{
               display: 'flex', alignItems: 'center', gap: '0.6rem',
@@ -414,6 +420,59 @@ const TableOrderView = ({
             })}
           </div>
         )}
+
+        {/* รายการที่ลูกค้าสั่งเองจาก QR และชำระมาแล้ว — อ่านอย่างเดียว ไม่ต้องเก็บเงินซ้ำ */}
+        {paidItems.length > 0 && (
+          <div style={{ marginTop: pendingItems.length > 0 ? '1.25rem' : 0, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: '0.5rem', color: '#4338ca', fontWeight: 800, fontSize: '0.92rem'
+            }}>
+              <span>💳 {lang === 'th' ? 'ลูกค้าสั่งเอง & ชำระแล้ว' : 'Self-ordered & paid'}</span>
+              <span>฿{paidTotal.toLocaleString()}</span>
+            </div>
+            {paidItems.map((item, idx) => (
+              <div key={'paid-' + idx} style={{
+                background: '#eef2ff',
+                border: '2px solid #c7d2fe',
+                borderRadius: '14px',
+                padding: '0.85rem 1rem',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '0.75rem'
+              }}>
+                <div style={{
+                  background: '#ffffff', border: '1px solid #c7d2fe', borderRadius: '8px',
+                  padding: '0.35rem 0.65rem', fontWeight: 800, color: '#4338ca',
+                  fontSize: '0.95rem', flexShrink: 0, minWidth: '36px', textAlign: 'center'
+                }}>
+                  {Number(item.Quantity) || 1}x
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, color: '#1e1b4b', fontSize: '1rem', lineHeight: 1.3 }}>
+                    {lang === 'th' ? (item.ItemName || '') : (item.ItemNameEn || item.ItemName || '')}
+                  </div>
+                  {item.Options && (
+                    <div style={{ fontSize: '0.85rem', color: '#4338ca', marginTop: '0.25rem', fontWeight: 500 }}>
+                      {item.Options}
+                    </div>
+                  )}
+                  {item.Timestamp && !isNaN(new Date(item.Timestamp)) && (
+                    <div style={{ fontSize: '0.8rem', color: '#6366f1', marginTop: '0.25rem', fontWeight: 500 }}>
+                      🕒 {new Date(item.Timestamp).toLocaleString(lang === 'th' ? 'th-TH' : 'en-GB', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                      })}
+                    </div>
+                  )}
+                </div>
+                <span style={{ fontWeight: 800, color: '#4338ca', fontSize: '1.05rem' }}>
+                  ฿{((Number(item.ItemPrice) || 0) * (Number(item.Quantity) || 1)).toLocaleString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Bottom Action Bar */}
@@ -477,6 +536,16 @@ const TableOrderView = ({
             </div>
           );
         })()}
+        {pendingItems.length === 0 && paidItems.length > 0 && (
+          <div style={{
+            background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: '12px',
+            padding: '0.75rem 1rem', display: 'flex', justifyContent: 'space-between',
+            alignItems: 'center', color: '#3730a3', fontWeight: 700, fontSize: '0.92rem'
+          }}>
+            <span>💳 {lang === 'th' ? 'ลูกค้าชำระเองครบแล้ว' : 'Fully paid by the customer'}</span>
+            <span style={{ fontWeight: 800 }}>฿{paidTotal.toLocaleString()}</span>
+          </div>
+        )}
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button
             onClick={onAddMore}
@@ -500,6 +569,28 @@ const TableOrderView = ({
             <Plus size={18} color="#0f172a" />
             {lang === 'th' ? 'สั่งเพิ่ม' : 'Add More'}
           </button>
+          {pendingItems.length === 0 && paidItems.length > 0 && onCloseTable && (
+            <button
+              onClick={() => {
+                if (window.confirm(lang === 'th'
+                  ? 'ลูกค้าชำระเงินครบแล้ว ต้องการปิดโต๊ะและล้างรายการหรือไม่?'
+                  : 'The customer has paid in full. Close this table and clear its items?')) {
+                  onCloseTable(tableNumber);
+                }
+              }}
+              style={{
+                flex: 2,
+                background: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)',
+                border: 'none', borderRadius: '14px', color: '#ffffff',
+                padding: '0.9rem', cursor: 'pointer', fontWeight: 800, fontSize: '1.05rem',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
+                boxShadow: '0 4px 15px rgba(67,56,202,0.35)'
+              }}
+            >
+              <CheckCircle2 size={20} />
+              {lang === 'th' ? 'ปิดโต๊ะ (ชำระครบแล้ว)' : 'Close table (paid)'}
+            </button>
+          )}
           {pendingItems.length > 0 && (
             <button
               onClick={() => {

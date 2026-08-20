@@ -10,7 +10,7 @@ var SHEET_ID = '16TdnUiHIZ0ACWbbNq2h6tXg49LL0N3FCHXMXB5Y9BlM';
 
 // ป้ายเวอร์ชันของสคริปต์ — ใช้ตรวจว่า deployment ที่แอปเรียกอยู่เป็นโค้ดล่าสุดหรือยัง
 // (เปิด <URL>/exec?action=ping ในเบราว์เซอร์แล้วดูค่านี้) แก้โค้ดครั้งต่อไปให้ขยับเลขวันที่ด้วย
-var SCRIPT_BUILD = '2026-08-10-drivetest';
+var SCRIPT_BUILD = '2026-08-20-kiosk-sales';
 
 // โฟลเดอร์ Google Drive สำหรับเก็บรูปเมนูที่อัปโหลดจากหน้าจัดการเมนู
 // https://drive.google.com/drive/folders/14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3
@@ -243,7 +243,9 @@ function doGet(e) {
     return _bomJson({
       tableOrders: getSheetDataAsObjects(ss, 'TableOrders'),
       // Orders ใช้แค่หาเลขบิลสูงสุด + จอครัว → 300 บิลล่าสุดพอ
-      orders:      getSheetDataAsObjects(ss, 'Orders', 300)
+      orders:      getSheetDataAsObjects(ss, 'Orders', 300),
+      // บิลที่ลูกค้าจ่ายเองจากคีออสไม่ได้เกิดบนเครื่องขาย ถ้าไม่ส่งมาด้วยยอดสรุปกะจะขาดไป
+      payments:    getSheetDataAsObjects(ss, 'PaymentSummary', 300)
     });
   }
 
@@ -364,6 +366,64 @@ function doGet(e) {
 // getSheetDataAsObjects
 // ──────────────────────────────────────────────
 // maxRows (ไม่บังคับ) = ดึงเฉพาะ N แถวล่าสุด — กันชีทที่โตเรื่อย ๆ (เช่น Orders) ทำให้ getAllData ช้าลงทุกวัน
+// รวมตัวเลือกของรายการอาหาร (ราคาแบบไหน/เผ็ดระดับไหน/ท็อปปิ้ง/โปร/หมายเหตุ) เป็นข้อความบรรทัดเดียว
+// ใช้ร่วมกันระหว่างออเดอร์จากเครื่องขายและออเดอร์ที่ลูกค้าสั่งเองจากคีออส ให้ได้รูปแบบเดียวกัน
+function itemOptionText(item) {
+  var parts = [];
+  if (item.food && item.food.priceName) parts.push(item.food.priceName);
+  if (item.spice && item.spice.name) parts.push('ความเผ็ด: ' + item.spice.name);
+  if (item.allPopups && item.allPopups.length > 0) item.allPopups.forEach(function(p) { parts.push(p.name); });
+  if (item.promo && item.promo.id !== 'none' && item.promo.name) parts.push(item.promo.name);
+  if (item.note && String(item.note).trim()) parts.push('📝 ' + String(item.note).trim());
+  return parts.join(', ');
+}
+
+// เลขบิลถัดไปของคำนำหน้าหนึ่ง ๆ (เช่น SELF-#007) — อ่านเฉพาะคอลัมน์เลขบิลของชีต Orders
+// ต้องเรียกในบล็อกที่ถือ LockService อยู่ ไม่งั้นสองคำขอพร้อมกันจะได้เลขเดียวกัน
+function nextOrderNumber(ss, prefix) {
+  var sheet = ss.getSheetByName('Orders');
+  var max = 0;
+  if (sheet && sheet.getLastRow() > 1) {
+    var col = sheet.getRange(2, 2, sheet.getLastRow() - 1, 1).getValues();
+    var re = new RegExp('^' + prefix + '-#(\\d+)$');
+    for (var i = 0; i < col.length; i++) {
+      var m = re.exec(String(col[i][0] || '').trim());
+      if (m) {
+        var n = parseInt(m[1], 10);
+        if (!isNaN(n) && n > max) max = n;
+      }
+    }
+  }
+  var next = String(max + 1);
+  while (next.length < 3) next = '0' + next;
+  return prefix + '-#' + next;
+}
+
+// ออเดอร์คีออสที่บันทึกไปแล้วของ sessionId นี้ (ถ้ามี) — คืนเลขบิลเดิมเพื่อกันบิลซ้ำตอนยิงซ้ำ
+// แถวรายการรายโต๊ะของคีออสเก็บเลขบิลไว้ท้ายช่องตัวเลือกในรูปแบบ '💳 ชำระแล้ว SELF-#001'
+function findKioskOrderBySession(ss, sessionId) {
+  var sheet = ss.getSheetByName('TableOrders');
+  if (!sheet || sheet.getLastRow() < 2 || !sessionId) return '';
+  var rows = sheet.getRange(2, 2, sheet.getLastRow() - 1, 6).getValues(); // B..G = SessionId..Options
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i][0]) !== String(sessionId)) continue;
+    var m = /ชำระแล้ว\s+(\S+)/.exec(String(rows[i][5] || ''));
+    if (m) return m[1];
+  }
+  return '';
+}
+
+// id ของกะที่เปิดค้างอยู่ — คีออสไม่รู้จักกะ จึงต้องให้ฝั่งเซิร์ฟเวอร์ผูกให้ตอนบันทึกยอด
+function openShiftId(ss) {
+  var sheet = ss.getSheetByName('Shifts');
+  if (!sheet || sheet.getLastRow() < 2) return '';
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 13).getValues();
+  for (var i = rows.length - 1; i >= 0; i--) {
+    if (String(rows[i][12] || '').toLowerCase() === 'open') return String(rows[i][0] || '');
+  }
+  return '';
+}
+
 function getSheetDataAsObjects(ss, sheetName, maxRows) {
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
@@ -421,6 +481,89 @@ function doPost(e) {
   ];
   if (STATIC_WRITE_ACTIONS.indexOf(action) !== -1) clearStaticCache();
 
+  // ── ออเดอร์คีออส: ลูกค้าสแกน QR สั่งเอง + จ่ายผ่าน QR + สลิปผ่านการตรวจแล้ว ──
+  // ทำให้ครบในคำขอเดียวและล็อกไว้ เพราะหลายโต๊ะกดจ่ายพร้อมกันได้:
+  //   1) ออกเลขบิลชุดของคีออสเอง (SELF-#001, SELF-#002 ...) ไม่ปนกับเลขบิลของแคชเชียร์
+  //   2) ลงชีต Orders เป็นบิลสถานะ Pending → จอครัวเห็นทันที กดเสร็จแล้วค่อยเป็น Completed
+  //   3) ลง PaymentSummary → ยอดเข้ารายงานและสรุปกะ (staff = 'Self-Order')
+  //   4) ลง TableOrders สถานะ 'paid' → พนักงานเห็นว่าโต๊ะนี้สั่งอะไร แต่ระบบไม่เก็บเงินซ้ำ
+  if (action === 'kioskPaidOrder') {
+    var kLock = LockService.getScriptLock();
+    try {
+      kLock.waitLock(30000);
+    } catch (lockErr) {
+      return _bomJson({ success: false, error: 'ระบบกำลังบันทึกออเดอร์อื่นอยู่ กรุณาลองใหม่อีกครั้ง' });
+    }
+    try {
+      var kTable  = String(postData.tableNumber || '');
+      var kItems  = postData.items || [];
+      var kTotal  = Number(postData.total) || 0;
+      var kMethod = postData.paymentMethod || 'เงินโอน (QR)';
+      var kTime   = postData.timestamp || new Date().toISOString();
+      var kPrefix = String(postData.prefix || 'SELF').toUpperCase().replace(/[^0-9A-Zก-๙]/g, '') || 'SELF';
+      var kBy     = 'Self-Order';
+      var kSessionId = String(postData.sessionId || Date.now());
+      if (kItems.length === 0) return _bomJson({ success: false, error: 'ไม่มีรายการอาหารในออเดอร์' });
+
+      // ยิงซ้ำเพราะเน็ตมือถือหลุดกลางทางเป็นเรื่องปกติ — ถ้า sessionId นี้บันทึกไปแล้ว
+      // ให้ตอบเลขบิลเดิมกลับไป ไม่ออกบิลใหม่ซ้อน (ลูกค้าโอนเงินมาครั้งเดียว)
+      var kDup = findKioskOrderBySession(ss, kSessionId);
+      if (kDup) return _bomJson({ success: true, orderNumber: kDup, duplicate: true });
+
+      var kOrderNo = nextOrderNumber(ss, kPrefix);
+      var kName    = kTable ? ('โต๊ะ ' + kTable + ' (สั่งเอง)') : 'สั่งเอง';
+      var kAddr    = kTable ? ('โต๊ะ ' + kTable) : 'สั่งเอง';
+
+      // 1) บิลในชีต Orders — คอลัมน์เรียงตามหัวตาราง Orders เป๊ะ ๆ
+      var ordersSheet = getOrCreateSheet(ss, 'Orders', ['Timestamp', 'OrderNumber', 'CustomerName', 'Address', 'ItemDetail', 'DiningOption', 'Price', 'TotalAmount', 'Status', 'OrderStartTime', 'CompletionTime', 'RecordedBy', 'Quantity']);
+      kItems.forEach(function(item) {
+        var qty     = Number(item.quantity) || 1;
+        var unit    = Number(item.food && item.food.price) || 0;
+        var dining  = (item.dining && item.dining.name) ? item.dining.name : 'ทานที่ร้าน';
+        ordersSheet.appendRow([kTime, kOrderNo, kName, kAddr, (item.food && item.food.name) || '', dining, unit * qty, kTotal, 'Pending', kTime, '', kBy, qty]);
+        var opt = itemOptionText(item);
+        if (opt) ordersSheet.appendRow([kTime, kOrderNo, kName, kAddr, '↳ ' + opt, dining, 0, kTotal, 'Pending', kTime, '', kBy, '']);
+      });
+
+      // 2) ยอดชำระ — ผูกกับกะที่เปิดอยู่ เพื่อให้สรุปกะและรายงานนับรวมยอดจากคีออสด้วย
+      var paySh = getOrCreateSheet(ss, 'PaymentSummary', ['timestamp','orderNumber','tableNo','paymentMethod','grandTotal','staff','shiftId','splitDetail']);
+      paySh.appendRow([kTime, kOrderNo, kTable, kMethod, kTotal, kBy, openShiftId(ss), '']);
+
+      // 3) รายการรายโต๊ะ สถานะ paid — โต๊ะยังโชว์ว่ามีลูกค้า แต่ไม่เข้าไปรวมในยอดที่ต้องเก็บ
+      var tblSheet  = ss.getSheetByName('TableOrders');
+      if (tblSheet) {
+        kItems.forEach(function(item) {
+          var opt = itemOptionText(item);
+          var paidNote = '💳 ชำระแล้ว ' + kOrderNo;
+          tblSheet.appendRow([
+            kTable, kSessionId, (item.food && item.food.name) || '', (item.food && item.food.nameEn) || '',
+            Number(item.food && item.food.price) || 0, Number(item.quantity) || 1,
+            opt ? (opt + ' | ' + paidNote) : paidNote,
+            kTime, 'paid', kBy
+          ]);
+        });
+      }
+
+      // 4) ตัดสต็อกตามสูตร BOM เหมือนบิลที่แคชเชียร์ปิดเอง — ถ้าร้านยังไม่ได้ตั้ง BOM จะข้ามไปเฉย ๆ
+      // ห่อ try ไว้ต่างหาก เพราะบิลกับยอดเงินบันทึกไปแล้ว ห้ามล้มทั้งคำขอเพราะตัดสต็อกไม่ได้
+      try {
+        var kDeduct = [];
+        kItems.forEach(function(item) {
+          if (item.food && item.food.id) kDeduct.push({ menuId: String(item.food.id), menuName: item.food.name || '', qty: Number(item.quantity) || 1 });
+        });
+        if (kDeduct.length > 0) deductStock({ orderNumber: kOrderNo, tableNo: kTable, items: kDeduct });
+      } catch (stockErr) {
+        Logger.log('kioskPaidOrder deductStock: ' + stockErr);
+      }
+
+      return _bomJson({ success: true, orderNumber: kOrderNo });
+    } catch (kErr) {
+      return _bomJson({ success: false, error: String(kErr) });
+    } finally {
+      try { kLock.releaseLock(); } catch (relErr) {}
+    }
+  }
+
   // ── TABLE ORDER ACTIONS ──
   if (action === 'addTableOrder') {
     var sheet = ss.getSheetByName('TableOrders');
@@ -430,13 +573,7 @@ function doPost(e) {
     var timestamp   = postData.timestamp   || new Date().toISOString();
     var recordedBy  = postData.recordedBy  || '';
     items.forEach(function(item) {
-      var parts = [];
-      if (item.food && item.food.priceName) parts.push(item.food.priceName);
-      if (item.spice && item.spice.name) parts.push('ความเผ็ด: ' + item.spice.name);
-      if (item.allPopups && item.allPopups.length > 0) item.allPopups.forEach(function(p) { parts.push(p.name); });
-      if (item.promo && item.promo.id !== 'none' && item.promo.name) parts.push(item.promo.name);
-      if (item.note && String(item.note).trim()) parts.push('📝 ' + String(item.note).trim());
-      sheet.appendRow([tableNumber, sessionId, item.food.name || '', item.food.nameEn || '', Number(item.food.price) || 0, Number(item.quantity) || 1, parts.join(', '), timestamp, 'pending', recordedBy]);
+      sheet.appendRow([tableNumber, sessionId, item.food.name || '', item.food.nameEn || '', Number(item.food.price) || 0, Number(item.quantity) || 1, itemOptionText(item), timestamp, 'pending', recordedBy]);
     });
     return _bomJson({ success: true, sessionId: sessionId });
   }
@@ -460,11 +597,10 @@ function doPost(e) {
   // ล้างรายการโต๊ะทั้งหมดที่ยังไม่ชำระ (ตอนปิดกะ)
   if (action === 'clearAllTableOrders') {
     var sheetA = ss.getSheetByName('TableOrders');
-    if (sheetA) {
-      var dataA = sheetA.getDataRange().getValues();
-      for (var i = dataA.length - 1; i >= 1; i--) {
-        if (dataA[i][8] !== 'paid') sheetA.deleteRow(i + 1);
-      }
+    if (sheetA && sheetA.getLastRow() > 1) {
+      // ล้างทุกแถวรวมรายการที่ลูกค้าจ่ายมาแล้วจากคีออสด้วย — ของพวกนั้นถูกบันทึกเป็นบิล
+      // ในชีต Orders ตั้งแต่ตอนจ่ายแล้ว ถ้าปล่อยค้างไว้โต๊ะจะขึ้นว่ามีลูกค้าข้ามกะ
+      sheetA.deleteRows(2, sheetA.getLastRow() - 1);
     }
     return _bomJson({ success: true });
   }
@@ -472,9 +608,13 @@ function doPost(e) {
   if (action === 'clearTableOrders') {
     var sheet = ss.getSheetByName('TableOrders');
     var tableNumber = String(postData.tableNumber || '');
+    // includePaid = ปิดโต๊ะจบจริง ๆ (เก็บเงินส่วนที่ค้างครบ/ลูกค้าจ่ายเองครบ) → ล้างรายการที่จ่ายแล้วด้วย
+    // ไม่ใส่ = ล้างเฉพาะรายการที่ยังไม่จ่าย เก็บของที่ลูกค้าจ่ายมาแล้วไว้ให้พนักงานเห็น
+    var includePaid = postData.includePaid === true;
     var data = sheet.getDataRange().getValues();
     for (var i = data.length - 1; i >= 1; i--) {
-      if (String(data[i][0]) === tableNumber && data[i][8] !== 'paid') sheet.deleteRow(i + 1);
+      if (String(data[i][0]) !== tableNumber) continue;
+      if (includePaid || data[i][8] !== 'paid') sheet.deleteRow(i + 1);
     }
     return _bomJson({ success: true });
   }
@@ -501,7 +641,9 @@ function doPost(e) {
     var data = sheet.getDataRange().getValues();
     var updated = false;
     for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === fromTable && data[i][8] !== 'paid') {
+      // ย้ายทั้งโต๊ะ = ลูกค้าย้ายที่นั่งจริง จึงต้องยกรายการที่จ่ายมาแล้วจากคีออสไปด้วย
+      // ไม่งั้นโต๊ะเดิมจะค้างสถานะมีลูกค้าทั้งที่ไม่มีใครนั่งแล้ว
+      if (String(data[i][0]) === fromTable) {
         sheet.getRange(i + 1, 1).setValue(toTable);
         updated = true;
       }

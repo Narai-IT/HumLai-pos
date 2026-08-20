@@ -91,12 +91,20 @@ function App() {
   const [saveAlert, setSaveAlert] = useState(null);
 
   const handleOpenShift = async (openCash) => {
+    // อ่านคำตอบให้ได้ เพื่อใช้ shiftId ที่ฝั่ง GAS ออกให้เป็นตัวเดียวกับแถวในชีท Shifts
+    // (ถ้าตั้ง id เองในเครื่อง ตอนปิดกะจะหาแถวไม่เจอ ยอดสรุปกะเลยไม่ถูกเขียนลงชีท)
+    let shiftId = '';
     try {
-      await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'openShift', staff: currentUser?.username || '', openCash }) });
+      const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'openShift', staff: currentUser?.username || '', openCash }) });
+      const json = await res.json().catch(() => null);
+      if (json && json.shiftId) shiftId = String(json.shiftId);
     } catch (e) {}
-    const shiftId = 'SHIFT-' + Date.now();
+    if (!shiftId) shiftId = 'SHIFT-' + Date.now();
     const shift = { id: shiftId, openTime: new Date().toISOString(), openStaff: currentUser?.username || '', openCash };
     const freshSales = { totalSales: 0, totalCash: 0, totalCard: 0, totalTransfer: 0, totalOrders: 0 };
+    // เริ่มนับยอดคีออสของกะใหม่จากศูนย์ (รายการของกะก่อนถูกนับไปแล้ว)
+    countedKioskRef.current = [];
+    localStorage.removeItem('kiosk_counted_orders');
     setCurrentShift(shift);
     setShiftSales(freshSales);
     localStorage.setItem('current_shift', JSON.stringify(shift));
@@ -145,15 +153,19 @@ function App() {
         const prev = JSON.parse(localStorage.getItem('outstanding_bills') || '[]');
         localStorage.setItem('outstanding_bills', JSON.stringify([...prev, ...bills]));
       } catch (e) {}
-      // บันทึกขึ้นเซิร์ฟเวอร์ + ล้างโต๊ะทั้งหมด
       try {
         await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveOutstandingBills', bills }) });
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'clearAllTableOrders' }) });
       } catch (e) {}
-      // เคลียร์โต๊ะในเครื่อง + ลบจำนวนลูกค้า
-      setTableOrders(prev => prev.filter(o => o.Status === 'paid'));
       pendingTables.forEach(t => localStorage.removeItem('customer_count_' + t.tableNo));
     }
+
+    // ล้างโต๊ะทั้งหมดเสมอ รวมรายการที่ลูกค้าจ่ายมาแล้วจากคีออส (บันทึกเป็นบิลไปตั้งแต่ตอนจ่ายแล้ว)
+    // ถ้าไม่ล้าง โต๊ะจะยังขึ้นว่ามีลูกค้าค้างข้ามไปกะถัดไป
+    try {
+      await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'clearAllTableOrders' }) });
+    } catch (e) {}
+    setTableOrders([]);
+    (tableOrders || []).forEach(o => localStorage.removeItem('customer_count_' + o.TableNumber));
 
     try {
       await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'closeShift', shiftId: currentShift.id, staff: currentUser?.username || '', closeCash, note, ...shiftSales }) });
@@ -337,6 +349,53 @@ function App() {
     return true;
   };
 
+  // ── ยอดขายจากคีออสเข้าสรุปกะ ──
+  // บิลที่ลูกค้าจ่ายเองเกิดบนมือถือลูกค้า ตัวนับยอดกะ (shiftSales) อยู่ในเครื่องขาย
+  // จึงต้องอ่าน PaymentSummary ที่ poll มาแล้วบวกเข้ายอดกะเอง ไม่งั้นสรุปกะจะขาดยอดส่วนนี้
+  const currentShiftRef = React.useRef(null);
+  React.useEffect(() => { currentShiftRef.current = currentShift; }, [currentShift]);
+  // เลขบิลคีออสที่บวกเข้ายอดกะไปแล้ว — กันบวกซ้ำทุกครั้งที่ poll หรือเปิดแอปใหม่
+  const countedKioskRef = React.useRef(null);
+
+  const absorbKioskPayments = (payments) => {
+    const shift = currentShiftRef.current;
+    if (!shift || !Array.isArray(payments)) return;
+    if (countedKioskRef.current === null) {
+      try { countedKioskRef.current = JSON.parse(localStorage.getItem('kiosk_counted_orders') || '[]'); }
+      catch { countedKioskRef.current = []; }
+    }
+    const counted = countedKioskRef.current;
+    // เทียบด้วยเวลาเปิดกะ ไม่ใช่ shiftId เพราะบิลคีออสถูกผูก shiftId จากฝั่ง GAS
+    // ซึ่งอาจไม่ใช่ตัวเดียวกับ id ของกะที่เครื่องนี้ถืออยู่ (เช่นตอนเน็ตหลุดตอนเปิดกะ)
+    const openedAt = new Date(shift.openTime).getTime();
+    const fresh = payments.filter(p => {
+      if (!p || String(p.staff || '') !== 'Self-Order' || !p.orderNumber) return false;
+      if (counted.indexOf(String(p.orderNumber)) !== -1) return false;
+      if (String(p.shiftId || '') === String(shift.id)) return true;
+      const paidAt = new Date(p.timestamp).getTime();
+      return !isNaN(openedAt) && !isNaN(paidAt) && paidAt >= openedAt - 60000;
+    });
+    if (fresh.length === 0) return;
+
+    fresh.forEach(p => counted.push(String(p.orderNumber)));
+    countedKioskRef.current = counted.slice(-300); // เท่าจำนวนแถวที่ getLive ส่งมาพอ
+    localStorage.setItem('kiosk_counted_orders', JSON.stringify(countedKioskRef.current));
+
+    // คีออสรับเฉพาะโอนผ่าน QR — ไม่มีเงินสดเข้าลิ้นชักจากช่องทางนี้
+    const addTotal = fresh.reduce((sum, p) => sum + (Number(p.grandTotal) || 0), 0);
+    setShiftSales(prev => {
+      const updated = {
+        totalSales:    (prev.totalSales    || 0) + addTotal,
+        totalOrders:   (prev.totalOrders   || 0) + fresh.length,
+        totalCash:      prev.totalCash     || 0,
+        totalTransfer: (prev.totalTransfer || 0) + addTotal,
+        totalCard:      prev.totalCard     || 0,
+      };
+      localStorage.setItem('shift_sales', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const processAppGASData = (data) => {
     if (data.categories && Array.isArray(data.categories) && changed('categories', data.categories)) {
       setAllCategories(data.categories);
@@ -391,6 +450,7 @@ function App() {
       setAllMenu(flatMenu);
       setLiveMenu(flatMenu.filter(m => m.isActive !== false));
     }
+    if (data.payments) absorbKioskPayments(data.payments);
     if (data.tableOrders && Array.isArray(data.tableOrders)) {
       // โต๊ะเป็นข้อมูลที่เปลี่ยนบ่อยและต้องตรงเสมอ → อัปเดตทุกครั้งที่ payload เปลี่ยน
       setTableOrders(data.tableOrders);
@@ -781,6 +841,27 @@ function App() {
     }
   };
 
+  // ปิดโต๊ะที่ลูกค้าสั่งเองและจ่ายครบแล้ว — ไม่ต้องออกบิลใหม่ (บิลถูกออกตอนลูกค้าจ่ายไปแล้ว)
+  // แค่ล้างรายการของโต๊ะให้กลับมาว่างสำหรับลูกค้าคนถัดไป
+  const handleCloseSettledTable = async (targetTable) => {
+    const tbl = String(targetTable || tableNumber);
+    setTableOrders(prev => prev.filter(o => String(o.TableNumber) !== tbl));
+    localStorage.removeItem('customer_count_' + tbl);
+    setTableNumber('');
+    navigate('/index');
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'clearTableOrders', tableNumber: tbl, includePaid: true })
+      });
+      setTimeout(() => fetchOrdersFromSheet(), 1500);
+    } catch (e) {
+      console.error('Error clearing settled table:', e);
+    }
+  };
+
   // =============================================
   // NEW: Open checkout from table view
   // =============================================
@@ -912,7 +993,8 @@ function App() {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'clearTableOrders', tableNumber: String(tableNumber) })
+        // ปิดบิลแล้ว = โต๊ะจบ ล้างรวมรายการที่ลูกค้าจ่ายเองมาก่อนหน้าด้วย
+        body: JSON.stringify({ action: 'clearTableOrders', tableNumber: String(tableNumber), includePaid: true })
       });
     } catch (error) {
       console.error('Error clearing table orders:', error);
@@ -967,8 +1049,10 @@ function App() {
 
     // Optimistic update
     setTableOrders(prev => prev.map(o => {
-      if (String(o.TableNumber) !== String(fromTable) || o.Status === 'paid') return o;
+      if (String(o.TableNumber) !== String(fromTable)) return o;
+      // ย้ายทั้งโต๊ะให้ยกรายการที่ลูกค้าจ่ายเองมาแล้วไปด้วย ส่วนการย้ายบางรายการเลือกได้เฉพาะที่ยังไม่จ่าย
       if (moveAll) return { ...o, TableNumber: toTable };
+      if (o.Status === 'paid') return o;
       const s = tableRowSig(o);
       if (need[s] > 0) { need[s] -= 1; return { ...o, TableNumber: toTable }; }
       return o;
@@ -1079,8 +1163,13 @@ function App() {
     }, 0);
   };
 
-  const handleKioskSendOrder = async (targetTableNo, cartItems, total, paymentMethod) => {
-    const sessionId = String(Date.now());
+  // ออเดอร์จากคีออส — ลูกค้าโอนเงินและสลิปผ่านการตรวจมาแล้ว จึงต้องบันทึกเป็น "บิลที่จ่ายแล้ว"
+  // ไม่ใช่แค่รายการรายโต๊ะ ไม่งั้นยอดไม่เข้ารายงาน/สรุปกะ และพนักงานอาจเก็บเงินซ้ำตอนปิดโต๊ะ
+  // ฝั่ง GAS (action kioskPaidOrder) ออกเลขบิล + ลง Orders/PaymentSummary/TableOrders + ตัดสต็อก
+  // ให้ครบในคำขอเดียวโดยมีล็อกกันหลายโต๊ะกดจ่ายพร้อมกัน
+  const handleKioskSendOrder = async (targetTableNo, cartItems, total, paymentMethod, paySessionId) => {
+    // sessionId มาจากหน้าคีออส และคงค่าเดิมทุกครั้งที่กดส่งซ้ำ → หลังบ้านใช้กันบิลซ้ำ
+    const sessionId = String(paySessionId || (String(Date.now()) + '-' + Math.random().toString(36).slice(2, 8)));
     const timestamp = getThaiTimeISO();
 
     const cartForServer = cartItems.map(item => {
@@ -1094,24 +1183,67 @@ function App() {
       };
     });
 
-    try {
-      await fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'addTableOrder',
-          tableNumber: String(targetTableNo),
-          sessionId,
-          items: cartForServer,
-          timestamp,
-          recordedBy: 'Self-Order'
-        })
-      });
-      setTimeout(() => fetchOrdersFromSheet(), 1500);
-    } catch (e) {
-      console.error('Error saving kiosk order:', e);
+    const payload = {
+      action: 'kioskPaidOrder',
+      tableNumber: String(targetTableNo),
+      sessionId,
+      items: cartForServer,
+      total: Number(total) || 0,
+      paymentMethod: paymentMethod || 'เงินโอน (QR)',
+      timestamp
+    };
+
+    // ลูกค้าจ่ายเงินไปแล้ว ห้ามเงียบหาย — ยิงซ้ำได้ 3 ครั้ง (เน็ตมือถือหลุดง่าย)
+    // ยิงซ้ำแล้วบิลไม่ซ้ำ เพราะฝั่ง GAS เช็ก sessionId เดิมแล้วคืนเลขบิลเดิมกลับมา
+    let lastError = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(payload)
+        });
+        const json = await res.json().catch(() => null);
+        if (json && json.success) {
+          setTimeout(() => fetchOrdersFromSheet(), 1500);
+          return { success: true, orderNumber: json.orderNumber || '' };
+        }
+        lastError = (json && json.error) || 'บันทึกไม่สำเร็จ';
+      } catch (e) {
+        lastError = String(e.message || e);
+      }
+      await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
     }
+    // แบ็กเอนด์ยังเป็นสคริปต์เวอร์ชันเก่า (ยังไม่ได้ deploy ตัวใหม่) — ห้ามทิ้งออเดอร์ที่จ่ายเงินมาแล้ว
+    // ถอยไปใช้วิธีเดิมคือส่งเข้ารายการโต๊ะ พร้อมทำเครื่องหมายว่าชำระแล้วไว้ในรายการให้พนักงานเห็น
+    if (lastError.indexOf('Unknown action') !== -1) {
+      try {
+        const marked = cartForServer.map(item => ({
+          ...item,
+          note: `${item.note ? item.note + ' ' : ''}💳 ชำระผ่าน QR แล้ว (${paymentMethod || ''})`
+        }));
+        await fetch(GAS_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({
+            action: 'addTableOrder',
+            tableNumber: String(targetTableNo),
+            sessionId,
+            items: marked,
+            timestamp,
+            recordedBy: 'Self-Order'
+          })
+        });
+        setTimeout(() => fetchOrdersFromSheet(), 1500);
+        return { success: true, orderNumber: '', needStaff: true };
+      } catch (e) {
+        lastError = String(e.message || e);
+      }
+    }
+
+    console.error('Error saving kiosk order:', lastError);
+    return { success: false, error: lastError };
   };
 
   const isKioskPath = location.pathname.includes('/kiosk') || location.pathname.includes('/self-order');
@@ -1163,6 +1295,7 @@ function App() {
               settings={posSettings}
               onAddMore={() => navigate('/index')}
               onCheckout={handleOpenCheckoutFromTable}
+              onCloseTable={handleCloseSettledTable}
               onDeleteItem={handleDeleteTableItem}
               onBack={() => {
                 navigate('/index');

@@ -117,6 +117,7 @@
 .pos2-dot-free { background: #cbd5e1; }
 .pos2-dot-busy { background: #16a34a; }
 .pos2-dot-late { background: #f59e0b; }
+.pos2-dot-prepaid { background: #6366f1; }
 
 .pos2-table-list { display: flex; gap: 0.45rem; overflow-x: auto; padding-bottom: 2px; }
 .pos2-table {
@@ -136,6 +137,8 @@
 .pos2-table small { font-size: 0.68rem; color: #64748b; font-weight: 700; }
 .pos2-table.busy { border-color: #16a34a; background: #f0fdf4; }
 .pos2-table.late { border-color: #f59e0b; background: #fffbeb; }
+/* โต๊ะที่ลูกค้าสั่งเองจาก QR และโอนเงินมาแล้ว — ไม่ต้องเก็บเงินซ้ำ */
+.pos2-table.prepaid { border-color: #6366f1; background: #eef2ff; }
 .pos2-table.current { border-color: var(--pos2-primary); box-shadow: 0 0 0 2px var(--pos2-primary-soft); }
 .pos2-table-count {
   position: absolute; top: -7px; right: -7px;
