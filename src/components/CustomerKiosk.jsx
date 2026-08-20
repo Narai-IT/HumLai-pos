@@ -223,7 +223,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
 
   return (
     <div style={{
-      minHeight: '100vh',
+      // 100dvh = ความสูงจอ "จริง" ตอนนั้น — 100vh บนมือถือจะนับรวมแถบที่อยู่เว็บที่ยุบ ๆ ยืด ๆ
+      minHeight: '100dvh',
       background: '#f8fafc',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       color: '#0f172a',
@@ -231,7 +232,10 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       margin: '0 auto',
       boxShadow: '0 0 30px rgba(0,0,0,0.1)',
       position: 'relative',
-      paddingBottom: '100px'
+      // เผื่อที่ให้แถบตะกร้าลอย + แถบ home ของ iPhone
+      paddingBottom: 'calc(110px + env(safe-area-inset-bottom))',
+      WebkitTapHighlightColor: 'transparent',
+      overflowX: 'hidden'
     }}>
 
       {/* ─── Kiosk Header (Vertical Top Sticky) ─── */}
@@ -441,7 +445,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       {/* ─── Sticky Bottom Floating Cart Bar ─── */}
       {cart.length > 0 && (
         <div style={{
-          position: 'fixed', bottom: '15px', left: '50%', transform: 'translateX(-50%)',
+          position: 'fixed', bottom: 'calc(15px + env(safe-area-inset-bottom))',
+          left: '50%', transform: 'translateX(-50%)',
           width: 'calc(100% - 2rem)', maxWidth: '440px', zIndex: 90
         }}>
           <button
@@ -510,7 +515,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             style={{
               background: '#ffffff', width: '100%', maxWidth: '480px',
               borderTopLeftRadius: '24px', borderTopRightRadius: '24px',
-              padding: '1.5rem', maxHeight: '88vh', overflowY: 'auto',
+              padding: '1.25rem',
+              paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))',
+              maxHeight: '90dvh', overflowY: 'auto', WebkitOverflowScrolling: 'touch',
               boxShadow: '0 -10px 40px rgba(0,0,0,0.2)', color: '#0f172a'
             }}
           >

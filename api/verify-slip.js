@@ -9,12 +9,24 @@
 const SLIPOK_ENDPOINT = 'https://api.slipok.com/api/line/apikey';
 
 export default async function handler(req, res) {
+  const apiKey   = process.env.SLIPOK_API_KEY || 'SLIPOKDP6B53D';
+  const branchId = process.env.SLIPOK_BRANCH_ID || '74167';
+
+  // เปิด /api/verify-slip ในเบราว์เซอร์เพื่อเช็กว่าฟังก์ชันถูก deploy แล้วจริง
+  // (ไม่เปิดเผยคีย์ บอกแค่ว่ามีคีย์อยู่หรือไม่)
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      ok: true,
+      service: 'slipok-verify',
+      branchId,
+      hasApiKey: !!apiKey,
+      keyFrom: process.env.SLIPOK_API_KEY ? 'env' : 'fallback-in-code'
+    });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
-
-  const apiKey   = process.env.SLIPOK_API_KEY || 'SLIPOKDP6B53D';
-  const branchId = process.env.SLIPOK_BRANCH_ID || '74167';
 
   try {
     const { base64, mimeType, amount } = req.body || {};
