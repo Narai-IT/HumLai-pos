@@ -28,8 +28,27 @@ export const normalizePrintServerUrl = (raw) => {
   }
 };
 
-export const getDefaultPrintServerUrl = () =>
-  `http://${window.location.hostname || 'localhost'}:${DEFAULT_PORT}`;
+export const LOCAL_PRINT_SERVER_URL = `http://127.0.0.1:${DEFAULT_PORT}`;
+
+// เบราว์เซอร์ถือว่า localhost / 127.x.x.x เป็นปลายทางที่ปลอดภัย (potentially trustworthy)
+// จึงยกเว้นให้จากกฎ mixed content — หน้าเว็บ https ยิงไปหาได้ ต่างจาก IP วงแลนที่โดนบล็อก
+export const isLocalhostUrl = (url) => {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host.endsWith('.localhost') || host === '::1' || host === '[::1]' || /^127\./.test(host);
+  } catch (e) {
+    return false;
+  }
+};
+
+// หน้าเว็บที่เปิดผ่าน https (เช่นโดเมนบน Vercel) ยิงไป IP วงแลนไม่ได้
+// จึงต้องคุยกับ Print Server ที่รันในเครื่องเดียวกันผ่าน 127.0.0.1 แทน
+export const getDefaultPrintServerUrl = () => {
+  if (window.location.protocol === 'https:' && !isLocalhostUrl(window.location.href)) {
+    return LOCAL_PRINT_SERVER_URL;
+  }
+  return `http://${window.location.hostname || 'localhost'}:${DEFAULT_PORT}`;
+};
 
 export const getPrintServerUrl = () => {
   try {
@@ -52,9 +71,10 @@ export const setPrintServerUrl = (raw) => {
 };
 
 // หน้าเว็บที่เปิดผ่าน https:// ยิง http:// ไม่ได้ (mixed content)
+// ยกเว้นปลายทางที่เป็น localhost/127.0.0.1 ซึ่งเบราว์เซอร์อนุญาต
 // เป็นสาเหตุที่พบบ่อยที่สุดเวลาเปิดแอปจากโดเมนจริงแล้วปริ้นไม่ออก
 export const isMixedContentBlocked = (url = getPrintServerUrl()) =>
-  window.location.protocol === 'https:' && url.startsWith('http://');
+  window.location.protocol === 'https:' && url.startsWith('http://') && !isLocalhostUrl(url);
 
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 8000) => {
   const controller = new AbortController();
@@ -70,7 +90,7 @@ export const PRINT_SERVER_OFFLINE_MSG =
   'ติดต่อ Print Server ไม่ได้ — เปิด start-printer.bat หรือรัน "node server.js" ในเครื่องที่ต่อวงแลนเดียวกับเครื่องพิมพ์';
 
 export const MIXED_CONTENT_MSG =
-  'หน้าเว็บนี้เปิดผ่าน https:// เบราว์เซอร์จึงบล็อกการเชื่อมต่อไปยัง Print Server (http://) — ให้เปิดแอปผ่าน http:// ในวงแลนแทน';
+  'หน้าเว็บนี้เปิดผ่าน https:// เบราว์เซอร์จึงบล็อกการเชื่อมต่อไปยัง IP วงแลน — ให้ตั้งที่อยู่เป็น 127.0.0.1:3001 แล้วรัน Print Server ในเครื่องเดียวกับที่เปิดหน้านี้';
 
 // เช็คว่า Print Server ออนไลน์อยู่ไหม
 // คืนค่า { online, url, blocked, info, error }

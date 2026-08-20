@@ -7,6 +7,8 @@ import {
   getPrintServerUrl,
   getDefaultPrintServerUrl,
   setPrintServerUrl,
+  isLocalhostUrl,
+  LOCAL_PRINT_SERVER_URL,
   PRINT_SERVER_EVENT
 } from '../../utils/printServer';
 
@@ -99,6 +101,13 @@ const ManagePrinters = () => {
   const handleResetServerUrl = () => {
     const applied = setPrintServerUrl('');
     setServerUrlDraft(applied);
+  };
+
+  // ทางลัดแก้เคส https บล็อก IP วงแลน — ชี้ไป Print Server ในเครื่องเดียวกัน
+  const handleUseLocalhost = () => {
+    const applied = setPrintServerUrl(LOCAL_PRINT_SERVER_URL);
+    setServerUrlDraft(applied);
+    setShowServerSettings(false);
   };
 
   const copyStartCommand = async () => {
@@ -292,12 +301,39 @@ const ManagePrinters = () => {
             <div style={{ marginTop: '0.6rem', fontSize: '0.84rem', color: '#166534' }}>
               พร้อมสั่งพิมพ์ — วงแลนที่ตรวจพบ: <strong>{(health.info.subnets || []).map(s => `${s}x`).join(', ') || '-'}</strong>
               {health.info.version && <span style={{ color: '#64748b' }}> (v{health.info.version})</span>}
+              {isLocalhostUrl(health.url) && (
+                <div style={{ color: '#475569', marginTop: '0.25rem' }}>
+                  กำลังใช้ Print Server ในเครื่องนี้ — การค้นหาและสั่งพิมพ์ไปยังเครื่องพิมพ์ในวงแลนยังทำได้ตามปกติ เพราะ Print Server เป็นผู้ติดต่อเครื่องพิมพ์ให้
+                </div>
+              )}
             </div>
           )}
 
           {health.status === 'offline' && (
             <div style={{ marginTop: '0.75rem', fontSize: '0.86rem', color: '#7f1d1d' }}>
               <div style={{ marginBottom: '0.5rem' }}>{health.error}</div>
+
+              {health.blocked && (
+                <div style={{ background: '#ffffff', border: '1px dashed #fecaca', borderRadius: '10px', padding: '0.85rem 1rem', color: '#475569' }}>
+                  <strong style={{ color: '#0f172a' }}>วิธีแก้:</strong>
+                  <p style={{ margin: '0.5rem 0', lineHeight: 1.7 }}>
+                    เบราว์เซอร์ยอมให้หน้า https ติดต่อ <code>127.0.0.1</code> ได้ (แต่ห้าม IP วงแลนอย่าง 192.168.x.x)
+                    ดังนั้นถ้ารัน Print Server อยู่ใน<strong>เครื่องเดียวกับที่เปิดหน้านี้</strong> ให้เปลี่ยนที่อยู่เป็น <code>127.0.0.1:3001</code> ก็ใช้งานได้เลย
+                  </p>
+                  <button
+                    onClick={handleUseLocalhost}
+                    style={{ background: '#0284c7', color: 'white', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+                  >
+                    <Server size={15} /> ใช้ {LOCAL_PRINT_SERVER_URL} แทน
+                  </button>
+                  <ul style={{ margin: '0.75rem 0 0 1.2rem', padding: 0, lineHeight: 1.7, fontSize: '0.83rem' }}>
+                    <li>เครื่องที่เปิดหน้านี้ต้องรัน <code>start-printer.bat</code> หรือ <code>node server.js</code> ด้วย</li>
+                    <li>ถ้าใช้แท็บเล็ต/มือถือที่รัน Print Server ไม่ได้ ต้องเปิดแอปผ่าน <code>http://</code> ในวงแลนแทน</li>
+                    <li>Chrome รุ่นใหม่อาจถามสิทธิ์เข้าถึงอุปกรณ์ในเครือข่ายครั้งแรก ให้กดอนุญาต</li>
+                  </ul>
+                </div>
+              )}
+
               {!health.blocked && (
                 <div style={{ background: '#ffffff', border: '1px dashed #fecaca', borderRadius: '10px', padding: '0.85rem 1rem', color: '#475569' }}>
                   <strong style={{ color: '#0f172a' }}>วิธีเปิด Print Server:</strong>
@@ -341,6 +377,12 @@ const ManagePrinters = () => {
                   style={{ background: '#0284c7', color: 'white', border: 'none', borderRadius: '8px', padding: '0.5rem 1rem', fontWeight: 700, cursor: 'pointer' }}
                 >
                   บันทึก
+                </button>
+                <button
+                  onClick={handleUseLocalhost}
+                  style={{ background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1', borderRadius: '8px', padding: '0.5rem 1rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  ใช้ 127.0.0.1
                 </button>
                 <button
                   onClick={handleResetServerUrl}
