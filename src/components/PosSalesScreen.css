@@ -360,3 +360,13 @@
   margin-right: 2px;
 }
 .pos2-bill:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ปุ่มพิมพ์ใบครัวซ้ำ บนหัวข้อ "ส่งครัวแล้ว" */
+.pos2-reprint {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--pos2-primary);
+  background: #ffffff; color: var(--pos2-primary-dark);
+}
+.pos2-reprint:hover { background: var(--pos2-primary); color: #ffffff; }

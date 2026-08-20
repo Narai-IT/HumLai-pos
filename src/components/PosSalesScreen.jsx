@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RefreshCw, LogOut, Settings, Trash2, Plus, Minus,
-  MoreHorizontal, Globe, Receipt
+  MoreHorizontal, Globe, Receipt, Printer
 } from 'lucide-react';
 import FoodCard from './FoodCard';
 import './PosSalesScreen.css';
@@ -28,7 +28,7 @@ const PosSalesScreen = ({
   activeCategory, setActiveCategory,
   cart = [],
   onOrderClick, onUpdateQuantity, onRemoveFromCart, onUpdateNote, onClearCart,
-  onSendOrder, onCheckout, onDeleteTableItem,
+  onSendOrder, onCheckout, onDeleteTableItem, onPrintKitchen,
   resolvePrice,
   customerType, setCustomerType,
   customerName, setCustomerName,
@@ -479,7 +479,16 @@ const PosSalesScreen = ({
               <>
                 <div className="pos2-sec-head">
                   <span>🍽️ {t('ส่งครัวแล้ว', 'Sent to kitchen')} ({sentItems.length})</span>
-                  <b>฿{sentTotal.toLocaleString()}</b>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <b>฿{sentTotal.toLocaleString()}</b>
+                    <button
+                      className="pos2-reprint"
+                      title={t('พิมพ์ใบครัวซ้ำ (กระดาษติด/ใบหาย)', 'Reprint kitchen ticket')}
+                      onClick={() => onPrintKitchen(sentItems)}
+                    >
+                      <Printer size={13} />
+                    </button>
+                  </span>
                 </div>
                 {sentItems.map((o, idx) => (
                   <div key={`${o.SessionId}-${o.ItemName}-${idx}`} className="pos2-line-item sent">

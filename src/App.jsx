@@ -30,7 +30,7 @@ const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
-import { getPrinterByType } from './utils/printerRouting';
+import { getPrinterByType, getPrinters, printKitchenOrder } from './utils/printerRouting';
 
 const MENU_ITEMS = [];
 
@@ -46,6 +46,26 @@ const branchPrefix = (b) => {
 const SKIP_LOGIN = true;
 const DEFAULT_ADMIN = { id: 'admin', username: 'admin', branch: 'admin', canCheckout: true, isAdmin: true };
 
+
+// สร้างข้อมูลใบครัวจากแถวของชีต TableOrders
+// ส่งแบบ flattened: ชื่อมี (xN) ต่อท้ายให้เครื่องอ่านจำนวนออก และยัดตัวเลือก/หมายเหตุ
+// ลง subItems เพื่อให้ครัวเห็นครบ (เช่น "📝 ไม่ใส่ผัก")
+const buildKitchenOrder = (rows, tableNo, id, timestamp) => ({
+  id,
+  orderNumber: `โต๊ะ ${tableNo}`,
+  customerDetails: { name: `โต๊ะ ${tableNo}`, address: `โต๊ะ ${tableNo}` },
+  items: rows.map(row => {
+    const qty = Number(row.Quantity) || 1;
+    return {
+      isFlattened: true,
+      name: qty > 1 ? `${row.ItemName} (x${qty})` : row.ItemName,
+      subItems: row.Options ? String(row.Options).split(', ').filter(Boolean) : []
+    };
+  }),
+  total: rows.reduce((sum, r) => sum + (Number(r.ItemPrice) || 0) * (Number(r.Quantity) || 1), 0),
+  status: 'pending',
+  timestamp
+});
 
 function App() {
   const navigate = useNavigate();
@@ -821,6 +841,22 @@ function App() {
     setTableOrders(prev => [...prev, ...newLocalItems]);
     setCart([]);
 
+    // ── พิมพ์ใบครัวทันทีที่กดส่ง ──
+    // แยกใบไปตามเครื่องพิมพ์ที่ตั้งไว้ในแต่ละเมนู (printerId) ไม่ได้ตั้งก็ตกไปเครื่องประเภทครัว
+    // ไม่ await เพื่อไม่ให้การบันทึกลงชีตต้องรอเครื่องพิมพ์ตอบ
+    if (getPrinters().length > 0) {
+      printKitchenOrder(buildKitchenOrder(newLocalItems, tableNumber, sessionId, timestamp), allMenu)
+        .then(res => {
+          // เงียบตอนสำเร็จ แต่ต้องบอกให้รู้ตอนพิมพ์ไม่ออก ไม่งั้นครัวไม่ได้ใบแล้วไม่มีใครรู้
+          if (!res.success) {
+            setSaveAlert({ type: 'error', msg: `⚠️ ส่งรายการเข้าบิลแล้ว แต่พิมพ์ใบครัวไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
+          }
+        })
+        .catch(err => {
+          setSaveAlert({ type: 'error', msg: `⚠️ ส่งรายการเข้าบิลแล้ว แต่พิมพ์ใบครัวไม่สำเร็จ: ${err.message || err}` });
+        });
+    }
+
     try {
       await fetch(GAS_URL, {
         method: 'POST',
@@ -860,6 +896,25 @@ function App() {
       setTimeout(() => fetchOrdersFromSheet(), 1500);
     } catch (e) {
       console.error('Error clearing settled table:', e);
+    }
+  };
+
+  // พิมพ์ใบครัวซ้ำสำหรับรายการที่ส่งไปแล้ว — ใช้ตอนกระดาษติดหรือใบหาย
+  const handlePrintKitchenAgain = async (rows) => {
+    if (!rows || rows.length === 0) return;
+    if (getPrinters().length === 0) {
+      setSaveAlert({ type: 'error', msg: '⚠️ ยังไม่ได้ตั้งค่าเครื่องพิมพ์ — ไปที่ จัดการหลังบ้าน > ตั้งค่าเครื่องพิมพ์' });
+      return;
+    }
+    const res = await printKitchenOrder(
+      buildKitchenOrder(rows, tableNumber, 'reprint-' + Date.now(), getThaiTimeISO()),
+      allMenu
+    );
+    if (res.success) {
+      setSaveAlert({ type: 'success', msg: `🖨️ ส่งใบครัวไปที่เครื่องพิมพ์แล้ว (${res.printed}/${res.total} ใบ)` });
+      setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
+    } else {
+      setSaveAlert({ type: 'error', msg: `⚠️ พิมพ์ใบครัวไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
     }
   };
 
@@ -1333,6 +1388,7 @@ function App() {
               onSendOrder={handleSendOrderToTable}
               onCheckout={handleOpenCheckoutFromTable}
               onDeleteTableItem={handleDeleteTableItem}
+              onPrintKitchen={handlePrintKitchenAgain}
               resolvePrice={resolvePrice}
               customerType={customerType}
               setCustomerType={setCustomerType}
