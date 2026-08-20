@@ -166,11 +166,21 @@ export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData }, t
 // ย้ายหน้าที่นี้ไปให้ Print Server ที่รันค้างอยู่แล้วทำแทน
 // ===============================================================
 
+// Print Server ที่ยังรันโค้ดเวอร์ชันเก่าจะไม่มี route /auto-print → ตอบ 404
+// ต้องบอกให้ชัดว่าต้องอัปเดตแล้วรีสตาร์ท ไม่ใช่ปล่อยให้เห็นแค่เลข error
+export const PRINT_SERVER_OUTDATED_MSG =
+  'Print Server เครื่องนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มีระบบพิมพ์อัตโนมัติ) — อัปเดตโค้ดในเครื่องที่รัน Print Server (git pull) แล้วปิด-เปิด Print Server ใหม่';
+
+// Print Server รองรับการพิมพ์อัตโนมัติไหม — ดูจาก features ที่ /health ตอบกลับมา
+export const supportsAutoPrint = (healthInfo) =>
+  Array.isArray(healthInfo?.features) && healthInfo.features.includes('autoPrint');
+
 const autoPrintFetch = async (path, options = {}, timeoutMs = 10000) => {
   const url = getPrintServerUrl();
   if (isMixedContentBlocked(url)) return { success: false, error: MIXED_CONTENT_MSG };
   try {
     const response = await fetchWithTimeout(`${url}${path}`, options, timeoutMs);
+    if (response.status === 404) return { success: false, error: PRINT_SERVER_OUTDATED_MSG, outdated: true };
     const data = await response.json().catch(() => null);
     if (!data) return { success: false, error: `Print Server ตอบกลับ HTTP ${response.status}` };
     return data;

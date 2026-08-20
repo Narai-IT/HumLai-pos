@@ -12,7 +12,8 @@ import {
   PRINT_SERVER_EVENT,
   getAutoPrint,
   saveAutoPrint,
-  runAutoPrintNow
+  runAutoPrintNow,
+  supportsAutoPrint
 } from '../../utils/printServer';
 
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
@@ -142,10 +143,13 @@ const ManagePrinters = () => {
     return res;
   }, []);
 
+  // เครื่องที่รันโค้ดเก่าไม่มี route /auto-print — อย่าไปยิงให้ได้ 404 เปล่า ๆ
+  const autoPrintReady = health.status === 'online' && supportsAutoPrint(health.info);
+
   useEffect(() => {
-    if (health.status === 'online') refreshAutoPrint();
+    if (autoPrintReady) refreshAutoPrint();
     else setAutoPrint(null);
-  }, [health.status, refreshAutoPrint]);
+  }, [autoPrintReady, refreshAutoPrint]);
 
   // ส่งค่าที่ตั้งไว้ในหน้านี้ (รายการเครื่องพิมพ์ + URL ของ Apps Script) ไปเก็บที่ Print Server
   // Print Server จะได้ดึงออเดอร์และจับคู่เครื่องพิมพ์ได้เองแม้ไม่มีใครเปิดหน้าเว็บ
@@ -491,6 +495,20 @@ const ManagePrinters = () => {
           {health.status !== 'online' ? (
             <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: '10px', padding: '0.7rem 0.85rem', fontSize: '0.82rem', fontWeight: 700 }}>
               ต้องเชื่อมต่อ Print Server ให้ได้ก่อน จึงจะตั้งค่าส่วนนี้ได้
+            </div>
+          ) : !autoPrintReady ? (
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e', borderRadius: '10px', padding: '0.8rem 0.9rem', fontSize: '0.82rem', fontWeight: 700, lineHeight: 1.6 }}>
+              <div style={{ marginBottom: '0.4rem' }}>
+                ⚠️ Print Server เครื่องนี้ยังเป็นเวอร์ชันเก่า (v{health.info?.version || 'ไม่ทราบ'}) ยังไม่มีระบบพิมพ์อัตโนมัติ
+              </div>
+              <div style={{ fontWeight: 600 }}>
+                ที่<strong>เครื่องที่รัน Print Server</strong> ให้ทำตามนี้แล้วค่อยกลับมาหน้านี้:
+                <ol style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem' }}>
+                  <li>ปิด Print Server ที่เปิดค้างอยู่ (ปิดหน้าต่าง start-printer หรือจบ process node)</li>
+                  <li>อัปเดตโค้ดในโฟลเดอร์โปรเจกต์ — <code>git pull</code> (หรือคัดลอกไฟล์ชุดใหม่ทับ ต้องมี <code>server.js</code>, <code>print-ticket.js</code>, <code>auto-print.js</code> ครบ)</li>
+                  <li>เปิดใหม่ด้วย <code>start-printer.bat</code> หรือ <code>node server.js</code></li>
+                </ol>
+              </div>
             </div>
           ) : (
             <>
