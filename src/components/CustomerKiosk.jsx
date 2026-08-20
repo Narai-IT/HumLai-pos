@@ -258,7 +258,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
           </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {/* การ์ดเมนูแบบตาราง 2 คอลัมน์ รูปเป็นสี่เหลี่ยมจัตุรัส — เห็นเมนูได้มากขึ้นต่อหนึ่งหน้าจอ */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', alignItems: 'start' }}>
           {filteredFood.map(food => {
             const inCartItems = cart.filter(c => c.food.id === food.id);
             const inCartQty = inCartItems.reduce((sum, c) => sum + c.quantity, 0);
@@ -273,12 +274,12 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   border: '1px solid #e2e8f0', overflow: 'hidden',
                   boxShadow: '0 6px 20px rgba(0,0,0,0.04)',
                   cursor: 'pointer', transition: 'transform 0.15s',
-                  display: 'flex', flexDirection: 'column',
+                  display: 'flex', flexDirection: 'column', height: '100%',
                   position: 'relative'
                 }}
               >
                 {/* Image Container with high visual impact */}
-                <div style={{ width: '100%', height: '180px', position: 'relative', background: '#f1f5f9' }}>
+                <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative', background: '#f1f5f9' }}>
                   <img
                     src={food.image || `/images/menu/${food.id}.png`}
                     alt={food.name}
@@ -290,21 +291,21 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   
                   {/* Badge & Price tag overlay */}
                   <div style={{
-                    position: 'absolute', bottom: '10px', right: '10px',
+                    position: 'absolute', bottom: '8px', right: '8px',
                     background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(8px)',
-                    color: '#ffffff', padding: '0.4rem 0.85rem', borderRadius: '20px',
-                    fontWeight: '900', fontSize: '1.1rem', border: '1.5px solid rgba(255,255,255,0.2)',
+                    color: '#ffffff', padding: '0.28rem 0.6rem', borderRadius: '20px',
+                    fontWeight: '900', fontSize: '0.92rem', border: '1.5px solid rgba(255,255,255,0.2)',
                     boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
                   }}>
-                    <span style={{ color: '#ea580c', fontSize: '0.85rem', marginRight: '2px' }}>฿</span>
+                    <span style={{ color: '#ea580c', fontSize: '0.75rem', marginRight: '2px' }}>฿</span>
                     {price.toLocaleString()}
                   </div>
 
                   {inCartQty > 0 && (
                     <div style={{
-                      position: 'absolute', top: '10px', right: '10px',
+                      position: 'absolute', top: '8px', right: '8px',
                       background: '#ea580c', color: 'white', fontWeight: '900',
-                      fontSize: '0.85rem', borderRadius: '50%', width: '28px', height: '28px',
+                      fontSize: '0.8rem', borderRadius: '50%', width: '26px', height: '26px',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       boxShadow: '0 4px 10px rgba(234,88,12,0.4)', border: '2px solid white'
                     }}>
@@ -314,13 +315,20 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                 </div>
 
                 {/* Content info */}
-                <div style={{ padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
                   <div>
-                    <h4 style={{ fontSize: '1.1rem', fontWeight: '800', margin: '0 0 0.25rem 0', color: '#0f172a' }}>
+                    {/* ตัดชื่อที่ 2 บรรทัด เพื่อให้การ์ดในแถวเดียวกันสูงเท่ากัน */}
+                    <h4 style={{
+                      fontSize: '0.95rem', fontWeight: '800', margin: 0, color: '#0f172a', lineHeight: 1.3,
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                    }}>
                       {lang === 'th' ? food.name : (food.nameEn || food.name)}
                     </h4>
                     {food.description && (
-                      <p style={{ fontSize: '0.8rem', color: '#64748b', margin: 0, fontWeight: '500' }}>
+                      <p style={{
+                        fontSize: '0.74rem', color: '#64748b', margin: '0.2rem 0 0 0', fontWeight: '500', lineHeight: 1.35,
+                        display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+                      }}>
                         {food.description}
                       </p>
                     )}
@@ -329,11 +337,12 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   <button
                     onClick={(e) => { e.stopPropagation(); handleFoodClick(food); }}
                     style={{
+                      marginTop: 'auto',
                       background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                      color: '#ffffff', border: 'none', borderRadius: '12px',
-                      padding: '0.65rem 1.1rem', fontWeight: '800', fontSize: '0.9rem',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                      boxShadow: '0 4px 12px rgba(217,119,6,0.3)', flexShrink: 0
+                      color: '#ffffff', border: 'none', borderRadius: '11px',
+                      padding: '0.6rem 0.5rem', fontWeight: '800', fontSize: '0.88rem',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                      boxShadow: '0 4px 12px rgba(217,119,6,0.3)', width: '100%', fontFamily: 'inherit'
                     }}
                   >
                     <Plus size={16} /> {lang === 'th' ? 'สั่ง' : 'Add'}
