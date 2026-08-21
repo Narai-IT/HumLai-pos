@@ -89,6 +89,13 @@ const CartModal = ({ cart, onClose, onRemove, onUpdateQuantity, onUpdateNote, on
                       </div>
                     )}
 
+                    {/* รายการที่แยกออกมาจากป๊อปอัพของอีกจาน */}
+                    {item.fromPopupOf && (
+                      <div className="cart-item-from-popup" style={{ color: '#1d4ed8', fontWeight: 700 }}>
+                        {lang === 'th' ? `พ่วงกับ ${item.fromPopupOf}` : `with ${item.fromPopupOf}`}
+                      </div>
+                    )}
+
                     <div className="cart-item-dining">
                       <strong style={{ color: '#0f172a' }}>{lang === 'th' ? 'การรับประทาน:' : 'Dining:'}</strong> {lang === 'th' ? item.dining.name : (item.dining.nameEn || item.dining.name)}
                     </div>

@@ -10,7 +10,8 @@ const popupFieldKeys = () => {
   POPUP_NUMS.forEach(n => {
     keys.push(
       `hasPopup${n}`, `popup${n}Category`, `popup${n}Items`, `popup${n}ItemsMax`,
-      `popup${n}Min`, `popup${n}Max`, `popup${n}Free`, `popup${n}AllowRepeat`
+      `popup${n}Min`, `popup${n}Max`, `popup${n}Free`, `popup${n}AllowRepeat`,
+      `popup${n}Separate`
     );
   });
   return keys;
@@ -28,6 +29,9 @@ export const emptyPopupFields = () => {
     obj[`popup${n}Max`] = 0;
     obj[`popup${n}Free`] = false;
     obj[`popup${n}AllowRepeat`] = true; // เลือกซ้ำได้เป็นค่าเริ่มต้น
+    // แยกเป็นรายการของตัวเองในบิล/ใบครัว แทนที่จะเป็นตัวเลือกใต้เมนูหลัก
+    // ค่าเริ่มต้น = ไม่แยก เพราะป๊อปอัพส่วนใหญ่เป็นตัวเลือก (เผ็ดน้อย/ไข่ดาว) ไม่ใช่จานแยก
+    obj[`popup${n}Separate`] = false;
   });
   return obj;
 };

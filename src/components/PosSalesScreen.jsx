@@ -266,6 +266,8 @@ const PosSalesScreen = ({
       if (found) found.count += 1; else grouped.push({ label, count: 1 });
     });
     grouped.forEach(g => parts.push(g.count > 1 ? `${g.label} ×${g.count}` : g.label));
+    // รายการที่แยกออกมาจากป๊อปอัพของอีกจาน — บอกว่าพ่วงมากับจานไหน
+    if (item.fromPopupOf) parts.push(t(`พ่วงกับ ${item.fromPopupOf}`, `with ${item.fromPopupOf}`));
     if (item.dining && item.dining.name) parts.push(item.dining.name);
     if (item.customerName) parts.push(`${t('ลูกค้า', 'Customer')}: ${item.customerName}`);
     return parts.join(' · ');

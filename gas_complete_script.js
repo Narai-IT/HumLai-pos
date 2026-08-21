@@ -399,6 +399,8 @@ function itemOptionText(item) {
   if (item.spice && item.spice.name) parts.push('ความเผ็ด: ' + item.spice.name);
   if (item.allPopups && item.allPopups.length > 0) item.allPopups.forEach(function(p) { parts.push(p.name); });
   if (item.promo && item.promo.id !== 'none' && item.promo.name) parts.push(item.promo.name);
+  // รายการที่แยกออกมาจากป๊อปอัพ — บอกครัวว่าสั่งพ่วงมากับจานไหน
+  if (item.fromPopupOf) parts.push('พ่วงกับ ' + item.fromPopupOf);
   if (item.note && String(item.note).trim()) parts.push('📝 ' + String(item.note).trim());
   return parts.join(', ');
 }

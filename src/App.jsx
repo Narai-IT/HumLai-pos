@@ -694,6 +694,32 @@ function App() {
     }
   };
 
+  // เพิ่ม 1 รายการลงตะกร้า — ถ้ามีรายการเหมือนกันเป๊ะอยู่แล้ว (เมนู/ราคา/ตัวเลือก/ชื่อลูกค้า/การรับประทาน)
+  // ให้บวกจำนวนแทนการเพิ่มบรรทัดใหม่
+  const mergeIntoCart = (list, { food, popups = [], customerName: name = '', spice, promo, dining, fromPopupOf }) => {
+    const popupsIds = popups.map(p => p.id).sort().join('-') || 'no_popups';
+    const cartItemId = `${food.id}_${food.priceName || ''}_${name}_${popupsIds}_${spice?.id}_${promo?.id}_${dining?.id}_${fromPopupOf || ''}`;
+    const existingIndex = list.findIndex(item => item.cartItemId === cartItemId);
+    if (existingIndex >= 0) {
+      const next = [...list];
+      next[existingIndex] = { ...next[existingIndex], quantity: next[existingIndex].quantity + 1 };
+      return next;
+    }
+    return [...list, {
+      cartId: Date.now() + Math.random(),
+      cartItemId,
+      food,
+      quantity: 1,
+      customerName: name,
+      allPopups: popups,
+      spice,
+      promo,
+      dining,
+      // มาจากป๊อปอัพของเมนูไหน — ใช้โชว์ในตะกร้าว่าสั่งพ่วงมากับจานไหน
+      fromPopupOf: fromPopupOf || null
+    }];
+  };
+
   const handleConfirmOrder = (rawFood, orderDetails) => {
     // ราคาฐานมาจากราคาที่เลือกจาก popup (ถ้าเลือกไว้) หรือจาก "ประเภทลูกค้า" (fallback = ราคาปกติ)
     const chosen = orderDetails?.selectedPrice || resolvePrice(rawFood);
@@ -711,26 +737,28 @@ function App() {
     }
     const orderCustomerName = customerName.trim();
     const allPopupsWithBundled = [...(orderDetails.allPopups || []), ...bundledPopups];
-    const popupsIds = allPopupsWithBundled.map(p => p.id).sort().join('-') || 'no_popups';
-    const cartItemId = `${baseFood.id}_${baseFood.priceName || ''}_${orderCustomerName}_${popupsIds}_${orderDetails.spice?.id}_${orderDetails.promo?.id}_${orderDetails.dining?.id}`;
-    const existingItemIndex = cart.findIndex(item => item.cartItemId === cartItemId);
-    let newCart;
-    if (existingItemIndex >= 0) {
-      newCart = [...cart];
-      newCart[existingItemIndex].quantity += 1;
-    } else {
-      newCart = [...cart, {
-        cartId: Date.now() + Math.random(),
-        cartItemId,
-        food: baseFood,
-        quantity: 1,
+
+    let newCart = mergeIntoCart(cart, {
+      food: baseFood,
+      popups: allPopupsWithBundled,
+      customerName: orderCustomerName,
+      spice: orderDetails.spice,
+      promo: orderDetails.promo,
+      dining: orderDetails.dining
+    });
+
+    // ป๊อปอัพที่ตั้งให้ "แยกเป็นรายการต่างหาก" — ลงตะกร้าเป็นรายการของตัวเอง
+    // จะได้ขึ้นเป็นคนละบรรทัดในบิล/ใบครัว และวิ่งไปเครื่องพิมพ์ของเมนูตัวเองได้
+    (orderDetails.separateItems || []).forEach(row => {
+      newCart = mergeIntoCart(newCart, {
+        food: row.food,
+        popups: row.options || [],
         customerName: orderCustomerName,
-        allPopups: allPopupsWithBundled,
-        spice: orderDetails.spice,
-        promo: orderDetails.promo,
-        dining: orderDetails.dining
-      }];
-    }
+        dining: orderDetails.dining,
+        fromPopupOf: baseFood.name
+      });
+    });
+
     setCart(newCart);
     setSelectedFood(null);
   };
@@ -798,6 +826,8 @@ function App() {
         grouped.forEach(g => parts.push(g.count > 1 ? `${g.name} ×${g.count}` : g.name));
       }
       if (item.promo && item.promo.id !== 'none' && item.promo.name) parts.push(item.promo.name);
+      // รายการที่แยกออกมาจากป๊อปอัพ — บอกครัวว่าสั่งพ่วงมากับจานไหน
+      if (item.fromPopupOf) parts.push('พ่วงกับ ' + item.fromPopupOf);
       if (item.note && item.note.trim()) parts.push('📝 ' + item.note.trim());
 
       let unitPrice = Number(item.food.price) || 0;

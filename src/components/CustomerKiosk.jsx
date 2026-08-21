@@ -111,14 +111,30 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   const handleConfirmWizardOrder = (rawFood, orderDetails) => {
     const chosenPrice = orderDetails?.selectedPrice;
     const baseFood = chosenPrice ? { ...rawFood, price: Number(chosenPrice.price) || 0, priceName: chosenPrice.name } : rawFood;
-    
-    setCart([...cart, {
+    const dining = orderDetails.dining || { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
+
+    const rows = [{
       cartId: Date.now() + Math.random(),
       food: baseFood,
       quantity: 1,
       allPopups: orderDetails.allPopups || [],
-      dining: orderDetails.dining || { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' }
-    }]);
+      dining
+    }];
+
+    // ป๊อปอัพที่ตั้งให้ "แยกเป็นรายการต่างหาก" — ลงตะกร้าเป็นรายการของตัวเอง
+    // จะได้ขึ้นคนละบรรทัดในบิล/ใบครัว เหมือนฝั่งพนักงานสั่ง
+    (orderDetails.separateItems || []).forEach((row, idx) => {
+      rows.push({
+        cartId: Date.now() + Math.random() + idx + 1,
+        food: row.food,
+        quantity: 1,
+        allPopups: row.options || [],
+        dining,
+        fromPopupOf: baseFood.name
+      });
+    });
+
+    setCart([...cart, ...rows]);
     setSelectedFood(null);
   };
 
