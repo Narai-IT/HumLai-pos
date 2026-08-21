@@ -788,13 +788,13 @@ const ManageMenu = () => {
                               {/* แยกเป็นรายการของตัวเอง หรือเป็นตัวเลือกใต้เมนูหลัก */}
                               <div className="admin-form-group" style={{ marginBottom: '0.5rem' }}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', marginBottom: 0 }}>
-                                  <input type="checkbox" checked={editingItem[separateProp] === true} onChange={e => setEditingItem({ ...editingItem, [separateProp]: e.target.checked })} style={{ width: 'auto', marginBottom: 0 }} />
+                                  <input type="checkbox" checked={editingItem[separateProp] !== false} onChange={e => setEditingItem({ ...editingItem, [separateProp]: e.target.checked })} style={{ width: 'auto', marginBottom: 0 }} />
                                   <span style={{ fontSize: '0.85rem' }}>{lang === 'th' ? 'แยกเป็นรายการต่างหาก (ขึ้นคนละบรรทัดในบิล/ใบครัว)' : 'List as its own order line'}</span>
                                 </label>
                                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '1.5rem' }}>
                                   {lang === 'th'
-                                    ? 'เหมาะกับป๊อปอัพที่ดึงเมนูจริง (เครื่องดื่ม/ข้าวสวย) — จะได้แยกใบและวิ่งไปเครื่องพิมพ์ของเมนูนั้นเอง ถ้าไม่ติ๊ก = เป็นตัวเลือกห้อยใต้เมนูหลักเหมือนเดิม'
-                                    : 'Best for popups that pull real menu items — each becomes its own line and routes to that item’s printer.'}
+                                    ? 'ค่าเริ่มต้นคือแยก — รายการฟรีจะขึ้นเป็น ฿0 รายการที่คิดเงินจะติดราคาของตัวเองไปด้วย และวิ่งไปเครื่องพิมพ์ของเมนูนั้นเอง ติ๊กออกถ้าเป็นตัวเลือกล้วน ๆ (เผ็ดน้อย/ไข่ดาว) ที่อยากให้ห้อยใต้เมนูหลัก'
+                                    : 'On by default — free picks show as ฿0, paid picks carry their own price, and each routes to that item’s printer. Untick for pure options (spice level, fried egg).'}
                                 </div>
                               </div>
                               {/* เลือกซ้ำได้ / ไม่ได้ */}

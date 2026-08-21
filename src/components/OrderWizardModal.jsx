@@ -74,7 +74,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
       allowRepeat: categoryConfig[`popup${n}AllowRepeat`] !== false,
       isFree,
       // แยกเป็นรายการของตัวเองในบิล/ใบครัว แทนที่จะเป็นตัวเลือกใต้เมนูหลัก
-      separate: categoryConfig[`popup${n}Separate`] === true
+      // ไม่ได้ตั้งค่าไว้ = แยก (ค่าตั้งต้น) ต้องติ๊กออกเองถ้าอยากให้เป็นตัวเลือกห้อยใต้เมนูหลัก
+      separate: categoryConfig[`popup${n}Separate`] !== false
     };
   };
 
@@ -443,9 +444,13 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     })}
                   </div>
                 )}
-                <div className="option-price" style={{ color: '#ea580c', fontWeight: '800' }}>
-                  {addon.price > 0 ? `+฿${addon.price}` : ''}
-                  {nested && addon.price <= 0 && picks.length === 0 ? (lang === 'th' ? 'กดเพื่อเลือก' : 'tap to choose') : ''}
+                <div className="option-price" style={{ color: addon.price > 0 ? '#ea580c' : '#16a34a', fontWeight: '800' }}>
+                  {/* ป๊อปอัพที่แยกรายการ = เป็นจานของตัวเอง จึงโชว์ราคาเต็มของรายการนั้น (ฟรีก็เป็น ฿0)
+                      ส่วนป๊อปอัพที่เป็นตัวเลือกใต้เมนูหลัก ยังโชว์เป็นส่วนที่บวกเพิ่ม (+฿) เหมือนเดิม */}
+                  {config.separate
+                    ? (addon.price > 0 ? `฿${addon.price}` : (lang === 'th' ? 'ฟรี ฿0' : 'Free ฿0'))
+                    : (addon.price > 0 ? `+฿${addon.price}` : '')}
+                  {nested && addon.price <= 0 && picks.length === 0 && !config.separate ? (lang === 'th' ? 'กดเพื่อเลือก' : 'tap to choose') : ''}
                 </div>
               </div>
             );

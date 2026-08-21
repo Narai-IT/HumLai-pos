@@ -624,6 +624,12 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                             {item.allPopups.map(p => p.name).join(', ')}
                           </div>
                         )}
+                        {/* รายการที่แยกออกมาจากป๊อปอัพของอีกจาน */}
+                        {item.fromPopupOf && (
+                          <div style={{ fontSize: '0.72rem', color: '#1d4ed8', fontWeight: 700 }}>
+                            {lang === 'th' ? `พ่วงกับ ${item.fromPopupOf}` : `with ${item.fromPopupOf}`}
+                          </div>
+                        )}
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
