@@ -82,21 +82,45 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     return () => { cancelled = true; };
   }, [isCheckoutOpen, cartSubtotal, qrType, kshopRawPayload, promptPayId]);
 
-  const handleAddToCartDirect = (food) => {
-    const existingIndex = cart.findIndex(c => c.food.id === food.id && (!c.allPopups || c.allPopups.length === 0));
-    if (existingIndex >= 0) {
-      const updated = [...cart];
-      updated[existingIndex].quantity += 1;
-      setCart(updated);
-    } else {
-      setCart([...cart, {
-        cartId: Date.now() + Math.random(),
-        food,
+  // เมนูที่เพิ่มอัตโนมัติเมื่อสั่ง (Bundled Items) = เมนูจริงที่แถมไปกับจานนี้
+  // ลงตะกร้าเป็นรายการของตัวเองราคา ฿0 เหมือนฝั่งพนักงานสั่ง ครัวจะได้เห็นเป็นคนละรายการ
+  const bundledRowsFor = (food, dining) => {
+    const ids = Array.isArray(food.bundledItems) ? food.bundledItems : [];
+    const rows = [];
+    ids.forEach((bundledId, idx) => {
+      const bundledFood = liveMenu.find(m => String(m.id) === String(bundledId));
+      if (!bundledFood) return;
+      rows.push({
+        cartId: Date.now() + Math.random() + idx,
+        food: { ...bundledFood, price: 0, priceName: '', isBundled: true },
         quantity: 1,
         allPopups: [],
-        dining: { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' }
-      }]);
-    }
+        dining,
+        fromPopupOf: food.name
+      });
+    });
+    return rows;
+  };
+
+  // รายการที่เหมือนกันเป๊ะ (เมนูเดียวกัน ไม่มีตัวเลือก มาจากจานเดียวกัน) ให้บวกจำนวนแทนเพิ่มบรรทัดซ้ำ
+  const mergeRow = (list, row) => {
+    const plain = (r) => !r.allPopups || r.allPopups.length === 0;
+    const idx = list.findIndex(c =>
+      String(c.food.id) === String(row.food.id) &&
+      (c.fromPopupOf || '') === (row.fromPopupOf || '') &&
+      plain(c) && plain(row)
+    );
+    if (idx >= 0) return list.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + row.quantity } : c));
+    return [...list, row];
+  };
+
+  const handleAddToCartDirect = (food) => {
+    const dining = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
+    const rows = [
+      { cartId: Date.now() + Math.random(), food, quantity: 1, allPopups: [], dining },
+      ...bundledRowsFor(food, dining)
+    ];
+    setCart(rows.reduce(mergeRow, cart));
   };
 
   const handleFoodClick = (food) => {
@@ -134,7 +158,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       });
     });
 
-    setCart([...cart, ...rows]);
+    setCart([...rows, ...bundledRowsFor(baseFood, dining)].reduce(mergeRow, cart));
     setSelectedFood(null);
   };
 

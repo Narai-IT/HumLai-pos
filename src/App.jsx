@@ -726,21 +726,22 @@ function App() {
     const baseFood = chosen
       ? { ...rawFood, price: Number(chosen.price) || 0, priceName: chosen.name || '' }
       : rawFood;
-    const bundledPopups = [];
+    // เมนูที่เพิ่มอัตโนมัติเมื่อสั่ง (Bundled Items) = เมนูจริงที่แถมไปกับจานนี้
+    // ลงตะกร้าเป็นรายการของตัวเองราคา ฿0 ครัวจะได้เห็นเป็นคนละรายการ และวิ่งไปเครื่องพิมพ์ของเมนูนั้นเอง
+    const bundledFoods = [];
     if (baseFood.bundledItems && baseFood.bundledItems.length > 0) {
       baseFood.bundledItems.forEach(bundledId => {
         const bundledFood = liveMenu.find(m => String(m.id) === String(bundledId));
         if (bundledFood) {
-          bundledPopups.push({ ...bundledFood, id: `bundled_${bundledFood.id}`, price: 0, isBundled: true });
+          bundledFoods.push({ ...bundledFood, price: 0, priceName: '', isBundled: true });
         }
       });
     }
     const orderCustomerName = customerName.trim();
-    const allPopupsWithBundled = [...(orderDetails.allPopups || []), ...bundledPopups];
 
     let newCart = mergeIntoCart(cart, {
       food: baseFood,
-      popups: allPopupsWithBundled,
+      popups: orderDetails.allPopups || [],
       customerName: orderCustomerName,
       spice: orderDetails.spice,
       promo: orderDetails.promo,
@@ -753,6 +754,17 @@ function App() {
       newCart = mergeIntoCart(newCart, {
         food: row.food,
         popups: row.options || [],
+        customerName: orderCustomerName,
+        dining: orderDetails.dining,
+        fromPopupOf: baseFood.name
+      });
+    });
+
+    // เมนูแถม — รายการของตัวเองราคา ฿0 (ซ้ำ id เดิมหลายครั้ง = จำนวนหลายชิ้น จะถูกรวมเป็นจำนวนให้เอง)
+    bundledFoods.forEach(bundledFood => {
+      newCart = mergeIntoCart(newCart, {
+        food: bundledFood,
+        popups: [],
         customerName: orderCustomerName,
         dining: orderDetails.dining,
         fromPopupOf: baseFood.name
