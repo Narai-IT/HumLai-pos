@@ -31,6 +31,7 @@ const PosSalesScreen = ({
   onSendOrder, onCheckout, onDeleteTableItem, onPrintKitchen, onPrintPreBill,
   discounts = [],
   resolvePrice,
+  hasPriceForCustomerType = () => true,
   customerType, setCustomerType,
   customerName, setCustomerName,
   settings = {},
@@ -163,15 +164,24 @@ const PosSalesScreen = ({
     onOrderClick(food);
   };
 
+  // ── เมนูที่ขายได้จริงในประเภทการขายที่เลือกอยู่ ──
+  // เมนูที่ยังไม่ได้ตั้งราคาของประเภทนั้น (เช่นไม่มีราคา Takehome) ให้ซ่อนไปเลย
+  // ไม่งั้นพนักงานกดสั่งแล้วได้ราคาปกติมาโดยไม่รู้ตัว
+  const sellableMenu = useMemo(
+    () => liveMenu.filter(m => hasPriceForCustomerType(m)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [liveMenu, customerType]
+  );
+
   // ── ค้นหาเมนูแล้วกดเพิ่มลงตะกร้าได้เลย ──
   const [query, setQuery] = useState('');
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return liveMenu
+    return sellableMenu
       .filter(m => String(m.name || '').toLowerCase().includes(q) || String(m.nameEn || '').toLowerCase().includes(q))
       .slice(0, 20);
-  }, [query, liveMenu]);
+  }, [query, sellableMenu]);
 
   // ── ตะกร้า ──
   const unitPrice = (item) => {
@@ -283,8 +293,17 @@ const PosSalesScreen = ({
     return () => document.removeEventListener('mousedown', close);
   }, [moreOpen]);
 
-  const visibleCats = categories.filter(c => liveMenu.some(i => itemInCategory(i, c.slug)));
-  const gridItems = liveMenu.filter(i => itemInCategory(i, activeCategory));
+  const visibleCats = categories.filter(c => sellableMenu.some(i => itemInCategory(i, c.slug)));
+  const gridItems = sellableMenu.filter(i => itemInCategory(i, activeCategory));
+  const visibleCatKey = visibleCats.map(c => c.slug).join('|');
+
+  // เปลี่ยนประเภทการขายแล้วหมวดที่เปิดค้างไว้อาจไม่เหลือเมนูเลย — เด้งไปหมวดแรกที่ยังมีของ
+  useEffect(() => {
+    if (visibleCats.length > 0 && !visibleCats.some(c => c.slug === activeCategory)) {
+      setActiveCategory(visibleCats[0].slug);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCatKey, activeCategory]);
 
   return (
     <div className="pos2">
@@ -469,7 +488,12 @@ const PosSalesScreen = ({
               ))}
             </div>
             {gridItems.length === 0 && (
-              <div className="pos2-empty">{t('ไม่มีรายการในหมวดหมู่นี้', 'No items in this category')}</div>
+              <div className="pos2-empty">
+                {customerType
+                  ? t(`ไม่มีเมนูที่ตั้งราคา ${customerType} ไว้ในหมวดหมู่นี้`,
+                       `No item in this category has a ${customerType} price`)
+                  : t('ไม่มีรายการในหมวดหมู่นี้', 'No items in this category')}
+              </div>
             )}
           </div>
         </div>

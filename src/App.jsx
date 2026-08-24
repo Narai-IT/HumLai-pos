@@ -651,20 +651,28 @@ function App() {
     return ['', 'Takehome', 'Deli'];
   }, []);
 
+  // ราคาที่เมนูตั้งไว้สำหรับ "ประเภทลูกค้า/ช่องทาง" ที่เลือกอยู่ — ไม่ได้ตั้งไว้คืน null
+  const priceForCustomerType = (food) => {
+    if (!customerType) return null;
+    const target = customerType.trim().toLowerCase();
+    return getPriceOptions(food).find(o => {
+      const name = (o.name || '').trim().toLowerCase();
+      if (name === target) return true;
+      if (target === 'takehome' && ['takehome', 'ห่อกลับบ้าน', 'กลับบ้าน', 'takeaway', 'take home'].includes(name)) return true;
+      if (target === 'deli' && ['deli', 'delivery', 'lineman', 'grab', 'shopee', 'เดลิเวอรี่'].includes(name)) return true;
+      return false;
+    }) || null;
+  };
+
+  // เมนูนี้ขายในประเภทที่เลือกอยู่ได้ไหม — ขายราคาปกติถือว่าขายได้ทุกเมนู
+  // ใช้ซ่อนเมนูที่ยังไม่ได้ตั้งราคา Takehome/Deli ออกจากหน้าขาย จะได้ไม่เผลอคีย์ผิดราคา
+  const hasPriceForCustomerType = (food) => !customerType || !!priceForCustomerType(food);
+
   // ราคาตาม "ประเภทลูกค้า/ช่องทาง" ที่เลือก — ถ้าเมนูไม่มีประเภทนั้น ใช้ราคาปกติแทน
   const resolvePrice = (food) => {
+    const match = priceForCustomerType(food);
+    if (match) return match;
     const opts = getPriceOptions(food);
-    if (customerType) {
-      const target = customerType.trim().toLowerCase();
-      const match = opts.find(o => {
-        const name = (o.name || '').trim().toLowerCase();
-        if (name === target) return true;
-        if (target === 'takehome' && ['takehome', 'ห่อกลับบ้าน', 'กลับบ้าน', 'takeaway', 'take home'].includes(name)) return true;
-        if (target === 'deli' && ['deli', 'delivery', 'lineman', 'grab', 'shopee', 'เดลิเวอรี่'].includes(name)) return true;
-        return false;
-      });
-      if (match) return match;
-    }
     return opts.find(o => (o.name || '').trim() === 'ปกติ') || opts[0];
   };
 
@@ -1447,6 +1455,7 @@ function App() {
               onPrintPreBill={handlePrintPreBill}
               discounts={posDiscounts}
               resolvePrice={resolvePrice}
+              hasPriceForCustomerType={hasPriceForCustomerType}
               customerType={customerType}
               setCustomerType={setCustomerType}
               customerName={customerName}
