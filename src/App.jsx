@@ -646,11 +646,6 @@ function App() {
     setCart([]);
   }, [tableNumber]);
 
-  // รายการ "ประเภทลูกค้า / ช่องทาง" ทั้งหมด (ราคาขายปกติ / TAKEHOME / DELI)
-  const customerTypeOptions = React.useMemo(() => {
-    return ['', 'Takehome', 'Deli'];
-  }, []);
-
   // ราคาที่เมนูตั้งไว้สำหรับ "ประเภทลูกค้า/ช่องทาง" ที่เลือกอยู่ — ไม่ได้ตั้งไว้คืน null
   const priceForCustomerType = (food) => {
     if (!customerType) return null;
@@ -1425,7 +1420,6 @@ function App() {
               customerName={customerName}
               setCustomerName={setCustomerName}
               onSelectTable={() => setTableNumber('')}
-              customerTypeOptions={customerTypeOptions}
             />
         } />
 

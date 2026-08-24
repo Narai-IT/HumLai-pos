@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ShoppingBag, Plus, CreditCard, Trash2, ChevronLeft, RefreshCw, Split, AlertTriangle, LayoutGrid, CheckCircle2 } from 'lucide-react';
+import { readTablesConfig, saleTypesForTable } from '../utils/salePricing';
 
 const calcCharges = (subtotal, settings = {}) => {
   const scRate = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
@@ -28,7 +29,6 @@ const TableOrderView = ({
   setCustomerType,
   customerName = '',
   setCustomerName,
-  customerTypeOptions = [''],
   onCloseTable
 }) => {
   const [showActionModal, setShowActionModal] = useState(false);
@@ -37,6 +37,13 @@ const TableOrderView = ({
   const [confirmStage, setConfirmStage] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState([]);
   
+  // ประเภทการขายที่โต๊ะนี้ใช้ได้ — ล็อกตาม priceTier ที่ตั้งไว้หลังบ้าน เหมือนหน้าขาย
+  const saleTypeOptions = useMemo(
+    () => saleTypesForTable(tableNumber, readTablesConfig()),
+    [tableNumber]
+  );
+  const saleTypeLocked = !!tableNumber && saleTypeOptions.length === 1;
+
   const [showEditCustomerModal, setShowEditCustomerModal] = useState(false);
   const [currentCount, setCurrentCount] = useState(() => localStorage.getItem('customer_count_' + tableNumber) || '');
   const [editCustomerCount, setEditCustomerCount] = useState(1);
@@ -267,18 +274,27 @@ const TableOrderView = ({
         </span>
         <select
           value={customerType}
+          disabled={saleTypeLocked}
           onChange={(e) => setCustomerType && setCustomerType(e.target.value)}
+          title={saleTypeLocked
+            ? (lang === 'th'
+              ? 'ประเภทการขายถูกกำหนดจากโต๊ะที่เลือก แก้ได้ที่หลังบ้าน > จัดการโต๊ะ'
+              : 'Sale type comes from the selected table — change it in Admin > Tables')
+            : undefined}
           style={{
             padding: '0.5rem 0.75rem', borderRadius: '8px',
-            background: '#ffffff', color: '#0f172a',
+            background: saleTypeLocked ? '#f1f5f9' : '#ffffff', color: '#0f172a',
             border: '2px solid #cbd5e1', fontSize: '0.9rem',
-            fontWeight: 700, cursor: 'pointer', maxWidth: '240px',
+            fontWeight: 700, cursor: saleTypeLocked ? 'default' : 'pointer', maxWidth: '240px',
+            opacity: 1,
             boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
           }}
         >
-          <option value="" style={{ color: '#000000', fontWeight: 'bold' }}>🪑 ราคาขายปกติ</option>
-          <option value="Takehome" style={{ color: '#000000', fontWeight: 'bold' }}>🛍️ TAKEHOME</option>
-          <option value="Deli" style={{ color: '#000000', fontWeight: 'bold' }}>🛵 DELI</option>
+          {saleTypeOptions.map(o => (
+            <option key={o.value} value={o.value} style={{ color: '#000000', fontWeight: 'bold' }}>
+              {lang === 'th' ? o.th : o.en}
+            </option>
+          ))}
         </select>
         <input
           type="text"

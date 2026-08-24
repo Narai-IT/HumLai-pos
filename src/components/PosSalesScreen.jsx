@@ -4,21 +4,11 @@ import {
   MoreHorizontal, Globe, Receipt, Printer, Tag, X
 } from 'lucide-react';
 import FoodCard from './FoodCard';
+import { sameTable, readTablesConfig, priceTypeForTable, saleTypesForTable } from '../utils/salePricing';
 import './PosSalesScreen.css';
-
-// ประเภทการขาย — ค่าที่ส่งออกคือ customerType ซึ่งเป็นตัวกำหนดชุดราคาของทุกเมนู
-// '' = ราคาปกติ, 'Takehome' = ราคาห่อกลับบ้าน, 'Deli' = ราคาเดลิเวอรี่
-export const SALE_TYPES = [
-  { value: '',         th: '🍽️ ทานที่ร้าน',  en: '🍽️ Dine-in' },
-  { value: 'Takehome', th: '🛍️ ห่อกลับบ้าน', en: '🛍️ Takeaway' },
-  { value: 'Deli',     th: '🛵 เดลิเวอรี่',   en: '🛵 Delivery' }
-];
 
 // โต๊ะที่มีของค้างนานเกินเท่านี้ (นาที) จะขึ้นสีส้มเตือน
 const LATE_MINUTES = 90;
-
-const sameTable = (a, b) =>
-  String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
 
 const PosSalesScreen = ({
   lang, setLang,
@@ -45,10 +35,8 @@ const PosSalesScreen = ({
   // ── โต๊ะที่ตั้งค่าไว้หลังบ้าน (แหล่งเดียวกับหน้าเลือกโต๊ะ) ──
   const [configuredTables, setConfiguredTables] = useState([]);
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem('pos_tables_config') || '[]');
-      if (Array.isArray(saved) && saved.length > 0) setConfiguredTables(saved.filter(x => x.active !== false));
-    } catch { /* ไม่มีค่าที่ตั้งไว้ → ใช้ค่าเริ่มต้นด้านล่าง */ }
+    const saved = readTablesConfig();
+    if (saved.length > 0) setConfiguredTables(saved);
   }, []);
 
   const zones = useMemo(() => {
@@ -103,18 +91,21 @@ const PosSalesScreen = ({
   };
 
   // ชุดราคาที่ควรใช้เมื่อเลือกโต๊ะในโซนนั้น ๆ
-  const priceTypeForTable = (name) => {
-    const cfg = configuredTables.find(x => sameTable(x.name, name));
-    if (cfg) {
-      if (cfg.priceTier === 'takehome') return 'Takehome';
-      if (cfg.priceTier === 'deli') return 'Deli';
-      return '';
-    }
-    const s = String(name).toLowerCase();
-    if (s.startsWith('takehome') || s.includes('กลับบ้าน')) return 'Takehome';
-    if (['lineman', 'grab', 'shopee', 'deli', 'delivery'].some(d => s.includes(d))) return 'Deli';
-    return '';
-  };
+  const tierOfTable = (name) => priceTypeForTable(name, configuredTables);
+
+  // ประเภทการขายที่เลือกได้ของโต๊ะที่เปิดอยู่ — ล็อกตาม priceTier ของโต๊ะ
+  // ประเภทที่โต๊ะนี้ไม่มีจะไม่ขึ้นในช่องเลือกเลย จะได้ไม่เผลอสลับไปคิดผิดชุดราคา
+  const saleTypeOptions = saleTypesForTable(tableNumber, configuredTables);
+  const saleTypeLocked = !!tableNumber && saleTypeOptions.length === 1;
+
+  // โต๊ะถูกเปิดจากหน้าอื่น (เช่นหน้าเลือกโต๊ะ) ประเภทการขายอาจค้างของโต๊ะเก่า
+  // ดึงกลับมาให้ตรงกับโต๊ะที่เปิดอยู่เสมอ ไม่งั้นช่องเลือกจะโชว์ค่าว่าง
+  useEffect(() => {
+    if (!tableNumber) return;
+    const tier = tierOfTable(tableNumber);
+    if (customerType !== tier) setCustomerType(tier);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableNumber, configuredTables]);
 
   // รายการในบิลที่ถูกแตะ เพื่อเลือกว่าจะพิมพ์ซ้ำหรือยกเลิก
   const [actionItem, setActionItem] = useState(null);
@@ -139,7 +130,7 @@ const PosSalesScreen = ({
       'The cart still has unsent items. Switching tables clears them. Continue?'
     ))) return;
 
-    const tier = priceTypeForTable(name);
+    const tier = tierOfTable(name);
     // โต๊ะทานที่ร้านที่ยังไม่มีรายการ = เปิดโต๊ะใหม่ → ถามจำนวนลูกค้าไว้ขึ้นบิล
     if (tier === '' && tableState(name).count === 0) {
       setPendingTable(name);
@@ -154,7 +145,7 @@ const PosSalesScreen = ({
     if (!name) return;
     if (!skip) localStorage.setItem('customer_count_' + name, String(guestCount));
     setPendingTable(null);
-    openTable(name, priceTypeForTable(name));
+    openTable(name, tierOfTable(name));
   };
 
   // สั่งอาหารได้ต่อเมื่อเปิดกะและเลือกโต๊ะแล้ว — กันคีย์ของลอยแล้วหายตอนเลือกโต๊ะทีหลัง
@@ -511,10 +502,14 @@ const PosSalesScreen = ({
             <select
               className="pos2-type-select"
               value={customerType}
+              disabled={saleTypeLocked}
               onChange={(e) => setCustomerType(e.target.value)}
-              title={t('ประเภทการขาย — กำหนดชุดราคาของทุกเมนู', 'Sale type — sets the price tier')}
+              title={saleTypeLocked
+                ? t('ประเภทการขายถูกกำหนดจากโต๊ะที่เลือก แก้ได้ที่หลังบ้าน > จัดการโต๊ะ',
+                    'Sale type comes from the selected table — change it in Admin > Tables')
+                : t('ประเภทการขาย — กำหนดชุดราคาของทุกเมนู', 'Sale type — sets the price tier')}
             >
-              {SALE_TYPES.map(o => (
+              {saleTypeOptions.map(o => (
                 <option key={o.value} value={o.value}>{lang === 'th' ? o.th : o.en}</option>
               ))}
             </select>
