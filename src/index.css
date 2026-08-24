@@ -776,6 +776,16 @@ body {
   font-size: 1.05rem;
 }
 
+/* รายละเอียดเมนูในป๊อปอัพ — บรรทัดใต้ชื่อ ตัวเล็กกว่าและสีอ่อนกว่า */
+.option-card .option-desc {
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.35;
+  color: #64748b;
+  margin: -0.3rem 0 0.45rem;
+  white-space: pre-line;
+}
+
 .option-card .option-price {
   color: var(--accent);
   font-size: 0.9rem;

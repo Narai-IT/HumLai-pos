@@ -414,15 +414,21 @@ const PosSalesScreen = ({
                     className={`pos2-table ${st.status} ${current ? 'current' : ''}`}
                     onClick={() => handleTableClick(name)}
                   >
-                    <b>{name}</b>
+                    <b>
+                      <span className="pos2-table-no">{name}</span>
+                      {st.count > 0 && (
+                        <span className="pos2-table-count" title={t('จำนวนออเดอร์', 'Orders')}>
+                          {st.count}
+                        </span>
+                      )}
+                    </b>
                     <small>
                       {st.status === 'free'
                         ? t('ว่าง', 'Free')
                         : st.status === 'prepaid'
-                          ? `💳 ${t('จ่ายแล้ว', 'Paid')} · ${st.count} ${t('รายการ', 'items')}`
-                          : `${st.count} ${t('รายการ', 'items')} · ${st.mins} ${t('นาที', 'min')}`}
+                          ? `💳 ${t('จ่ายแล้ว', 'Paid')}`
+                          : `${st.mins} ${t('นาที', 'min')}`}
                     </small>
-                    {st.count > 0 && <span className="pos2-table-count">{st.count}</span>}
                   </button>
                 );
               })}
@@ -470,6 +476,13 @@ const PosSalesScreen = ({
 
         {/* ── ตะกร้าด้านขวา ── */}
         <aside className="pos2-cart">
+          {/* เลขโต๊ะของบิลที่กำลังคีย์อยู่ — กันคีย์ผิดโต๊ะเวลาสายตาอยู่ที่แผงขวา */}
+          <div className={`pos2-cart-table ${tableNumber ? '' : 'empty'}`}>
+            <span className="pos2-cart-table-label">🪑 {t('โต๊ะ', 'Table')}</span>
+            <span className="pos2-cart-table-no">
+              {tableNumber || t('ยังไม่ได้เลือก', 'not selected')}
+            </span>
+          </div>
           <div className="pos2-cart-head">
             <select
               className="pos2-type-select"

@@ -381,6 +381,9 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             const isSelected = qty > 0;
             // เมนูตัวเลือกที่มีป๊อปอัพของตัวเอง = กดแล้วเปิดป๊อปอัพซ้อนให้เลือกต่อ
             const nested = canOpenNested(addon);
+            const addonDesc = lang === 'th'
+              ? addon.description
+              : (addon.descriptionEn || addon.description);
             const picks = getSubList(stepNum, addon.id);
             return (
               <div
@@ -428,6 +431,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     </span>
                   )}
                 </div>
+                {/* รายละเอียดเมนู — คนละบรรทัดกับชื่อ ตัวเล็กกว่า */}
+                {addonDesc && <div className="option-desc">{addonDesc}</div>}
                 {/* ตัวเลือกย่อยที่เลือกไว้ของแต่ละครั้ง */}
                 {picks.length > 0 && (
                   <div style={{ marginTop: '2px', textAlign: 'left' }}>
