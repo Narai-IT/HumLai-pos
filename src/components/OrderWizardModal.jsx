@@ -16,7 +16,7 @@ const norm = (v) => String(v || '').trim().toLowerCase();
 const MAX_POPUP_DEPTH = 3;
 const isChannelPrice = (name) => TAKEHOME_ALIASES.includes(norm(name)) || DELI_ALIASES.includes(norm(name));
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [] }) => {
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedPopup1, setSelectedPopup1] = useState({});
   const [selectedPopup2, setSelectedPopup2] = useState({});
@@ -62,6 +62,11 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     }
 
     const isFree = categoryConfig[`popup${n}Free`] === true;
+    // ตัวเลือกที่ยังไม่ได้ตั้งราคาของประเภทการขายที่เลือกอยู่ ไม่ต้องเอามาให้เลือก
+    // ยกเว้นป๊อปอัพที่ตั้งเป็นของฟรี — คิด ฿0 อยู่แล้ว ไม่มีทางคีย์ราคาผิด
+    if (!isFree) {
+      items = items.filter(m => hasPriceForCustomerType(m));
+    }
     items = items.map(m => ({ ...m, price: isFree ? 0 : m.price }));
 
     return {
@@ -227,14 +232,13 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     setSubOptions(prev => ({ ...prev, [stepNum]: {} }));
   };
 
+  // ข้ามขั้นตอนป๊อปอัพที่ไม่เหลือตัวเลือกให้เลือกแล้ว (เช่นถูกกรองออกตามประเภทการขาย)
+  // ไม่งั้นจะติดหน้าเปล่า ๆ และถ้าขั้นนั้นตั้ง "ต้องเลือกอย่างน้อย N" ไว้จะกดต่อไม่ได้เลย
+  const stepIsUsable = (n) => categoryConfig[`hasPopup${n}`] === true && stepConfigs[n].items.length > 0;
+
   const validSteps = [
     hasMultiplePrices ? 'price' : null,
-    categoryConfig.hasPopup1 === true ? 1 : null,
-    categoryConfig.hasPopup2 === true ? 2 : null,
-    categoryConfig.hasPopup3 === true ? 3 : null,
-    categoryConfig.hasPopup4 === true ? 4 : null,
-    categoryConfig.hasPopup5 === true ? 5 : null,
-    categoryConfig.hasPopup6 === true ? 6 : null,
+    ...[1, 2, 3, 4, 5, 6].map(n => (stepIsUsable(n) ? n : null)),
     (askDining && !isDrink && categoryConfig.hasDining !== false) ? 7 : null
   ].filter(s => s !== null);
 
@@ -594,6 +598,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
         askDining={false}
         depth={depth + 1}
         ancestorIds={chain}
+        hasPriceForCustomerType={hasPriceForCustomerType}
         onClose={() => setNestedPending(null)}
         onConfirm={handleNestedConfirm}
       />

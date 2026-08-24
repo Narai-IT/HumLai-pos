@@ -1539,6 +1539,7 @@ function App() {
           categories={allCategories.length > 0 ? allCategories : categories}
           basePrice={Number(resolvePrice(selectedFood)?.price) || 0}
           askDining={askDining}
+          hasPriceForCustomerType={hasPriceForCustomerType}
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmOrder}
         />
