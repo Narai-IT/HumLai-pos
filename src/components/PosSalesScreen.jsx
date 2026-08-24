@@ -18,7 +18,7 @@ const PosSalesScreen = ({
   activeCategory, setActiveCategory,
   cart = [],
   onOrderClick, onUpdateQuantity, onRemoveFromCart, onUpdateNote, onClearCart,
-  onSendOrder, onCheckout, onDeleteTableItem, onPrintKitchen, onPrintPreBill,
+  onSendOrder, onCheckout, onDeleteTableItem, onPrintKitchen, onPrintPreBill, onCloseTable,
   discounts = [],
   resolvePrice,
   hasPriceForCustomerType = () => true,
@@ -185,6 +185,17 @@ const PosSalesScreen = ({
       .slice(0, 20);
   }, [query, liveMenu]);
 
+  // ── โต๊ะที่ลูกค้าจ่ายมาเองครบแล้ว = เหลือแค่กดว่าเรียบร้อยเพื่อคืนโต๊ะให้ว่าง ──
+  // ต้องไม่มีของค้างในตะกร้าและไม่มีของที่ต้องเก็บเงิน ไม่งั้นของจะหายไปพร้อมการปิดโต๊ะ
+  const handleCloseSettled = () => {
+    if (!onCloseTable || !tableNumber) return;
+    if (!window.confirm(t(
+      `ลูกค้าโต๊ะ ${tableNumber} จ่ายเงินมาครบแล้ว ต้องการปิดโต๊ะและคืนเป็นโต๊ะว่างหรือไม่?`,
+      `Table ${tableNumber} is fully paid. Close it and free the table?`
+    ))) return;
+    onCloseTable(tableNumber);
+  };
+
   // ── ตะกร้า ──
   const unitPrice = (item) => {
     let p = Number(item.food.price) || 0;
@@ -199,6 +210,20 @@ const PosSalesScreen = ({
     () => tableOrders.filter(o => sameTable(o.TableNumber, tableNumber) && o.Status !== 'paid'),
     [tableOrders, tableNumber]
   );
+
+  // รายการที่ลูกค้าสแกน QR สั่งเองและโอนเงินมาแล้ว — ไม่ต้องเก็บเงินซ้ำ
+  // โชว์ให้พนักงานเห็นว่าโต๊ะนี้สั่งอะไรไว้ และเป็นตัวบอกว่าโต๊ะยังไม่ว่าง
+  const paidItems = useMemo(
+    () => tableOrders.filter(o => sameTable(o.TableNumber, tableNumber) && o.Status === 'paid'),
+    [tableOrders, tableNumber]
+  );
+  const paidTotal = paidItems.reduce(
+    (sum, o) => sum + (Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1), 0
+  );
+
+  // โต๊ะนี้เหลือแต่ของที่ลูกค้าจ่ายมาเองแล้ว — ไม่มีอะไรต้องส่งครัวหรือเก็บเงินอีก
+  const settledOnly = !!tableNumber && paidItems.length > 0
+    && sentItems.length === 0 && cart.length === 0 && !!onCloseTable;
   const sentTotal = sentItems.reduce(
     (s, o) => s + (Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1), 0
   );
@@ -558,6 +583,34 @@ const PosSalesScreen = ({
           </div>
 
           <div className="pos2-cart-items">
+            {/* ── ของที่ลูกค้าสแกน QR สั่งเองและโอนมาแล้ว — ดูอย่างเดียว ไม่ต้องเก็บเงินซ้ำ ── */}
+            {paidItems.length > 0 && (
+              <>
+                <div className="pos2-sec-head paid">
+                  <span>💳 {t('ลูกค้าจ่ายเองแล้ว', 'Paid via kiosk')} ({paidItems.length})</span>
+                  <b>฿{paidTotal.toLocaleString()}</b>
+                </div>
+                {paidItems.map((o, idx) => (
+                  <div key={`paid-${o.SessionId}-${o.ItemName}-${idx}`} className="pos2-line-item paid">
+                    <div className="pos2-line-top">
+                      <div className="pos2-line-name">
+                        <span className="pos2-qty-badge">{Number(o.Quantity) || 1}×</span> {o.ItemName}
+                      </div>
+                    </div>
+                    {o.Options && <div className="pos2-line-opt">{o.Options}</div>}
+                    <div className="pos2-line-bottom">
+                      <span style={{ fontSize: '0.72rem', color: '#94a3b8', fontWeight: 700 }}>
+                        {t('ลูกค้าจ่ายมาแล้ว', 'already paid')}
+                      </span>
+                      <div className="pos2-line-price">
+                        ฿{((Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1)).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
             {/* ── ของที่ส่งครัวไปแล้ว = บิลของโต๊ะนี้ ── */}
             {sentItems.length > 0 && (
               <>
@@ -607,7 +660,7 @@ const PosSalesScreen = ({
               </>
             )}
 
-            {cart.length === 0 && sentItems.length === 0 ? (
+            {cart.length === 0 && sentItems.length === 0 && paidItems.length === 0 ? (
               <div className="pos2-cart-empty">{t('ยังไม่มีรายการ — แตะเมนูเพื่อเพิ่ม', 'No items yet — tap a menu item')}</div>
             ) : cart.map(item => (
               <div key={item.cartId} className="pos2-line-item">
@@ -664,6 +717,13 @@ const PosSalesScreen = ({
             <div className="pos2-sum">
               <span>{t('ส่งครัวแล้ว', 'Sent')}</span><b>฿{sentTotal.toLocaleString()}</b>
             </div>
+            {/* ยอดที่ลูกค้าโอนมาเองแล้ว แยกไว้ต่างหาก ห้ามเอาไปรวมยอดที่ต้องเก็บ */}
+            {paidItems.length > 0 && (
+              <div className="pos2-sum" style={{ color: '#4338ca' }}>
+                <span>{t('ลูกค้าจ่ายเองแล้ว', 'Paid via kiosk')}</span>
+                <b style={{ color: '#4338ca' }}>฿{paidTotal.toLocaleString()}</b>
+              </div>
+            )}
             {cart.length > 0 && (
               <div className="pos2-sum" style={{ color: '#b45309' }}>
                 <span>{t('ยังไม่ส่ง', 'Not sent')}</span><b style={{ color: '#b45309' }}>฿{cartTotal.toLocaleString()}</b>
@@ -692,12 +752,20 @@ const PosSalesScreen = ({
               <b>฿{grandTotal.toLocaleString()}</b>
             </div>
             <div className="pos2-actions">
-              <button className="pos2-send" onClick={onSendOrder} disabled={cart.length === 0 || !tableNumber}>
-                ✅ {t('ส่งรายการอาหาร', 'Send order')}
-              </button>
-              <button className="pos2-bill" onClick={handleCheckoutClick} disabled={!tableNumber}>
-                💳 {t('ชำระเงิน', 'Payment')}
-              </button>
+              {settledOnly ? (
+                <button className="pos2-close-table" onClick={handleCloseSettled}>
+                  ✅ {t('เรียบร้อย — คืนโต๊ะให้ว่าง', 'Done — free the table')}
+                </button>
+              ) : (
+                <>
+                  <button className="pos2-send" onClick={onSendOrder} disabled={cart.length === 0 || !tableNumber}>
+                    ✅ {t('ส่งรายการอาหาร', 'Send order')}
+                  </button>
+                  <button className="pos2-bill" onClick={handleCheckoutClick} disabled={!tableNumber}>
+                    💳 {t('ชำระเงิน', 'Payment')}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </aside>

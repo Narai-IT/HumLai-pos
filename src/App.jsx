@@ -1438,6 +1438,7 @@ function App() {
               onDeleteTableItem={handleDeleteTableItem}
               onPrintKitchen={handlePrintKitchenAgain}
               onPrintPreBill={handlePrintPreBill}
+              onCloseTable={handleCloseSettledTable}
               discounts={posDiscounts}
               resolvePrice={resolvePrice}
               hasPriceForCustomerType={hasPriceForCustomerType}

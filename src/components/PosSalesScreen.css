@@ -378,7 +378,10 @@
   position: sticky; top: -0.5rem; z-index: 2;
 }
 .pos2-sec-head.new { color: #b45309; background: #fef3c7; }
+/* ของที่ลูกค้าสแกน QR สั่งเองและโอนมาแล้ว — ดูอย่างเดียว ไม่ต้องเก็บเงินซ้ำ */
+.pos2-sec-head.paid { color: #4338ca; background: #eef2ff; }
 .pos2-line-item.sent { background: #ffffff; border-style: dashed; }
+.pos2-line-item.paid { background: #f8fafc; border-color: #c7d2fe; }
 .pos2-qty-badge {
   display: inline-block;
   background: var(--pos2-primary); color: #fff;
@@ -387,6 +390,16 @@
   margin-right: 2px;
 }
 .pos2-bill:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* โต๊ะที่ลูกค้าจ่ายมาเองครบแล้ว — กดปุ่มเดียวจบ คืนโต๊ะให้ว่าง */
+.pos2-close-table {
+  flex: 1; border: none; border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+  padding: 0.75rem; font-size: 0.92rem; font-weight: 900; font-family: inherit; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(67,56,202,0.3);
+}
+.pos2-close-table:hover { background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%); }
 
 /* ปุ่มพิมพ์ใบครัวซ้ำ บนหัวข้อ "ส่งครัวแล้ว" */
 .pos2-reprint {
