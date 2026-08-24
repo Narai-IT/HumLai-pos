@@ -1500,6 +1500,30 @@ body {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
+/* เมนูที่ยังไม่ได้ตั้งราคาของประเภทการขายที่เลือกอยู่ — เห็นได้ แต่กดสั่งไม่ได้ */
+.pos-food-card.unavailable {
+  cursor: not-allowed;
+  background: rgba(0, 0, 0, 0.02);
+}
+.pos-food-card.unavailable:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.pos-food-card.unavailable .pos-card-img-wrap,
+.pos-food-card.unavailable .pos-card-name,
+.pos-food-card.unavailable .pos-card-desc {
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+.pos-food-card.unavailable:hover .pos-card-img { transform: none; }
+.pos-card-price.unavailable {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0;
+}
+
 .pos-food-card.in-cart {
   border-color: var(--accent);
   background: rgba(234, 179, 8, 0.08);

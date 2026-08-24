@@ -62,17 +62,18 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     }
 
     const isFree = categoryConfig[`popup${n}Free`] === true;
-    // ตัวเลือกที่ยังไม่ได้ตั้งราคาของประเภทการขายที่เลือกอยู่ ไม่ต้องเอามาให้เลือก
-    // ยกเว้นป๊อปอัพที่ตั้งเป็นของฟรี — คิด ฿0 อยู่แล้ว ไม่มีทางคีย์ราคาผิด
-    if (!isFree) {
-      items = items.filter(m => hasPriceForCustomerType(m));
-    }
+    // ตัวเลือกที่ยังไม่ได้ตั้งราคาของประเภทการขายที่เลือกอยู่ ยังโชว์ให้เห็นว่ามีอยู่
+    // แต่กดเลือกไม่ได้ ยกเว้นป๊อปอัพที่ตั้งเป็นของฟรี — คิด ฿0 อยู่แล้ว ไม่มีทางคีย์ราคาผิด
+    const unpricedIds = new Set(
+      isFree ? [] : items.filter(m => !hasPriceForCustomerType(m)).map(m => m.id)
+    );
     items = items.map(m => ({ ...m, price: isFree ? 0 : m.price }));
 
     return {
       namesTh,
       namesEn,
       items,
+      unpricedIds,
       minSelect: categoryConfig[`popup${n}Min`] || 0,
       maxSelect: categoryConfig[`popup${n}Max`] || 0,
       itemsMaxMap: categoryConfig[`popup${n}ItemsMax`] || {},
@@ -185,6 +186,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   // เลือกเมนูในป๊อปอัพ — ถ้าเมนูนั้นมีป๊อปอัพของตัวเอง ให้เปิดป๊อปอัพซ้อนขึ้นมาก่อน
   const handlePick = (stepNum, config, item) => {
     const qtyMap = stepQtyMaps[stepNum];
+    if (config.unpricedIds.has(item.id)) return;
     if (!canAddMore(config, qtyMap, item.id)) return;
     if (canOpenNested(item)) {
       // ป๊อปอัพที่ตั้งเป็น "ฟรี" ไม่ควรให้เลือกราคาซ้อนเข้ามา
@@ -234,7 +236,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
   // ข้ามขั้นตอนป๊อปอัพที่ไม่เหลือตัวเลือกให้เลือกแล้ว (เช่นถูกกรองออกตามประเภทการขาย)
   // ไม่งั้นจะติดหน้าเปล่า ๆ และถ้าขั้นนั้นตั้ง "ต้องเลือกอย่างน้อย N" ไว้จะกดต่อไม่ได้เลย
-  const stepIsUsable = (n) => categoryConfig[`hasPopup${n}`] === true && stepConfigs[n].items.length > 0;
+  const stepIsUsable = (n) => categoryConfig[`hasPopup${n}`] === true
+    && stepConfigs[n].items.some(m => !stepConfigs[n].unpricedIds.has(m.id));
 
   const validSteps = [
     hasMultiplePrices ? 'price' : null,
@@ -381,7 +384,9 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             const qty = getQty(qtyMap, addon.id);
             const perItemMax = perItemMaxOf(config, addon.id);
             const itemAtMax = perItemMax > 0 && qty >= perItemMax;
-            const cardDisabled = (atMax && qty === 0) || itemAtMax;
+            // ยังไม่ได้ตั้งราคาของประเภทการขายนี้ = เห็นได้ แต่กดเลือกไม่ได้
+            const unpriced = config.unpricedIds.has(addon.id);
+            const cardDisabled = unpriced || (atMax && qty === 0) || itemAtMax;
             const isSelected = qty > 0;
             // เมนูตัวเลือกที่มีป๊อปอัพของตัวเอง = กดแล้วเปิดป๊อปอัพซ้อนให้เลือกต่อ
             const nested = canOpenNested(addon);
@@ -394,10 +399,15 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                 key={addon.id}
                 className={`option-card ${isSelected ? 'selected' : ''}`}
                 style={{
-                  position: 'relative', cursor: cardDisabled ? 'default' : 'pointer', opacity: cardDisabled ? 0.5 : 1,
+                  position: 'relative',
+                  cursor: unpriced ? 'not-allowed' : (cardDisabled ? 'default' : 'pointer'),
+                  opacity: cardDisabled ? 0.5 : 1,
                   background: isSelected ? '#fff7ed' : '#ffffff',
                   border: `2px solid ${isSelected ? '#ea580c' : '#cbd5e1'}`
                 }}
+                title={unpriced
+                  ? (lang === 'th' ? 'ยังไม่ได้ตั้งราคาสำหรับประเภทการขายนี้' : 'No price set for this sale type')
+                  : undefined}
                 onClick={() => handlePick(stepNum, config, addon)}
               >
                 {qty > 0 && (
@@ -453,6 +463,11 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     })}
                   </div>
                 )}
+                {unpriced ? (
+                  <div className="option-price" style={{ color: '#94a3b8', fontWeight: '800', fontSize: '0.78rem' }}>
+                    {lang === 'th' ? 'ยังไม่ตั้งราคา' : 'No price set'}
+                  </div>
+                ) : (
                 <div className="option-price" style={{ color: addon.price > 0 ? '#ea580c' : '#16a34a', fontWeight: '800' }}>
                   {/* ป๊อปอัพที่แยกรายการ = เป็นจานของตัวเอง จึงโชว์ราคาเต็มของรายการนั้น (ฟรีก็เป็น ฿0)
                       ส่วนป๊อปอัพที่เป็นตัวเลือกใต้เมนูหลัก ยังโชว์เป็นส่วนที่บวกเพิ่ม (+฿) เหมือนเดิม */}
@@ -461,6 +476,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     : (addon.price > 0 ? `+฿${addon.price}` : '')}
                   {nested && addon.price <= 0 && picks.length === 0 && !config.separate ? (lang === 'th' ? 'กดเพื่อเลือก' : 'tap to choose') : ''}
                 </div>
+                )}
               </div>
             );
           }) : (

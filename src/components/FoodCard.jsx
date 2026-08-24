@@ -24,7 +24,7 @@ const CATEGORY_FOLDERS = {
   "โชจู": "โชจู"
 };
 
-const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang = 'th', displayPrice }) => {
+const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang = 'th', displayPrice, disabled = false, disabledReason = '' }) => {
   const name = lang === 'th' ? food.name : (food.nameEn || food.name);
   const desc = lang === 'th' ? food.description : (food.descriptionEn || food.description);
 
@@ -63,8 +63,9 @@ const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang 
 
   return (
     <div
-      className={`pos-food-card ${cartQuantity > 0 ? 'in-cart' : ''}`}
-      onClick={() => onOrderClick(food)}
+      className={`pos-food-card ${cartQuantity > 0 ? 'in-cart' : ''} ${disabled ? 'unavailable' : ''}`}
+      onClick={disabled ? undefined : () => onOrderClick(food)}
+      title={disabled ? disabledReason : undefined}
     >
       <div className="pos-card-img-wrap">
         {imageSrc ? (
@@ -90,11 +91,13 @@ const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang 
         {desc && <p className="pos-card-desc">{desc}</p>}
 
         <div className="pos-card-footer">
-          <span className="pos-card-price">
-            ฿{Number(displayPrice != null ? displayPrice : food.price).toLocaleString()}
+          <span className={`pos-card-price ${disabled ? 'unavailable' : ''}`}>
+            {disabled
+              ? (lang === 'th' ? 'ยังไม่ตั้งราคา' : 'No price set')
+              : `฿${Number(displayPrice != null ? displayPrice : food.price).toLocaleString()}`}
           </span>
 
-          {cartQuantity > 0 ? (
+          {disabled ? null : cartQuantity > 0 ? (
             <div className="pos-stepper" onClick={(e) => e.stopPropagation()}>
               <button
                 className="pos-stepper-btn minus"

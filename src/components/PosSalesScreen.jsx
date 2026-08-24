@@ -4,7 +4,7 @@ import {
   MoreHorizontal, Globe, Receipt, Printer, Tag, X
 } from 'lucide-react';
 import FoodCard from './FoodCard';
-import { sameTable, readTablesConfig, priceTypeForTable, saleTypesForTable } from '../utils/salePricing';
+import { SALE_TYPES, sameTable, readTablesConfig, priceTypeForTable, saleTypesForTable } from '../utils/salePricing';
 import './PosSalesScreen.css';
 
 // โต๊ะที่มีของค้างนานเกินเท่านี้ (นาที) จะขึ้นสีส้มเตือน
@@ -148,31 +148,42 @@ const PosSalesScreen = ({
     openTable(name, tierOfTable(name));
   };
 
+  // ── เมนูที่ยังไม่ได้ตั้งราคาของประเภทการขายที่เลือกอยู่ ──
+  // ยังโชว์ในตารางให้เห็นว่ามีเมนูนี้อยู่ แต่กดสั่งไม่ได้
+  // ไม่งั้นพนักงานกดสั่งแล้วได้ราคาปกติมาโดยไม่รู้ตัว
+  const unpricedIds = useMemo(
+    () => new Set(liveMenu.filter(m => !hasPriceForCustomerType(m)).map(m => m.id)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [liveMenu, customerType]
+  );
+  const isUnpriced = (m) => unpricedIds.has(m.id);
+  const unpricedNote = () => {
+    const type = SALE_TYPES.find(o => o.value === customerType);
+    const label = type ? (lang === 'th' ? type.th : type.en) : customerType;
+    return t(
+      `เมนูนี้ยังไม่ได้ตั้งราคาสำหรับ "${label}" — ตั้งได้ที่หลังบ้าน > จัดการเมนู`,
+      `This item has no "${label}" price yet — set it in Admin > Menu`
+    );
+  };
+
   // สั่งอาหารได้ต่อเมื่อเปิดกะและเลือกโต๊ะแล้ว — กันคีย์ของลอยแล้วหายตอนเลือกโต๊ะทีหลัง
   const guardedOrderClick = (food) => {
     if (!shiftOpen) { alert(t('กรุณาเปิดกะก่อนจึงจะสั่งอาหารได้', 'Please open a shift first.')); return; }
     if (!tableNumber) { alert(t('กรุณาเลือกโต๊ะด้านบนก่อนเริ่มคีย์รายการ', 'Please pick a table first.')); return; }
+    // การ์ด/ผลค้นหาปิดปุ่มไว้อยู่แล้ว ตัวนี้กันทางอื่นที่อาจเรียกเข้ามาโดยตรง
+    if (isUnpriced(food)) { alert(unpricedNote()); return; }
     onOrderClick(food);
   };
-
-  // ── เมนูที่ขายได้จริงในประเภทการขายที่เลือกอยู่ ──
-  // เมนูที่ยังไม่ได้ตั้งราคาของประเภทนั้น (เช่นไม่มีราคา Takehome) ให้ซ่อนไปเลย
-  // ไม่งั้นพนักงานกดสั่งแล้วได้ราคาปกติมาโดยไม่รู้ตัว
-  const sellableMenu = useMemo(
-    () => liveMenu.filter(m => hasPriceForCustomerType(m)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [liveMenu, customerType]
-  );
 
   // ── ค้นหาเมนูแล้วกดเพิ่มลงตะกร้าได้เลย ──
   const [query, setQuery] = useState('');
   const searchResults = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return sellableMenu
+    return liveMenu
       .filter(m => String(m.name || '').toLowerCase().includes(q) || String(m.nameEn || '').toLowerCase().includes(q))
       .slice(0, 20);
-  }, [query, sellableMenu]);
+  }, [query, liveMenu]);
 
   // ── ตะกร้า ──
   const unitPrice = (item) => {
@@ -284,17 +295,8 @@ const PosSalesScreen = ({
     return () => document.removeEventListener('mousedown', close);
   }, [moreOpen]);
 
-  const visibleCats = categories.filter(c => sellableMenu.some(i => itemInCategory(i, c.slug)));
-  const gridItems = sellableMenu.filter(i => itemInCategory(i, activeCategory));
-  const visibleCatKey = visibleCats.map(c => c.slug).join('|');
-
-  // เปลี่ยนประเภทการขายแล้วหมวดที่เปิดค้างไว้อาจไม่เหลือเมนูเลย — เด้งไปหมวดแรกที่ยังมีของ
-  useEffect(() => {
-    if (visibleCats.length > 0 && !visibleCats.some(c => c.slug === activeCategory)) {
-      setActiveCategory(visibleCats[0].slug);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleCatKey, activeCategory]);
+  const visibleCats = categories.filter(c => liveMenu.some(i => itemInCategory(i, c.slug)));
+  const gridItems = liveMenu.filter(i => itemInCategory(i, activeCategory));
 
   return (
     <div className="pos2">
@@ -472,6 +474,8 @@ const PosSalesScreen = ({
                   food={item}
                   lang={lang}
                   displayPrice={Number(resolvePrice(item)?.price) || 0}
+                  disabled={isUnpriced(item)}
+                  disabledReason={unpricedNote()}
                   onOrderClick={guardedOrderClick}
                   onDecreaseClick={onDecreaseQuantity}
                   cartQuantity={cart.filter(c => c.food.id === item.id).reduce((s, c) => s + (c.quantity || 1), 0)}
@@ -479,12 +483,7 @@ const PosSalesScreen = ({
               ))}
             </div>
             {gridItems.length === 0 && (
-              <div className="pos2-empty">
-                {customerType
-                  ? t(`ไม่มีเมนูที่ตั้งราคา ${customerType} ไว้ในหมวดหมู่นี้`,
-                       `No item in this category has a ${customerType} price`)
-                  : t('ไม่มีรายการในหมวดหมู่นี้', 'No items in this category')}
-              </div>
+              <div className="pos2-empty">{t('ไม่มีรายการในหมวดหมู่นี้', 'No items in this category')}</div>
             )}
           </div>
         </div>
@@ -536,10 +535,15 @@ const PosSalesScreen = ({
                   {searchResults.map(m => (
                     <button
                       key={m.id}
+                      className={isUnpriced(m) ? 'unavailable' : ''}
+                      disabled={isUnpriced(m)}
+                      title={isUnpriced(m) ? unpricedNote() : undefined}
                       onClick={() => { guardedOrderClick(m); setQuery(''); }}
                     >
                       <span>{lang === 'th' ? m.name : (m.nameEn || m.name)}</span>
-                      <b>฿{Number(resolvePrice(m)?.price || 0).toLocaleString()}</b>
+                      {isUnpriced(m)
+                        ? <b className="unavailable">{t('ยังไม่ตั้งราคา', 'No price')}</b>
+                        : <b>฿{Number(resolvePrice(m)?.price || 0).toLocaleString()}</b>}
                     </button>
                   ))}
                 </div>
