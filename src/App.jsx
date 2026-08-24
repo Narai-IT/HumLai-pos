@@ -28,6 +28,7 @@ const LiquorStorage = lazy(() => import('./components/LiquorStorage'));
 const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
+import { priceForSaleType } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
 import { getPrinterByType, getPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
@@ -647,28 +648,18 @@ function App() {
   }, [tableNumber]);
 
   // ราคาที่เมนูตั้งไว้สำหรับ "ประเภทลูกค้า/ช่องทาง" ที่เลือกอยู่ — ไม่ได้ตั้งไว้คืน null
-  const priceForCustomerType = (food) => {
-    if (!customerType) return null;
-    const target = customerType.trim().toLowerCase();
-    return getPriceOptions(food).find(o => {
-      const name = (o.name || '').trim().toLowerCase();
-      if (name === target) return true;
-      if (target === 'takehome' && ['takehome', 'ห่อกลับบ้าน', 'กลับบ้าน', 'takeaway', 'take home'].includes(name)) return true;
-      if (target === 'deli' && ['deli', 'delivery', 'lineman', 'grab', 'shopee', 'เดลิเวอรี่'].includes(name)) return true;
-      return false;
-    }) || null;
-  };
+  const priceForCustomerType = (food) => priceForSaleType(getPriceOptions(food), customerType);
 
-  // เมนูนี้ขายในประเภทที่เลือกอยู่ได้ไหม — ขายราคาปกติถือว่าขายได้ทุกเมนู
-  // ใช้ซ่อนเมนูที่ยังไม่ได้ตั้งราคา Takehome/Deli ออกจากหน้าขาย จะได้ไม่เผลอคีย์ผิดราคา
-  const hasPriceForCustomerType = (food) => !customerType || !!priceForCustomerType(food);
+  // เมนูนี้ขายในประเภทที่เลือกอยู่ได้ไหม
+  // ขายปกติ/ทานที่ร้านก็ต้องเช็คเหมือนกัน — เมนูที่ตั้งไว้แต่ราคา Takehome/Deli
+  // (เช่นของทานเล่น TD, โปรเฉพาะ Delivery) ยังขายหน้าร้านไม่ได้
+  const hasPriceForCustomerType = (food) => !!priceForCustomerType(food);
 
-  // ราคาตาม "ประเภทลูกค้า/ช่องทาง" ที่เลือก — ถ้าเมนูไม่มีประเภทนั้น ใช้ราคาปกติแทน
+  // ราคาตาม "ประเภทลูกค้า/ช่องทาง" ที่เลือก — ไม่มีของประเภทนั้นก็ตกไปใช้ราคาแรกไว้โชว์
+  // (หน้าขายปิดไม่ให้กดสั่งเมนูพวกนี้อยู่แล้ว ตัวเลขนี้แค่กันพังตอนเรนเดอร์)
   const resolvePrice = (food) => {
-    const match = priceForCustomerType(food);
-    if (match) return match;
     const opts = getPriceOptions(food);
-    return opts.find(o => (o.name || '').trim() === 'ปกติ') || opts[0];
+    return priceForSaleType(opts, customerType) || opts[0];
   };
 
   // ถามเรื่อง "ทานที่ร้าน / ห่อกลับบ้าน" เฉพาะตอนขายแบบทานที่ร้าน

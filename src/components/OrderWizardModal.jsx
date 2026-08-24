@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps } from '../utils/popupConfig';
+import { TAKEHOME_ALIASES, normName as norm, isChannelPriceName } from '../utils/salePricing';
 
 const DINING_OPTIONS = [
   { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' },
   { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' }
 ];
 
-// ชื่อราคาที่เป็น "ช่องทางขาย" ไม่ใช่ขนาด/ตัวเลือกของเมนู
-// แยกออกจากขั้นตอนเลือกราคา เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
-const TAKEHOME_ALIASES = ['takehome', 'take home', 'takeaway', 'ห่อกลับบ้าน', 'กลับบ้าน', 'ห่อกลับ'];
-const DELI_ALIASES = ['deli', 'delivery', 'เดลิเวอรี่', 'lineman', 'grab', 'shopee'];
-const norm = (v) => String(v || '').trim().toLowerCase();
 // ความลึกสูงสุดของป๊อปอัพซ้อนป๊อปอัพ — กันการตั้งค่าที่วนหากันเองจนซ้อนไม่รู้จบ
 const MAX_POPUP_DEPTH = 3;
-const isChannelPrice = (name) => TAKEHOME_ALIASES.includes(norm(name)) || DELI_ALIASES.includes(norm(name));
+// ชื่อราคาที่เป็น "ช่องทางขาย" ไม่ใช่ขนาด/ตัวเลือกของเมนู แยกออกจากขั้นตอนเลือกราคา
+// เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
+const isChannelPrice = (name) => isChannelPriceName(name);
 
 const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
