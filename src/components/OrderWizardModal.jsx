@@ -1,7 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
 import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps } from '../utils/popupConfig';
 import { TAKEHOME_ALIASES, normName as norm, isChannelPriceName } from '../utils/salePricing';
+
+// ชื่อเมนูในการ์ดป๊อปอัพต้องอยู่บรรทัดเดียวเสมอ — ชื่อยาว ๆ ที่ตัดบรรทัด
+// ทำให้การ์ดในแถวเดียวกันสูงไม่เท่ากันและอ่านยาก
+// ถ้ายาวเกินความกว้างการ์ด ให้ย่อขนาดตัวอักษรลงทีละนิดจนพอดี (มีเพดานล่างกันเล็กจนอ่านไม่ออก
+// ถ้าย่อจนสุดแล้วยังไม่พอ ค่อยตัดด้วย ...)
+const FitOneLine = ({ text, className = 'option-name', style, maxRem = 1.05, minRem = 0.7 }) => {
+  const ref = useRef(null);
+  const [fontRem, setFontRem] = useState(maxRem);
+
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const fit = () => {
+      const el = ref.current;
+      if (!el || !el.clientWidth) return;
+      let size = maxRem;
+      el.style.fontSize = `${size}rem`;
+      while (size > minRem && el.scrollWidth > el.clientWidth + 1) {
+        size = Math.round((size - 0.03) * 100) / 100;
+        el.style.fontSize = `${size}rem`;
+      }
+      setFontRem(size);
+    };
+    fit();
+
+    // จอหมุน/การ์ดเปลี่ยนความกว้าง ต้องวัดใหม่ — เทียบความกว้างก่อน กันวัดวนเพราะความสูงเปลี่ยน
+    if (typeof ResizeObserver === 'undefined') return;
+    let lastWidth = node.clientWidth;
+    const ro = new ResizeObserver(() => {
+      const el = ref.current;
+      if (!el || el.clientWidth === lastWidth) return;
+      lastWidth = el.clientWidth;
+      fit();
+    });
+    ro.observe(node);
+    return () => ro.disconnect();
+  }, [text, maxRem, minRem]);
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      title={typeof text === 'string' ? text : undefined}
+      style={{
+        ...style,
+        fontSize: `${fontRem}rem`,
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }}
+    >
+      {text}
+    </div>
+  );
+};
 
 const DINING_OPTIONS = [
   { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' },
@@ -374,7 +430,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
               style={{ background: total === 0 ? '#fff7ed' : '#ffffff', border: `2px solid ${total === 0 ? '#ea580c' : '#cbd5e1'}` }}
               onClick={() => clearStep(stepNum)}
             >
-              <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? 'ไม่รับ (ข้าม)' : 'No Thanks'}</div>
+              <FitOneLine text={lang === 'th' ? 'ไม่รับ (ข้าม)' : 'No Thanks'} style={{ color: '#0f172a', fontWeight: '700' }} />
               <div className="option-price" style={{ color: '#64748b' }}>-</div>
             </div>
           )}
@@ -435,14 +491,18 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     }}>{qty}</div>
                   </div>
                 )}
-                <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>
-                  {lang === 'th' ? addon.name : addon.nameEn}
-                  {nested && (
-                    <span style={{ marginLeft: '0.35rem', fontSize: '0.65rem', fontWeight: 800, color: '#c2410c', background: '#ffedd5', borderRadius: '999px', padding: '0.1rem 0.4rem', whiteSpace: 'nowrap' }}>
+                <FitOneLine
+                  text={lang === 'th' ? addon.name : addon.nameEn}
+                  style={{ color: '#0f172a', fontWeight: '700', marginBottom: nested ? '0.25rem' : undefined }}
+                />
+                {/* ป้ายบอกว่ามีตัวเลือกย่อย — แยกบรรทัดของตัวเอง ไม่แย่งที่ชื่อเมนู */}
+                {nested && (
+                  <div style={{ marginBottom: '0.4rem' }}>
+                    <span style={{ display: 'inline-block', fontSize: '0.65rem', fontWeight: 800, color: '#c2410c', background: '#ffedd5', borderRadius: '999px', padding: '0.1rem 0.4rem', whiteSpace: 'nowrap' }}>
                       {lang === 'th' ? 'มีตัวเลือกย่อย' : 'has options'}
                     </span>
-                  )}
-                </div>
+                  </div>
+                )}
                 {/* รายละเอียดเมนู — คนละบรรทัดกับชื่อ ตัวเล็กกว่า */}
                 {addonDesc && <div className="option-desc">{addonDesc}</div>}
                 {/* ตัวเลือกย่อยที่เลือกไว้ของแต่ละครั้ง */}
@@ -521,7 +581,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                       style={{ cursor: 'pointer', background: isSel ? '#fff7ed' : '#ffffff', border: `2px solid ${isSel ? '#ea580c' : '#cbd5e1'}` }}
                     >
                       <div>
-                        <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{opt.name || (lang === 'th' ? 'ราคาปกติ' : 'Regular')}</div>
+                        <FitOneLine text={opt.name || (lang === 'th' ? 'ราคาปกติ' : 'Regular')} style={{ color: '#0f172a', fontWeight: '700' }} />
                         <div className="option-price" style={{ color: '#ea580c', fontWeight: '800', fontSize: '1.1rem', marginTop: '4px' }}>
                           ฿{Number(opt.price).toLocaleString()}
                         </div>
@@ -560,7 +620,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     style={{ background: selectedDining.id === option.id ? '#fff7ed' : '#ffffff', border: `2px solid ${selectedDining.id === option.id ? '#ea580c' : '#cbd5e1'}` }}
                   >
                     <div>
-                    <div className="option-name" style={{ color: '#0f172a', fontWeight: '700' }}>{lang === 'th' ? option.name : option.nameEn}</div>
+                    <FitOneLine text={lang === 'th' ? option.name : option.nameEn} style={{ color: '#0f172a', fontWeight: '700' }} />
                     <div className="option-price" style={{ color: '#ea580c', fontWeight: 800, marginTop: '4px' }}>
                       ฿{optPrice.toLocaleString()}
                       {option.id === 'takeaway' && takehomePrice && (
