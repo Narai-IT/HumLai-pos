@@ -1049,6 +1049,19 @@ function App() {
       timestamp
     };
 
+    // ── สั่งพิมพ์ใบเสร็จก่อนเป็นอย่างแรก ──
+    // ใบเสร็จไม่ต้องรอผลบันทึกลงชีต ข้อมูลที่ต้องใช้ครบตั้งแต่ตรงนี้แล้ว
+    // เดิมสั่งพิมพ์เป็นขั้นสุดท้าย จึงต้องรอ GAS ตอบครบ 3 รอบ (บันทึกบิล → ล้างโต๊ะ → ตัดสต็อก)
+    // ใบเสร็จเลยออกช้าหลายวินาที ทั้งที่เครื่องพิมพ์ว่างรออยู่
+    try {
+      const receiptPrinter = getPrinterByType('receipt');
+      if (receiptPrinter) {
+        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: newOrder })
+          .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
+          .catch(err => console.error('Silent print failed:', err));
+      }
+    } catch (e) { }
+
     // Optimistic clear table orders
     setTableOrders(prev => prev.filter(o => String(o.TableNumber) !== String(tableNumber)));
     setOrders(prev => [...prev, newOrder]);
@@ -1095,48 +1108,39 @@ function App() {
       setSaveAlert({ type: 'error', msg: `⚠️ บันทึกบิล ${newOrderNumber} (${paymentMethod}) ขึ้นระบบไม่สำเร็จ! ข้อมูลถูกสำรองไว้ในเครื่องแล้ว — จะลองส่งซ้ำอัตโนมัติเมื่อเน็ตกลับมา` });
     }
 
-    try {
-      // Clear TableOrders for this table
-      await fetch(GAS_URL, {
+    // ล้างโต๊ะกับตัดสต็อกไม่ขึ้นต่อกัน ยิงพร้อมกันได้ ไม่ต้องรอทีละรอบ
+    // (ยังต้องยิงหลังบันทึกบิลสำเร็จ ไม่งั้นบิลพังแล้วรายการในโต๊ะหายไปด้วย)
+    const deductItems = checkoutItems
+      .map(item => {
+        const menuItem = allMenu.find(m => m.name === item.ItemName || m.nameEn === item.ItemNameEn);
+        return menuItem ? { menuId: String(menuItem.id), menuName: item.ItemName, qty: Number(item.Quantity) || 1 } : null;
+      })
+      .filter(Boolean);
+
+    const backgroundJobs = [
+      // ปิดบิลแล้ว = โต๊ะจบ ล้างรวมรายการที่ลูกค้าจ่ายเองมาก่อนหน้าด้วย
+      fetch(GAS_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        // ปิดบิลแล้ว = โต๊ะจบ ล้างรวมรายการที่ลูกค้าจ่ายเองมาก่อนหน้าด้วย
         body: JSON.stringify({ action: 'clearTableOrders', tableNumber: String(tableNumber), includePaid: true })
-      });
-    } catch (error) {
-      console.error('Error clearing table orders:', error);
-    }
+      }).catch(error => console.error('Error clearing table orders:', error))
+    ];
 
-    try {
+    if (deductItems.length > 0) {
       // Deduct stock based on BOM
-      const deductItems = checkoutItems
-        .map(item => {
-          const menuItem = allMenu.find(m => m.name === item.ItemName || m.nameEn === item.ItemNameEn);
-          return menuItem ? { menuId: String(menuItem.id), menuName: item.ItemName, qty: Number(item.Quantity) || 1 } : null;
-        })
-        .filter(Boolean);
-      if (deductItems.length > 0) {
-        await fetch(GAS_URL, {
+      backgroundJobs.push(
+        fetch(GAS_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({ action: 'deductStock', orderNumber: newOrderNumber, tableNo: String(tableNumber), items: deductItems })
-        });
-      }
-    } catch (error) {
-      console.error('Error deducting stock:', error);
+        }).catch(error => console.error('Error deducting stock:', error))
+      );
     }
 
-    try {
-      // Print receipt
-      const receiptPrinter = getPrinterByType('receipt');
-      if (receiptPrinter) {
-        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: newOrder })
-          .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
-          .catch(err => console.error('Silent print failed:', err));
-      }
-    } catch (e) { }
+    await Promise.all(backgroundJobs);
+
   };
 
   // =============================================
