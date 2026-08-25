@@ -284,6 +284,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     setSlipError('');
     setSlipResult(null);
     setSlipChecking(true);
+    // ข้อมูลสลิปที่ตรวจผ่าน — ใช้ส่งออเดอร์ต่อทันทีในรอบนี้เลย
+    // (state ยังไม่อัปเดตตอนนี้ จึงส่งค่าไปกับพารามิเตอร์ตรง ๆ)
+    let verified = null;
     try {
       const dataUrl = await slipToDataUrl(file);
       setSlipPreview(dataUrl);
@@ -305,6 +308,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             : `Slip amount does not match the total.`);
         } else {
           setSlipResult(json.data);
+          verified = json.data;
         }
       } else {
         setSlipError(slipErrorText(json));
@@ -319,15 +323,22 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       setSlipServiceDown(true);
     }
     setSlipChecking(false);
+
+    // ตรวจผ่านแล้วถือว่าจ่ายครบ ไม่ต้องให้ลูกค้ากดยืนยันซ้ำอีกที — ส่งเข้าครัวเลย
+    if (verified) await handleConfirmSelfPayment(verified);
   };
 
   // ส่งออเดอร์ได้เมื่อสลิปผ่าน — หรือตัวตรวจสลิปใช้ไม่ได้จริง ๆ แล้วลูกค้ายืนยันเอง
   const canSendOrder = !!slipResult || (slipServiceDown && transferConfirmed);
 
-  const handleConfirmSelfPayment = async () => {
+  // verifiedSlip = ข้อมูลสลิปที่เพิ่งตรวจผ่านในรอบนี้ (ยังไม่เข้า state)
+  // เรียกจากปุ่มก็ได้ ไม่ต้องส่งอะไรมา จะใช้ผลตรวจที่เก็บไว้แทน
+  const handleConfirmSelfPayment = async (verifiedSlip = null) => {
     if (cart.length === 0) return;
-    if (!canSendOrder) return; // ต้องผ่านการตรวจสลิปก่อนเท่านั้น
-    if (isPaid) return;        // กดรัว ๆ ไม่ให้ส่งซ้อน
+    const slip = verifiedSlip || slipResult;
+    // ต้องผ่านการตรวจสลิป หรือตัวตรวจใช้ไม่ได้แล้วลูกค้ายืนยันเอง เท่านั้น
+    if (!slip && !(slipServiceDown && transferConfirmed)) return;
+    if (isPaid) return;        // กดรัว ๆ / ส่งซ้อนกับตัวส่งอัตโนมัติ
     setSendError('');
     setIsPaid(true);
 
@@ -338,8 +349,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     let result = { success: true, orderNumber: '' };
     if (onSendOrder) {
       // เขียนวิธีชำระให้พนักงานแยกออกว่ายอดนี้ตรวจสลิปแล้ว หรือลูกค้ายืนยันเอง (ต้องกระทบยอดกับบัญชีร้านเอง)
-      const payMethod = slipResult
-        ? `เงินโอน (QR ตรวจสลิปแล้ว)${slipResult.transRef ? ` [${slipResult.transRef}]` : ''}`
+      const payMethod = slip
+        ? `เงินโอน (QR ตรวจสลิปแล้ว)${slip.transRef ? ` [${slip.transRef}]` : ''}`
         : 'เงินโอน (QR ลูกค้ายืนยันเอง)';
       result = (await onSendOrder(
         tableNo, cart, cartSubtotal, payMethod, paySessionRef.current
@@ -1008,8 +1019,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '600', marginBottom: '0.75rem', lineHeight: 1.45 }}>
                     {lang === 'th'
-                      ? 'สแกน QR แล้วโอนตามยอด (ยอดถูกใส่มาให้ใน QR แล้ว ไม่ต้องพิมพ์เอง) จากนั้นถ่ายรูปหรือเลือกสลิปจากเครื่อง ระบบจะตรวจให้อัตโนมัติภายในไม่กี่วินาที'
-                      : 'Pay with the QR above (the amount is already filled in), then upload the slip. It is verified automatically in a few seconds.'}
+                      ? 'สแกน QR แล้วโอนตามยอด (ยอดถูกใส่มาให้ใน QR แล้ว ไม่ต้องพิมพ์เอง) จากนั้นถ่ายรูปหรือเลือกสลิปจากเครื่อง ตรวจผ่านแล้วระบบจะส่งออเดอร์เข้าครัวให้ทันที ไม่ต้องกดอะไรอีก'
+                      : 'Pay with the QR above (the amount is already filled in), then upload the slip. Once it is verified your order goes straight to the kitchen — nothing else to press.'}
                   </div>
 
                   {slipPreview && (
@@ -1064,7 +1075,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                       padding: '0.75rem 0.85rem', fontSize: '0.82rem', color: '#166534', fontWeight: '700', lineHeight: 1.6
                     }}>
                       <div style={{ fontWeight: '900', fontSize: '0.9rem', marginBottom: '0.2rem' }}>
-                        ✅ {lang === 'th' ? 'ตรวจสลิปผ่านแล้ว' : 'Slip verified'}
+                        ✅ {lang === 'th'
+                          ? (sendError ? 'ตรวจสลิปผ่านแล้ว' : 'ตรวจสลิปผ่านแล้ว — กำลังส่งออเดอร์เข้าครัวให้')
+                          : (sendError ? 'Slip verified' : 'Slip verified — sending your order to the kitchen')}
                       </div>
                       <div>{lang === 'th' ? 'ยอดที่โอน' : 'Amount'}: ฿{Number(slipResult.amount || 0).toLocaleString()}</div>
                       {slipResult.sendingBank && <div>{lang === 'th' ? 'ธนาคารต้นทาง' : 'From bank'}: {slipResult.sendingBank}</div>}
@@ -1112,7 +1125,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                 )}
 
                 <button
-                  onClick={handleConfirmSelfPayment}
+                  onClick={() => handleConfirmSelfPayment()}
                   disabled={isPaid || !canSendOrder}
                   style={{
                     width: '100%',
@@ -1130,11 +1143,13 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                   <CheckCircle size={22} />
                   {isPaid
                     ? (lang === 'th' ? 'กำลังส่งออเดอร์...' : 'Sending order...')
-                    : canSendOrder
-                      ? (lang === 'th' ? 'ส่งออเดอร์เข้าครัว' : 'Send order to kitchen')
-                      : slipServiceDown
-                        ? (lang === 'th' ? 'ติ๊กยืนยันการโอนก่อนจึงจะส่งได้' : 'Tick the confirmation to continue')
-                        : (lang === 'th' ? 'แนบสลิปก่อนจึงจะส่งออเดอร์ได้' : 'Attach a slip to continue')}
+                    : sendError
+                      ? (lang === 'th' ? 'ส่งออเดอร์อีกครั้ง' : 'Send the order again')
+                      : canSendOrder
+                        ? (lang === 'th' ? 'ส่งออเดอร์เข้าครัว' : 'Send order to kitchen')
+                        : slipServiceDown
+                          ? (lang === 'th' ? 'ติ๊กยืนยันการโอนก่อนจึงจะส่งได้' : 'Tick the confirmation to continue')
+                          : (lang === 'th' ? 'แนบสลิปแล้วระบบจะส่งออเดอร์ให้เอง' : 'Upload your slip — the order is sent automatically')}
                 </button>
               </>
             )}
