@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-
 import OrderWizardModal from './components/OrderWizardModal';
 import PosSalesScreen from './components/PosSalesScreen';
 import PaymentApprovalListener from './components/PaymentApprovalListener';
+import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import TableOrderView from './components/TableOrderView';
 import LoginScreen from './components/LoginScreen';
 import ShiftModal from './components/ShiftModal';
@@ -1384,6 +1385,8 @@ function App() {
           </div>
         </div>
       )}
+      {/* key = เส้นทางปัจจุบัน — เปลี่ยนหน้าแล้วกล่องดักพังรีเซ็ตตัวเอง ไม่ค้างจอ error ข้ามหน้า */}
+      <ChunkErrorBoundary lang={lang} key={location.pathname}>
       <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>{lang === 'th' ? 'กำลังโหลด...' : 'Loading...'}</div>}>
       <Routes>
         <Route path="/" element={<Navigate to="/index" replace />} />
@@ -1518,6 +1521,7 @@ function App() {
         <Route path="*" element={<Navigate to="/index" replace />} />
       </Routes>
       </Suspense>
+      </ChunkErrorBoundary>
 
       {selectedFood && (
         <OrderWizardModal
