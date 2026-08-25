@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal
+cd /d "%~dp0"
 title HumLai POS - ตั้งค่าเปิด Print Server อัตโนมัติ
 color 0A
 
@@ -17,6 +18,23 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
+
+rem ยังไม่ได้ลง dependency (node_modules) — Print Server จะเปิดไม่ขึ้นแบบเงียบ ๆ
+rem เพราะ daemon ซ่อนหน้าต่างไว้ จึงลงให้เสร็จตั้งแต่ตอนนี้
+if exist "%~dp0node_modules\express" goto deps_ok
+echo ยังไม่ได้ติดตั้งส่วนประกอบที่ต้องใช้ กำลังติดตั้งให้ (ครั้งแรกอาจใช้เวลา 1-3 นาที)...
+echo.
+call npm install
+if errorlevel 1 (
+  echo.
+  echo [ผิดพลาด] ติดตั้งส่วนประกอบไม่สำเร็จ — ตรวจสอบว่าเครื่องต่ออินเทอร์เน็ตอยู่ แล้วลองใหม่
+  echo.
+  pause
+  exit /b 1
+)
+echo    ติดตั้งเรียบร้อย
+echo.
+:deps_ok
 
 if not exist "%~dp0print-server-daemon.vbs" (
   echo [ผิดพลาด] ไม่พบไฟล์ print-server-daemon.vbs
@@ -57,6 +75,9 @@ echo    - บันทึกการทำงานอยู่ที่ logs\p
 echo.
 echo    ไปที่หน้า "ตั้งค่าเครื่องพิมพ์" แล้วกด "ตรวจสอบอีกครั้ง"
 echo    สถานะควรเปลี่ยนเป็นสีเขียวภายในไม่กี่วินาที
+echo.
+echo    ถ้าสถานะยังไม่เขียว ให้ดับเบิลคลิก check-printer.bat เพื่อตรวจหาสาเหตุ
+echo    (หรือดูไฟล์ logs\print-server.log)
 echo.
 echo    ถ้าต้องการยกเลิก ให้รัน uninstall-autostart.bat
 echo.

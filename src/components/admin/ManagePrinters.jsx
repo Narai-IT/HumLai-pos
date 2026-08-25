@@ -38,6 +38,10 @@ const DEFAULT_PRINTER = (ip = '') => ({ id: Date.now(), name: '', ip, type: 'kit
 
 const HEALTH_POLL_MS = 20000;
 
+// หน้าเว็บที่เปิดผ่าน https เจอข้อจำกัดของเบราว์เซอร์เพิ่มเวลาคุยกับ Print Server ในเครื่อง
+// (Chrome ขออนุญาตเข้าถึงอุปกรณ์ในเครือข่ายก่อน) จึงต้องมีคำแนะนำเพิ่มให้เฉพาะกรณีนี้
+const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
 const ManagePrinters = () => {
   const [printers, setPrinters] = useState([]);
   const [testStatus, setTestStatus] = useState({}); // { [id]: { status, msg } }
@@ -426,7 +430,20 @@ const ManagePrinters = () => {
                       </button>
                     </li>
                     <li>ถ้า Print Server อยู่คนละเครื่องกับที่เปิดหน้าเว็บนี้ ให้กด “ตั้งค่าที่อยู่” แล้วใส่ IP ของเครื่องนั้น</li>
+                    <li>
+                      เปิดแล้วยังไม่เขียว ให้ดับเบิลคลิก <code>check-printer.bat</code> — จะบอกเองว่าติดตรงไหน
+                      (ยังไม่ได้ลง Node.js / ยังไม่ได้ <code>npm install</code> / พอร์ต 3001 ยังไม่เปิด)
+                      และดูข้อความล่าสุดได้ที่ <code>logs\print-server.log</code>
+                    </li>
                   </ol>
+                  {isHttpsPage && (
+                    <div style={{ marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px dashed #e2e8f0', fontSize: '0.83rem', lineHeight: 1.7 }}>
+                      <strong style={{ color: '#0f172a' }}>เปิด Print Server แล้วแต่ยังแดงอยู่?</strong> หน้านี้เปิดผ่าน https
+                      Chrome จึงขออนุญาตก่อนติดต่ออุปกรณ์ในเครือข่าย — ถ้ามีป๊อปอัพถามให้กด “อนุญาต”
+                      และเครื่องที่รัน Print Server ต้องเป็นเวอร์ชัน 1.3.0 ขึ้นไป (เวอร์ชันเก่าจะถูก Chrome บล็อกเงียบ ๆ)
+                      ให้ <code>git pull</code> แล้วเปิด Print Server ใหม่
+                    </div>
+                  )}
                   <div style={{ marginTop: '0.6rem', fontSize: '0.82rem' }}>
                     หน้านี้จะตรวจสอบให้อัตโนมัติทุก {HEALTH_POLL_MS / 1000} วินาที เมื่อเปิด Server แล้วสถานะจะเปลี่ยนเป็นสีเขียวเอง
                   </div>

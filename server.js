@@ -6,13 +6,27 @@ import { printTicket } from './print-ticket.js';
 import { registerAutoPrint } from './auto-print.js';
 
 const SERVER_NAME = 'humlai-print-server';
-const SERVER_VERSION = '1.2.0';
+const SERVER_VERSION = '1.3.0';
 // ความสามารถที่ Print Server ตัวนี้มี — หน้าเว็บใช้เช็คว่าเครื่องนี้รันโค้ดเวอร์ชันใหม่พอไหม
 // (เครื่องที่ยังรันตัวเก่าจะไม่มี features กลับมา หน้าเว็บจะได้บอกให้อัปเดตแทนที่จะฟ้อง 404 เฉย ๆ)
-const SERVER_FEATURES = ['autoPrint'];
+const SERVER_FEATURES = ['autoPrint', 'privateNetwork'];
 const DEFAULT_PRINTER_PORT = 9100;
 
 const app = express();
+
+// ── Chrome Private Network Access ──
+// หน้าเว็บที่เปิดผ่าน https (เช่นโดเมนบน Vercel) เวลายิงมาหา 127.0.0.1 ซึ่งเป็น
+// "เครือข่ายส่วนตัว" Chrome จะส่ง preflight มาก่อนเสมอ พร้อมหัวข้อ
+// Access-Control-Request-Private-Network: true — ถ้าเราไม่ตอบอนุญาตกลับไป
+// Chrome จะบล็อกทิ้ง หน้าเว็บจึงขึ้น "ไม่พบ Print Server" ทั้งที่ Server เปิดอยู่
+// (เป็นคนละเรื่องกับ mixed content ซึ่งยกเว้น localhost ให้อยู่แล้ว)
+app.use((req, res, next) => {
+  if (req.headers['access-control-request-private-network']) {
+    res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  }
+  next();
+});
+
 app.use(cors());
 app.use(express.json()); // For handling JSON payloads
 
