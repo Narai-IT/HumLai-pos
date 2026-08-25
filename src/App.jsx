@@ -31,7 +31,7 @@ import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils
 import { priceForSaleType } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
-import { getPrinterByType, getPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
+import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 
 const MENU_ITEMS = [];
 
@@ -488,7 +488,9 @@ function App() {
       setPosSettings(data.settings);
     }
     if (data.printers && Array.isArray(data.printers) && data.printers.length > 0 && changed('printers', data.printers)) {
-      localStorage.setItem('printers_config', JSON.stringify(data.printers));
+      // รวมกับค่าที่ตั้งไว้ในเครื่องก่อน ไม่งั้นค่าที่ชีตไม่มีคอลัมน์ให้ (เช่น แยกใบ/รวมใบ) จะถูกล้างทิ้ง
+      const mergedPrinters = mergeServerPrinters(data.printers);
+      localStorage.setItem('printers_config', JSON.stringify(mergedPrinters));
       window.dispatchEvent(new Event('printers_changed'));
     }
     if (data.discounts && Array.isArray(data.discounts) && data.discounts.length > 0 && changed('discounts', data.discounts)) {

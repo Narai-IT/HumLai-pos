@@ -84,7 +84,7 @@ function initializeSheets() {
   getOrCreateSheet(ss, 'Users', ['id', 'username', 'pin', 'canCheckout', 'isAdmin', 'isCashier', 'branch']);
   getOrCreateSheet(ss, 'Discounts', ['id', 'name', 'type', 'value', 'categories']);
   getOrCreateSheet(ss, 'Settings', ['key', 'value']);
-  getOrCreateSheet(ss, 'Printers', ['id', 'name', 'ip', 'type']);
+  getOrCreateSheet(ss, 'Printers', ['id', 'name', 'ip', 'type', 'printMode']);
   getOrCreateSheet(ss, 'LiquorStorage', ['timestamp', 'type', 'customerName', 'phone', 'productName', 'qty', 'note', 'staff', 'category', 'unit']);
   getOrCreateSheet(ss, 'Waste', ['timestamp', 'branch', 'itemName', 'category', 'qty', 'unit', 'note', 'staff']);
   getOrCreateSheet(ss, 'PaymentApprovals', ['id', 'timestamp', 'tableNo', 'orderNumber', 'amount', 'requestedBy', 'status', 'approver', 'respondedAt']);
@@ -937,11 +937,13 @@ function doPost(e) {
   }
 
   if (action === 'savePrinters') {
-    var sheet = getOrCreateSheet(ss, 'Printers', ['id', 'name', 'ip', 'type']);
+    // printMode = รวมใบเดียว/แยกใบ ต้องเก็บลงชีตด้วย ไม่งั้นตอน getLive ส่งกลับมาไม่มีค่านี้
+    // แล้วเครื่องที่ sync จะทับค่าที่ตั้งไว้จนกลับไปเป็น "รวมใบเดียว" เอง
+    var sheet = getOrCreateSheet(ss, 'Printers', ['id', 'name', 'ip', 'type', 'printMode']);
     sheet.clearContents();
-    sheet.appendRow(['id', 'name', 'ip', 'type']);
+    sheet.appendRow(['id', 'name', 'ip', 'type', 'printMode']);
     (postData.printers || []).forEach(function(p) {
-      sheet.appendRow([p.id || '', p.name || '', p.ip || '', p.type || '']);
+      sheet.appendRow([p.id || '', p.name || '', p.ip || '', p.type || '', p.printMode || 'combined']);
     });
     return _bomJson({ success: true, saved: (postData.printers || []).length });
   }

@@ -30,6 +30,33 @@ export const getPrinters = () => {
   return legacy;
 };
 
+// ชีตฝั่งเซิร์ฟเวอร์เก็บเครื่องพิมพ์ไว้ไม่ครบทุกฟิลด์ (สคริปต์รุ่นเก่าเก็บแค่ id/name/ip/type)
+// ถ้าเอารายการจากเซิร์ฟเวอร์เขียนทับตรง ๆ ค่าที่ตั้งเพิ่มในเครื่องนี้ เช่น printMode (แยกใบ/รวมใบ)
+// จะหายไปเองตอน sync รอบถัดไป — ตั้งเสร็จดูเหมือนบันทึกได้ แล้วอยู่ ๆ ก็เด้งกลับเป็นค่าเริ่มต้น
+// จึงต้องรวมของเดิมในเครื่องเข้ากับรายการจากเซิร์ฟเวอร์ก่อนบันทึกทับเสมอ
+export const mergeServerPrinters = (serverPrinters = [], localPrinters = getPrinters()) => {
+  if (!Array.isArray(serverPrinters)) return [];
+
+  const findLocal = (printer) =>
+    localPrinters.find(local => String(local.id) === String(printer.id)) ||
+    localPrinters.find(local => local.ip && local.ip === printer.ip) ||
+    null;
+
+  return serverPrinters.map(printer => {
+    const local = findLocal(printer);
+    if (!local) return printer;
+    // ฟิลด์ที่เซิร์ฟเวอร์ไม่มี (หรือส่งมาเป็นค่าว่าง) ให้คงค่าที่ตั้งไว้ในเครื่องนี้
+    const merged = { ...local, ...printer };
+    Object.keys(printer).forEach(key => {
+      const value = printer[key];
+      if ((value === '' || value === undefined || value === null) && local[key] !== undefined) {
+        merged[key] = local[key];
+      }
+    });
+    return merged;
+  });
+};
+
 export const getPrinterByType = (type, printers = getPrinters()) =>
   printers.find(p => p.type === type && p.ip) || null;
 
