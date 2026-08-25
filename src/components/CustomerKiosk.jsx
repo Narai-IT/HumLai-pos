@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu } from 'lucide-react';
+import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu, Download } from 'lucide-react';
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
@@ -31,6 +31,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   const [slipChecking, setSlipChecking] = useState(false);
   const [slipResult, setSlipResult] = useState(null);   // ข้อมูลสลิปที่ผ่านการตรวจแล้ว
   const [slipError, setSlipError] = useState('');
+
+  // ข้อความใต้ปุ่มบันทึกรูป QR ('saved' | 'error' | '')
+  const [qrSaveState, setQrSaveState] = useState('');
 
   // ตัวตรวจสลิปใช้ไม่ได้ (ยังไม่ deploy / คีย์หมดอายุ / โควตาหมด / เน็ตร้านล่ม)
   // ลูกค้าถ่ายใหม่กี่ครั้งก็ไม่ผ่าน จึงเปิดทางให้ยืนยันเองแทน ไม่งั้นร้านเสียออเดอร์ทั้งโต๊ะ
@@ -69,6 +72,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     setSlipError('');
     setSlipServiceDown(false);
     setTransferConfirmed(false);
+    setQrSaveState('');
   }, [isCheckoutOpen, cartSubtotal]);
 
   // Generate QR Code when checkout opens
@@ -181,6 +185,47 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       }
       return item;
     }).filter(Boolean));
+  };
+
+  // ── บันทึกรูป QR ลงเครื่อง ──
+  // ลูกค้าถือมือถือเครื่องเดียว จะสแกน QR บนจอตัวเองไม่ได้ ต้องเซฟรูปไว้ก่อน
+  // แล้วเข้าแอปธนาคาร → "สแกนจากรูปภาพ/แกลเลอรี" ถึงจะโอนได้
+  // มือถือส่วนใหญ่ใช้ Web Share (มีเมนู "บันทึกรูปภาพ" ให้เลย) ส่วนเครื่องที่ไม่มีค่อยตกไปใช้ลิงก์ดาวน์โหลด
+  const handleSaveQr = async () => {
+    const src = qrType === 'static' ? staticQrUrl : qrDataUrl;
+    if (!src) return;
+    setQrSaveState('');
+    const fileName = `promptpay-table${tableNo}-${Math.round(cartSubtotal)}baht.png`;
+
+    try {
+      const blob = await (await fetch(src)).blob();
+      const file = new File([blob], fileName, { type: blob.type || 'image/png' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: fileName });
+          setQrSaveState('saved');
+          return;
+        } catch (err) {
+          // ผู้ใช้กดยกเลิกแผงแชร์เอง = ไม่ใช่ข้อผิดพลาด ไม่ต้องขึ้นอะไร
+          if (err && err.name === 'AbortError') return;
+          // แชร์ไม่ได้ด้วยเหตุอื่น ค่อยลองดาวน์โหลดต่อข้างล่าง
+        }
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setQrSaveState('saved');
+    } catch (err) {
+      console.error('save qr error:', err);
+      setQrSaveState('error');
+    }
   };
 
   // ย่อรูปก่อนส่ง แต่ยังต้องคมพอให้ SlipOK อ่าน QR ในสลิปออก จึงใช้ 1400px / คุณภาพ 0.92
@@ -814,6 +859,37 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                       ฿{cartSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
+
+                  {/* บันทึกรูป QR ไว้เปิดในแอปธนาคาร (สแกนจอตัวเองด้วยเครื่องเดียวกันไม่ได้) */}
+                  {(qrType === 'static' ? staticQrUrl : qrDataUrl) && (
+                    <>
+                      <button
+                        onClick={handleSaveQr}
+                        style={{
+                          width: '100%', marginTop: '0.85rem',
+                          background: '#ffffff', color: '#003d6a',
+                          border: '1.5px solid #003d6a', borderRadius: '12px',
+                          padding: '0.75rem', fontWeight: '900', fontSize: '0.95rem',
+                          cursor: 'pointer', fontFamily: 'inherit',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem'
+                        }}
+                      >
+                        <Download size={18} />
+                        {lang === 'th' ? 'บันทึกรูป QR' : 'Save QR image'}
+                      </button>
+
+                      <div style={{
+                        marginTop: '0.4rem', fontSize: '0.74rem', lineHeight: 1.45, fontWeight: '600',
+                        color: qrSaveState === 'error' ? '#b91c1c' : qrSaveState === 'saved' ? '#166534' : '#64748b'
+                      }}>
+                        {qrSaveState === 'error'
+                          ? (lang === 'th' ? 'บันทึกรูปไม่สำเร็จ — กดค้างที่รูป QR แล้วเลือก "บันทึกรูปภาพ" แทนได้' : 'Could not save. Long-press the QR and choose “Save image” instead.')
+                          : qrSaveState === 'saved'
+                            ? (lang === 'th' ? 'บันทึกรูปแล้ว — เปิดแอปธนาคาร แล้วเลือกสแกนจากรูปภาพ' : 'Saved — open your bank app and scan from your photos.')
+                            : (lang === 'th' ? 'จ่ายด้วยมือถือเครื่องนี้? บันทึกรูป QR ไว้ แล้วเปิดแอปธนาคาร → สแกนจากรูปภาพ/แกลเลอรี' : 'Paying from this phone? Save the QR, then use “scan from gallery” in your bank app.')}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {/* ─── ขั้นตอนบังคับ: แนบสลิปให้ระบบตรวจก่อน ─── */}
