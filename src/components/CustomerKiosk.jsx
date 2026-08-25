@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu, Download } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -43,11 +43,6 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   // แผงเลือกหมวดหมู่ (เปิดจากปุ่ม 3 ขีด)
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
 
-  useEffect(() => {
-    if (categories.length > 0 && !categories.some(c => c.slug === activeCategory)) {
-      setActiveCategory(categories[0].slug);
-    }
-  }, [categories]);
 
   // PromptPay QR configurations
   const promptPayId = settings?.promptPayId || '004000001641684';
@@ -380,12 +375,185 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     }, 6000);
   };
 
-  const activeCat = categories.find(c => c.slug === activeCategory) || categories[0];
-  const filteredFood = liveMenu.filter(item => {
-    const primary = item.category || 'food';
-    const extra = Array.isArray(item.categories) ? item.categories : [];
-    return primary === activeCategory || extra.includes(activeCategory);
-  });
+
+  // ── หน้าแรกโชว์ครบทุกเมนู แยกเป็นบล็อกตามหมวด ──
+  // เดิมกรองให้เห็นทีละหมวด ลูกค้าไม่รู้ว่ามีอะไรอีกบ้างถ้าไม่กดเปลี่ยนหมวด
+  // ตอนนี้ไล่ดูรวดเดียวได้ ส่วนปุ่มหมวดหมู่เปลี่ยนหน้าที่เป็น "เลื่อนไปยังหมวดนั้น"
+  const menuSections = useMemo(() => {
+    const sections = categories.map(cat => ({
+      slug: cat.slug,
+      name: lang === 'th' ? cat.name : (cat.nameEn || cat.name),
+      icon: cat.icon || '🍲',
+      items: liveMenu.filter(item => {
+        const primary = item.category || 'food';
+        const extra = Array.isArray(item.categories) ? item.categories : [];
+        return primary === cat.slug || extra.includes(cat.slug);
+      })
+    })).filter(section => section.items.length > 0);
+
+    // เมนูที่หมวดของมันถูกลบ/เปลี่ยนชื่อไปแล้ว ต้องยังเห็นอยู่ ไม่ใช่หายไปเงียบ ๆ
+    const shown = new Set(sections.flatMap(section => section.items.map(item => String(item.id))));
+    const rest = liveMenu.filter(item => !shown.has(String(item.id)));
+    if (rest.length > 0) {
+      sections.push({ slug: '__other__', name: lang === 'th' ? 'เมนูอื่น ๆ' : 'Others', icon: '🍽️', items: rest });
+    }
+    return sections;
+  }, [categories, liveMenu, lang]);
+
+  const totalMenuCount = menuSections.reduce((sum, section) => sum + section.items.length, 0);
+
+  // หมวดที่กำลังดูอยู่ — อ่านจาก menuSections เพราะมี "เมนูอื่น ๆ" ที่ไม่มีใน categories ด้วย
+  const activeCat = menuSections.find(section => section.slug === activeCategory) || menuSections[0];
+
+  // หัวจอ + แถบหมวดหมู่เป็น sticky ทับเนื้อหาอยู่ ต้องรู้ความสูงจริงเพื่อ
+  //   ก) วางแถบหมวดหมู่ให้พอดีใต้หัวจอ  ข) เลื่อนไปหมวดแล้วหัวข้อไม่โดนบัง
+  const headerRef = React.useRef(null);
+  const catBarRef = React.useRef(null);
+  const sectionRefs = React.useRef({});
+  const [headerH, setHeaderH] = useState(0);
+  const [catBarH, setCatBarH] = useState(0);
+
+  useEffect(() => {
+    const measure = () => {
+      setHeaderH(headerRef.current ? headerRef.current.offsetHeight : 0);
+      setCatBarH(catBarRef.current ? catBarRef.current.offsetHeight : 0);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+    };
+  }, [lang, menuSections.length]);
+
+  // หมวดที่เลือกอยู่หายไปจากเมนู (ร้านลบ/ปิดขาย) ให้กลับไปหมวดแรกที่ยังมีของ
+  useEffect(() => {
+    if (menuSections.length > 0 && !menuSections.some(section => section.slug === activeCategory)) {
+      setActiveCategory(menuSections[0].slug);
+    }
+  }, [menuSections, activeCategory]);
+
+  const scrollOffset = headerH + catBarH + 8;
+
+  const scrollToCategory = (slug) => {
+    setActiveCategory(slug);
+    setShowCategoryMenu(false);
+    // รอให้แผงหมวดหมู่ปิดก่อน ค่อยเลื่อน ไม่งั้นตำแหน่งเพี้ยนตอนคืนสกอร์ล
+    requestAnimationFrame(() => {
+      const el = sectionRefs.current[slug];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  // เลื่อนอ่านไปถึงหมวดไหน ให้ปุ่มด้านบนโชว์ชื่อหมวดนั้น ลูกค้าจะได้รู้ว่าอยู่ตรงไหนของเมนู
+  useEffect(() => {
+    const els = menuSections.map(section => sectionRefs.current[section.slug]).filter(Boolean);
+    if (els.length === 0 || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter(entry => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+      const slug = visible[0] && visible[0].target.dataset.slug;
+      if (slug) setActiveCategory(slug);
+    }, { rootMargin: `-${scrollOffset + 4}px 0px -65% 0px`, threshold: 0 });
+    els.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, [menuSections, scrollOffset]);
+
+  // การ์ดเมนูหนึ่งใบ — ใช้ร่วมกันทุกหมวด
+  const renderFoodCard = (food) => {
+    const inCartItems = cart.filter(c => c.food.id === food.id);
+    const inCartQty = inCartItems.reduce((sum, c) => sum + c.quantity, 0);
+    const price = Number(food.price) || 0;
+
+    return (
+      <div
+        key={food.id}
+        /* ตั้งใจไม่ให้กดที่การ์ด/รูปแล้วสั่ง — ลูกค้ามักแตะรูปเพื่อดูให้ชัด
+           ถ้าแตะแล้วเพิ่มของทันทีจะได้ของที่ไม่ได้ตั้งใจสั่ง ต้องกดปุ่ม "+ สั่ง" เท่านั้น */
+        style={{
+          background: '#ffffff', borderRadius: '18px',
+          border: '1px solid #e2e8f0', overflow: 'hidden',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.04)',
+          transition: 'transform 0.15s',
+          display: 'flex', flexDirection: 'column', height: '100%',
+          position: 'relative'
+        }}
+      >
+        {/* Image Container with high visual impact */}
+        <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative', background: '#f1f5f9' }}>
+          <img
+            src={food.image || `/images/menu/${food.id}.png`}
+            alt={food.name}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+            onError={(e) => { e.target.src = '/images/menu/default.png'; }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+          
+          {/* Badge & Price tag overlay */}
+          <div style={{
+            position: 'absolute', bottom: '8px', right: '8px',
+            background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(8px)',
+            color: '#ffffff', padding: '0.28rem 0.6rem', borderRadius: '20px',
+            fontWeight: '900', fontSize: '0.92rem', border: '1.5px solid rgba(255,255,255,0.2)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+          }}>
+            <span style={{ color: '#ea580c', fontSize: '0.75rem', marginRight: '2px' }}>฿</span>
+            {price.toLocaleString()}
+          </div>
+
+          {inCartQty > 0 && (
+            <div style={{
+              position: 'absolute', top: '8px', right: '8px',
+              background: '#ea580c', color: 'white', fontWeight: '900',
+              fontSize: '0.8rem', borderRadius: '50%', width: '26px', height: '26px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 10px rgba(234,88,12,0.4)', border: '2px solid white'
+            }}>
+              {inCartQty}
+            </div>
+          )}
+        </div>
+
+        {/* Content info */}
+        <div style={{ padding: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
+          <div>
+            {/* ตัดชื่อที่ 2 บรรทัด เพื่อให้การ์ดในแถวเดียวกันสูงเท่ากัน */}
+            <h4 style={{
+              fontSize: '0.95rem', fontWeight: '800', margin: 0, color: '#0f172a', lineHeight: 1.3,
+              display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+            }}>
+              {lang === 'th' ? food.name : (food.nameEn || food.name)}
+            </h4>
+            {food.description && (
+              <p style={{
+                fontSize: '0.74rem', color: '#64748b', margin: '0.2rem 0 0 0', fontWeight: '500', lineHeight: 1.35,
+                display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden'
+              }}>
+                {food.description}
+              </p>
+            )}
+          </div>
+
+          <button
+            onClick={() => handleFoodClick(food)}
+            style={{
+              marginTop: 'auto',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+              color: '#ffffff', border: 'none', borderRadius: '11px',
+              padding: '0.6rem 0.5rem', fontWeight: '800', fontSize: '0.88rem',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+              boxShadow: '0 4px 12px rgba(217,119,6,0.3)', width: '100%', fontFamily: 'inherit'
+            }}
+          >
+            <Plus size={16} /> {lang === 'th' ? 'สั่ง' : 'Add'}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{
@@ -410,7 +578,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     }}>
 
       {/* ─── Kiosk Header (Vertical Top Sticky) ─── */}
-      <header style={{
+      <header ref={headerRef} style={{
         position: 'sticky', top: 0, zIndex: 100,
         background: '#ffffff',
         borderBottom: '1px solid #e2e8f0',
@@ -480,8 +648,14 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
         <Sparkles size={36} color="#f59e0b" style={{ flexShrink: 0, opacity: 0.9 }} />
       </div>
 
-      {/* ─── ปุ่มหมวดหมู่ปุ่มเดียว (3 ขีด) — กดแล้วเลือกหมวดจากรายการ ─── */}
-      <div style={{ padding: '0.5rem 1rem 0.75rem' }}>
+      {/* ─── แถบหมวดหมู่ (3 ขีด) — กดแล้วเลื่อนไปยังหมวดนั้นในหน้าเดียวกัน ─── */}
+      <div
+        ref={catBarRef}
+        style={{
+          position: 'sticky', top: headerH, zIndex: 95,
+          background: '#f8fafc', padding: '0.5rem 1rem 0.6rem'
+        }}
+      >
         <button
           onClick={() => setShowCategoryMenu(true)}
           style={{
@@ -490,124 +664,60 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             padding: '0.75rem 0.9rem', borderRadius: '14px',
             border: '2px solid #e2e8f0', background: '#ffffff',
             color: '#0f172a', fontWeight: '800', fontSize: '0.95rem',
-            fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left'
+            fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+            boxShadow: '0 4px 12px rgba(15,23,42,0.05)'
           }}
         >
           <Menu size={20} color="#ea580c" />
           <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {activeCat ? `${activeCat.icon || '🍲'} ${lang === 'th' ? activeCat.name : (activeCat.nameEn || activeCat.name)}` : (lang === 'th' ? 'เลือกหมวดหมู่' : 'Choose a category')}
+            {activeCat ? `${activeCat.icon} ${activeCat.name}` : (lang === 'th' ? 'เลือกหมวดหมู่' : 'Choose a category')}
           </span>
-          <ChevronRight size={18} color="#94a3b8" style={{ transform: 'rotate(90deg)' }} />
+          <span style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', flexShrink: 0 }}>
+            {lang === 'th' ? 'ข้ามไปหมวด' : 'Jump to'}
+          </span>
+          <ChevronRight size={18} color="#94a3b8" style={{ transform: 'rotate(90deg)', flexShrink: 0 }} />
         </button>
       </div>
 
-      {/* ─── Large Photo Food Cards Feed ─── */}
+      {/* ─── เมนูทั้งหมด แยกเป็นบล็อกตามหมวด ไล่ดูรวดเดียวได้ ─── */}
       <main style={{ padding: '0 1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-            <span>{activeCat?.icon || '🍲'}</span>
-            <span>{lang === 'th' ? activeCat?.name : activeCat?.nameEn}</span>
-          </h3>
-          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700' }}>
-            {filteredFood.length} {lang === 'th' ? 'รายการ' : 'items'}
-          </span>
-        </div>
+        {menuSections.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#64748b', fontWeight: '700', padding: '2.5rem 1rem' }}>
+            {lang === 'th' ? 'ยังไม่มีเมนูให้สั่งตอนนี้' : 'No menu items available right now.'}
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700', marginBottom: '0.75rem' }}>
+              {lang === 'th'
+                ? `ทั้งหมด ${totalMenuCount} รายการ · ${menuSections.length} หมวด — เลื่อนดูได้ทั้งหน้า`
+                : `${totalMenuCount} items in ${menuSections.length} categories — scroll to browse`}
+            </div>
 
-        {/* การ์ดเมนูแบบตาราง 2 คอลัมน์ รูปเป็นสี่เหลี่ยมจัตุรัส — เห็นเมนูได้มากขึ้นต่อหนึ่งหน้าจอ */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', alignItems: 'start' }}>
-          {filteredFood.map(food => {
-            const inCartItems = cart.filter(c => c.food.id === food.id);
-            const inCartQty = inCartItems.reduce((sum, c) => sum + c.quantity, 0);
-            const price = Number(food.price) || 0;
-
-            return (
-              <div
-                key={food.id}
-                /* ตั้งใจไม่ให้กดที่การ์ด/รูปแล้วสั่ง — ลูกค้ามักแตะรูปเพื่อดูให้ชัด
-                   ถ้าแตะแล้วเพิ่มของทันทีจะได้ของที่ไม่ได้ตั้งใจสั่ง ต้องกดปุ่ม "+ สั่ง" เท่านั้น */
-                style={{
-                  background: '#ffffff', borderRadius: '18px',
-                  border: '1px solid #e2e8f0', overflow: 'hidden',
-                  boxShadow: '0 6px 20px rgba(0,0,0,0.04)',
-                  transition: 'transform 0.15s',
-                  display: 'flex', flexDirection: 'column', height: '100%',
-                  position: 'relative'
-                }}
+            {menuSections.map(section => (
+              <section
+                key={section.slug}
+                data-slug={section.slug}
+                ref={el => { sectionRefs.current[section.slug] = el; }}
+                style={{ scrollMarginTop: `${scrollOffset}px`, marginBottom: '1.5rem' }}
               >
-                {/* Image Container with high visual impact */}
-                <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative', background: '#f1f5f9' }}>
-                  <img
-                    src={food.image || `/images/menu/${food.id}.png`}
-                    alt={food.name}
-                    loading="lazy"
-                    referrerPolicy="no-referrer"
-                    onError={(e) => { e.target.src = '/images/menu/default.png'; }}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                  
-                  {/* Badge & Price tag overlay */}
-                  <div style={{
-                    position: 'absolute', bottom: '8px', right: '8px',
-                    background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(8px)',
-                    color: '#ffffff', padding: '0.28rem 0.6rem', borderRadius: '20px',
-                    fontWeight: '900', fontSize: '0.92rem', border: '1.5px solid rgba(255,255,255,0.2)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                  }}>
-                    <span style={{ color: '#ea580c', fontSize: '0.75rem', marginRight: '2px' }}>฿</span>
-                    {price.toLocaleString()}
-                  </div>
-
-                  {inCartQty > 0 && (
-                    <div style={{
-                      position: 'absolute', top: '8px', right: '8px',
-                      background: '#ea580c', color: 'white', fontWeight: '900',
-                      fontSize: '0.8rem', borderRadius: '50%', width: '26px', height: '26px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      boxShadow: '0 4px 10px rgba(234,88,12,0.4)', border: '2px solid white'
-                    }}>
-                      {inCartQty}
-                    </div>
-                  )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
+                    <span style={{ flexShrink: 0 }}>{section.icon}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{section.name}</span>
+                  </h3>
+                  <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '700', flexShrink: 0 }}>
+                    {section.items.length} {lang === 'th' ? 'รายการ' : 'items'}
+                  </span>
                 </div>
 
-                {/* Content info */}
-                <div style={{ padding: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
-                  <div>
-                    {/* ตัดชื่อที่ 2 บรรทัด เพื่อให้การ์ดในแถวเดียวกันสูงเท่ากัน */}
-                    <h4 style={{
-                      fontSize: '0.95rem', fontWeight: '800', margin: 0, color: '#0f172a', lineHeight: 1.3,
-                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                    }}>
-                      {lang === 'th' ? food.name : (food.nameEn || food.name)}
-                    </h4>
-                    {food.description && (
-                      <p style={{
-                        fontSize: '0.74rem', color: '#64748b', margin: '0.2rem 0 0 0', fontWeight: '500', lineHeight: 1.35,
-                        display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical', overflow: 'hidden'
-                      }}>
-                        {food.description}
-                      </p>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => handleFoodClick(food)}
-                    style={{
-                      marginTop: 'auto',
-                      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
-                      color: '#ffffff', border: 'none', borderRadius: '11px',
-                      padding: '0.6rem 0.5rem', fontWeight: '800', fontSize: '0.88rem',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
-                      boxShadow: '0 4px 12px rgba(217,119,6,0.3)', width: '100%', fontFamily: 'inherit'
-                    }}
-                  >
-                    <Plus size={16} /> {lang === 'th' ? 'สั่ง' : 'Add'}
-                  </button>
+                {/* การ์ดเมนูแบบตาราง 2 คอลัมน์ รูปเป็นสี่เหลี่ยมจัตุรัส — เห็นเมนูได้มากขึ้นต่อหนึ่งหน้าจอ */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', alignItems: 'start' }}>
+                  {section.items.map(renderFoodCard)}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              </section>
+            ))}
+          </>
+        )}
       </main>
 
       {/* ─── Sticky Bottom Floating Cart Bar ─── */}
@@ -704,18 +814,14 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-              {categories.map(cat => {
+              {menuSections.map(cat => {
                 const isActive = cat.slug === activeCategory;
-                // นับเฉพาะเมนูที่อยู่ในหมวดนั้นจริง ลูกค้าจะได้รู้ว่ากดเข้าไปแล้วมีของ
-                const count = liveMenu.filter(item => {
-                  const primary = item.category || 'food';
-                  const extra = Array.isArray(item.categories) ? item.categories : [];
-                  return primary === cat.slug || extra.includes(cat.slug);
-                }).length;
+                // หมวดที่ไม่มีเมนูไม่ต้องโชว์ (menuSections กรองออกให้แล้ว) กดแล้วต้องเจอของเสมอ
+                const count = cat.items.length;
                 return (
                   <button
                     key={cat.slug}
-                    onClick={() => { setActiveCategory(cat.slug); setShowCategoryMenu(false); }}
+                    onClick={() => scrollToCategory(cat.slug)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '0.6rem',
                       padding: '0.85rem 0.9rem', borderRadius: '13px',
@@ -725,9 +831,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
                       fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left', width: '100%'
                     }}
                   >
-                    <span style={{ flexShrink: 0, fontSize: '1.15rem' }}>{cat.icon || '🍲'}</span>
+                    <span style={{ flexShrink: 0, fontSize: '1.15rem' }}>{cat.icon}</span>
                     <span style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
-                      {lang === 'th' ? cat.name : (cat.nameEn || cat.name)}
+                      {cat.name}
                     </span>
                     <span style={{ fontSize: '0.78rem', fontWeight: '700', color: '#94a3b8', flexShrink: 0 }}>
                       {count}
