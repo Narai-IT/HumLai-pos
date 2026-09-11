@@ -16,29 +16,52 @@ const bool = (raw, fallback) => {
   return String(raw).toLowerCase() !== 'false' && String(raw) !== '0';
 };
 
+// รับได้ทั้ง "192.168.1.10", "SRV-NARAI" และแบบมีชื่ออินสแตนซ์ "SRV-NARAI\\SQLEXPRESS"
+const [serverHost, instanceName] = String(process.env.SQL_SERVER || 'localhost').split('\\');
+
 export const dbConfig = {
-  server:   process.env.SQL_SERVER   || 'localhost',
-  port:     Number(process.env.SQL_PORT || 1433),
+  server:   serverHost || 'localhost',
   database: process.env.SQL_DATABASE || 'HumLaiPOS',
   user:     process.env.SQL_USER     || '',
   password: process.env.SQL_PASSWORD || '',
+  // ใช้ชื่ออินสแตนซ์ (SQL Express) กับพอร์ตพร้อมกันไม่ได้ ไดรเวอร์จะฟ้องทันที
+  // ตั้งชื่ออินสแตนซ์มา = ให้ SQL Browser (UDP 1434) เป็นคนบอกพอร์ตเอง
+  ...(instanceName ? {} : { port: Number(process.env.SQL_PORT || 1433) }),
   options: {
     encrypt: bool(process.env.SQL_ENCRYPT, true),
     trustServerCertificate: bool(process.env.SQL_TRUST_CERT, true),
     enableArithAbort: true,
     // เก็บ/อ่าน DATETIME2 ตามค่าที่ส่งไปตรง ๆ ไม่ให้ไดรเวอร์ขยับเวลาตามโซนของเครื่องเซิร์ฟเวอร์
     useUTC: true,
-    // ชื่ออินสแตนซ์แบบ SRV\SQLEXPRESS — mssql ต้องรับมาเป็น instanceName ไม่ใช่ส่วนหนึ่งของ server
-    ...(String(process.env.SQL_SERVER || '').includes('\\')
-      ? { instanceName: String(process.env.SQL_SERVER).split('\\')[1] }
-      : {})
+    ...(instanceName ? { instanceName } : {})
   },
   pool: { max: Number(process.env.SQL_POOL_MAX || 5), min: 0, idleTimeoutMillis: 30000 },
   requestTimeout: Number(process.env.SQL_TIMEOUT || 20000),
   connectionTimeout: Number(process.env.SQL_CONNECT_TIMEOUT || 15000)
 };
 
-if (String(dbConfig.server).includes('\\')) dbConfig.server = String(dbConfig.server).split('\\')[0];
+// ข้อความ error ดิบของไดรเวอร์บอกแค่ "Failed to connect to x:1433" ซึ่งไม่พอให้รู้ว่าต้องไปแก้ตรงไหน
+export function explainConnectError(err) {
+  const raw = String((err && err.message) || err);
+  const where = instanceName ? `${serverHost}\\${instanceName}` : `${serverHost}:${dbConfig.port}`;
+  if (/Failed to connect|ETIMEOUT|ESOCKET|ECONNREFUSED|getaddrinfo/i.test(raw)) {
+    return [
+      `ต่อ SQL Server ที่ ${where} ไม่ได้ — ${raw}`,
+      'เช็กตามนี้:',
+      `  1. ค่า SQL_SERVER ในไฟล์ .env ชี้ไปที่เครื่องจริงหรือยัง (ตอนนี้คือ "${process.env.SQL_SERVER || '(ไม่ได้ตั้ง)'}")`,
+      '  2. เปิด TCP/IP ใน SQL Server Configuration Manager แล้วรีสตาร์ตเซอร์วิสหรือยัง',
+      '  3. ไฟร์วอลล์เปิดพอร์ต 1433 หรือยัง (ถ้าใช้ SQL Express ต้องเปิด UDP 1434 ให้ SQL Browser ด้วย)',
+      '  4. ทดสอบจาก PowerShell: Test-NetConnection -ComputerName <เครื่อง> -Port 1433'
+    ].join('\n');
+  }
+  if (/Login failed/i.test(raw)) {
+    return `ชื่อผู้ใช้หรือรหัสผ่านไม่ถูก (SQL_USER / SQL_PASSWORD) — ${raw}\nถ้ามั่นใจว่าถูก ให้เช็กว่าเปิด SQL Server Authentication (Mixed Mode) แล้วหรือยัง`;
+  }
+  if (/Cannot open database/i.test(raw)) {
+    return `ไม่พบฐานข้อมูล "${dbConfig.database}" หรือผู้ใช้นี้เข้าไม่ได้ — ${raw}`;
+  }
+  return raw;
+}
 
 // Vercel เรียกฟังก์ชันซ้ำใน container เดิม — เก็บ pool ไว้ที่ globalThis
 // ไม่งั้นทุกคำขอจะเปิดการเชื่อมต่อใหม่จนเซิร์ฟเวอร์เต็ม

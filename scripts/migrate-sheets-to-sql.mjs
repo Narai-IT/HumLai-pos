@@ -9,7 +9,7 @@
 //   node --env-file=.env scripts/migrate-sheets-to-sql.mjs            → ดูว่ามีข้อมูลเท่าไรบ้าง (ไม่เขียนอะไร)
 //   node --env-file=.env scripts/migrate-sheets-to-sql.mjs --write    → ย้ายจริง (ล้างตารางปลายทางก่อนเขียน)
 //   node --env-file=.env scripts/migrate-sheets-to-sql.mjs --write --only Orders,Menu
-import { query, insertRows, getPool } from '../api/_lib/db.js';
+import { query, insertRows, getPool, explainConnectError } from '../api/_lib/db.js';
 import { toThaiClock } from '../api/_lib/time.js';
 
 const GAS_URL = process.env.GAS_EXPORT_URL || '';
@@ -242,4 +242,4 @@ const run = async () => {
   await pool.close();
 };
 
-run().catch(err => { console.error('\n' + err.message); process.exit(1); });
+run().catch(err => { console.error('\n' + explainConnectError(err)); process.exit(1); });

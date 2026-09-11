@@ -6,7 +6,7 @@ import { handleGet, getStockLevels, getIngredientsList, getBomRows, generateSale
 import * as write from './write.js';
 import * as admin from './admin.js';
 import { deductStock, recordStockIn, saveBOM, upsertIngredient, deleteIngredient } from './stock.js';
-import { getPool } from './db.js';
+import { getPool, explainConnectError } from './db.js';
 
 export const BUILD = '2026-09-11-sqlserver';
 
@@ -83,7 +83,7 @@ async function ping() {
   } catch (err) {
     out.success = false;
     out.db = 'error';
-    out.error = String(err.message || err);
+    out.error = explainConnectError(err);
   }
   return out;
 }

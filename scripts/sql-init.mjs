@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getPool } from '../api/_lib/db.js';
+import { getPool, explainConnectError } from '../api/_lib/db.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const schemaPath = path.join(here, '..', 'db', 'schema.sql');
@@ -37,4 +37,4 @@ const run = async () => {
   await pool.close();
 };
 
-run().catch(err => { console.error(err.message); process.exit(1); });
+run().catch(err => { console.error('\n' + explainConnectError(err)); process.exit(1); });
