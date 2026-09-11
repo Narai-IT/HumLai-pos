@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, RefreshCw, Download, Calendar, TrendingUp, BarChart2, CheckCircle, Search, ArrowLeft, ChevronRight, Receipt, CreditCard, FileSpreadsheet } from 'lucide-react';
 import html2canvas from 'html2canvas';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../utils/api';
 
 // Time helpers in Thai Timezone
 const getThaiTodayStr = () => {
@@ -85,7 +84,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${GAS_URL}?action=getReportData&from=${fromDate}&to=${toDate}`);
+      const res = await fetch(`${API_URL}?action=getReportData&from=${fromDate}&to=${toDate}`);
       const json = await res.json();
       if (json.success) {
         setData(json);

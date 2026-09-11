@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, RefreshCw, ReceiptText, ChevronDown, ChevronUp, Phone, User, Clock } from 'lucide-react';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../utils/api';
 
 const parseItems = (raw) => {
   if (Array.isArray(raw)) return raw;
@@ -20,7 +19,7 @@ const OutstandingBills = ({ lang = 'th', onBack }) => {
     try { local = JSON.parse(localStorage.getItem('outstanding_bills') || '[]'); } catch {}
     let remote = [];
     try {
-      const res = await fetch(`${GAS_URL}?action=getOutstandingBills`);
+      const res = await fetch(`${API_URL}?action=getOutstandingBills`);
       const data = await res.json();
       if (data.success) remote = data.bills || [];
     } catch (e) {}

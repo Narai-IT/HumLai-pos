@@ -1,0 +1,170 @@
+// ── ข้อมูลหลังบ้าน: เมนู / หมวดหมู่ / โปรโมชั่น / ผู้ใช้ / เครื่องพิมพ์ / ส่วนลด / ตั้งค่า / รูปภาพ ──
+import { query, withTransaction, insertRows, typed, sql } from './db.js';
+import { toText, toBit, toJson, CATEGORY_SPEC } from './rows.js';
+
+const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
+const CATEGORY_COLS = Object.keys(CATEGORY_SPEC);
+
+const menuValues = (item) => ([
+  String(item.id ?? Date.now()), item.category || 'food', toText(item.name), toText(item.nameEn),
+  toText(item.description), toText(item.descriptionEn), Number(item.price) || 0, toText(item.image),
+  item.isActive !== false ? 1 : 0,
+  toJson(item.bundledItems, '[]'), toJson(item.popupConfig, '{}'),
+  toJson(item.prices, '[]'), toJson(item.categories, '[]'), toText(item.printerId)
+]);
+
+// ค่าเริ่มต้นของแต่ละคอลัมน์ยกมาจากสคริปต์เดิมทั้งหมด
+// (ป๊อปอัพชุดที่ 1 เปิดเป็นค่าเริ่มต้น ชุด 2–6 ปิด, hasDining เปิด)
+const categoryValues = (c) => {
+  const out = [String(c.slug ?? Date.now()), toText(c.name), toText(c.nameEn), c.icon || '📌', c.isActive !== false ? 1 : 0];
+  for (let i = 1; i <= 6; i++) {
+    const has = i === 1 ? (c.hasPopup1 !== false) : (c[`hasPopup${i}`] === true);
+    out.push(has ? 1 : 0);
+    out.push(toText(c[`popup${i}Category`]));
+    out.push(toJson(c[`popup${i}Items`], '[]'));
+    out.push(Number(c[`popup${i}Min`]) || 0);
+    out.push(Number(c[`popup${i}Max`]) || 0);
+    out.push(toJson(c[`popup${i}ItemsMax`], '{}'));
+    out.push(c[`popup${i}Free`] === true ? 1 : 0);
+  }
+  out.push(c.hasDining !== false ? 1 : 0);
+  return out;
+};
+
+// UPDATE ก่อน ถ้าไม่โดนแถวไหนค่อย INSERT — แทน "หาแถวในชีทแล้วเขียนทับ" ของเดิม
+async function upsert(table, columns, values, keyColumn) {
+  const params = {};
+  columns.forEach((col, i) => { params[`c${i}`] = values[i]; });
+  const keyIndex = columns.indexOf(keyColumn);
+  const setList = columns.map((col, i) => (i === keyIndex ? null : `[${col}] = @c${i}`)).filter(Boolean).join(', ');
+  const res = await query(`UPDATE dbo.${table} SET ${setList} WHERE [${keyColumn}] = @c${keyIndex}`, params);
+  if (res.rowsAffected[0] === 0) {
+    await query(
+      `INSERT INTO dbo.${table} (${columns.map(c => `[${c}]`).join(', ')}) VALUES (${columns.map((c, i) => `@c${i}`).join(', ')})`,
+      params
+    );
+  }
+  return { success: true };
+}
+
+// เขียนทับทั้งตาราง (หน้าหลังบ้านกด "บันทึก" ส่งมาทั้งชุด) — ลำดับแถวคือลำดับที่ส่งมา
+async function replaceAll(table, columns, rows) {
+  await withTransaction(async (runner) => {
+    await runner(`DELETE FROM dbo.${table}`);
+    await insertRows(table, columns, rows, runner);
+  });
+  return { success: true, saved: rows.length };
+}
+
+// ── เมนู ──
+export const upsertMenu = (data) => {
+  const item = data.item;
+  if (!item || !item.id) return { success: false };
+  return upsert('Menu', MENU_COLS, menuValues(item), 'id');
+};
+
+export const deleteMenu = async (data) => {
+  const res = await query('DELETE FROM dbo.Menu WHERE CAST(id AS NVARCHAR(60)) = @id', { id: String(data.id ?? '') });
+  return res.rowsAffected[0] > 0 ? { success: true } : { success: false, error: 'Not found' };
+};
+
+export const saveMenu = (data) => replaceAll('Menu', MENU_COLS, (data.items || []).map(menuValues));
+
+// ── หมวดหมู่ ──
+export const upsertCategory = (data) => {
+  const c = data.item;
+  if (!c || !c.slug) return { success: false };
+  return upsert('Categories', CATEGORY_COLS, categoryValues(c), 'slug');
+};
+
+export const deleteCategory = async (data) => {
+  const res = await query('DELETE FROM dbo.Categories WHERE slug = @slug', { slug: String(data.slug ?? '') });
+  return { success: res.rowsAffected[0] > 0 };
+};
+
+export const saveCategories = (data) => replaceAll('Categories', CATEGORY_COLS, (data.categories || []).map(categoryValues));
+
+// ── โปรโมชั่น ──
+const promoValues = (p) => ([String(p.id ?? Date.now()), toText(p.name), toText(p.nameEn), Number(p.price) || 0, toText(p.origPrice)]);
+const PROMO_COLS = ['id','name','nameEn','price','origPrice'];
+
+export const upsertPromotion = (data) => {
+  const promo = data.item;
+  if (!promo || !promo.id) return { success: false };
+  return upsert('Promotions', PROMO_COLS, promoValues(promo), 'id');
+};
+
+export const deletePromotion = async (data) => {
+  const res = await query('DELETE FROM dbo.Promotions WHERE CAST(id AS NVARCHAR(60)) = @id', { id: String(data.id ?? '') });
+  return { success: res.rowsAffected[0] > 0 };
+};
+
+export const savePromotions = (data) => replaceAll('Promotions', PROMO_COLS, (data.promotions || []).map(promoValues));
+
+// ── ผู้ใช้ / เครื่องพิมพ์ / ส่วนลด ──
+export const saveUsers = (data) => replaceAll('Users',
+  ['id','username','pin','canCheckout','isAdmin','isCashier','branch'],
+  (data.users || []).map(u => ([
+    String(u.id ?? Date.now()), toText(u.username), toText(u.pin),
+    u.canCheckout !== false ? 1 : 0,
+    toBit(u.isAdmin) === 1 ? 1 : 0,
+    toBit(u.isCashier) === 1 ? 1 : 0,
+    toText(u.branch)
+  ]))
+);
+
+// printMode (รวมใบเดียว/แยกใบ) ต้องเก็บด้วย ไม่งั้นเครื่องที่ sync จะทับค่าที่ตั้งไว้
+export const savePrinters = (data) => replaceAll('Printers',
+  ['id','name','ip','type','printMode'],
+  (data.printers || []).map(p => ([toText(p.id), toText(p.name), toText(p.ip), toText(p.type), p.printMode || 'combined']))
+);
+
+export const saveDiscounts = (data) => replaceAll('Discounts',
+  ['id','name','type','value','categories'],
+  (data.discounts || []).map(d => ([toText(d.id), toText(d.name), toText(d.type), Number(d.value) || 0, JSON.stringify(d.categories || [])]))
+);
+
+export const saveSettings = async (data) => {
+  const value = JSON.stringify(data.settings || {});
+  const res = await query(`UPDATE dbo.Settings SET [value] = @value WHERE [key] = 'pos_settings'`, { value });
+  if (res.rowsAffected[0] === 0) {
+    await query(`INSERT INTO dbo.Settings ([key], [value]) VALUES ('pos_settings', @value)`, { value });
+  }
+  return { success: true };
+};
+
+// ── ล้างข้อมูล ──
+export const resetAllSheetData = async () => {
+  await withTransaction(async (runner) => {
+    for (const table of ['Categories', 'Menu', 'Promotions']) await runner(`DELETE FROM dbo.${table}`);
+  });
+  return { success: true, message: 'All data cleared' };
+};
+
+export const clearSalesData = async () => {
+  const tables = ['Orders', 'TableOrders', 'PaymentSummary', 'PaymentApprovals', 'OutstandingBills', 'Shifts', 'StockOut', 'StockIn', 'LiquorStorage', 'Waste'];
+  await withTransaction(async (runner) => {
+    for (const table of tables) await runner(`DELETE FROM dbo.${table}`);
+  });
+  return { success: true, message: 'Sales and transaction data cleared successfully' };
+};
+
+// ── รูปภาพ (เดิมเก็บบน Google Drive) ──
+// เก็บไฟล์ลงตาราง Images แล้วเสิร์ฟผ่าน /api/image?id=... — ไม่ต้องพึ่งสิทธิ์ Drive อีก
+async function saveImage(data, kind, fallbackPrefix) {
+  if (!data.base64) return { success: false, error: 'ไม่พบไฟล์รูป' };
+  const id = `${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const bytes = Buffer.from(String(data.base64), 'base64');
+  if (bytes.length > 15 * 1024 * 1024) return { success: false, error: 'ไฟล์ใหญ่เกิน 15MB' };
+  await query(
+    `INSERT INTO dbo.Images (id, kind, filename, mimeType, bytes, createdAt) VALUES (@id, @kind, @filename, @mimeType, @bytes, SYSUTCDATETIME())`,
+    { id, kind, filename: data.filename || `${fallbackPrefix}-${Date.now()}.jpg`, mimeType: data.mimeType || 'image/jpeg',
+      // ระบุชนิดให้ชัด ไม่ให้ไดรเวอร์เดาเป็น varbinary ขนาดสั้นแล้วตัดไฟล์ทิ้ง
+      bytes: typed(sql.VarBinary(sql.MAX), bytes) }
+  );
+  const base = (process.env.IMAGE_BASE_URL || '').replace(/\/$/, '');
+  return { success: true, fileId: id, url: `${base}/api/image?id=${encodeURIComponent(id)}` };
+}
+
+export const uploadImage = (data) => saveImage(data, 'menu', 'menu');
+export const uploadSlip  = (data) => saveImage(data, 'slip', 'slip');

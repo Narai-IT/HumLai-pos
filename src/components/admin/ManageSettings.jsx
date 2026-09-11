@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, ToggleLeft, ToggleRight, Save, Info, QrCode, Upload, CheckCircle2, AlertTriangle } from 'lucide-react';
 import jsQR from 'jsqr';
 import { parseKShopPayload } from '../../utils/promptpay';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../../utils/api';
 
 const DEFAULT_SETTINGS = {
   serviceCharge: { enabled: false, rate: 10 },
@@ -130,7 +129,7 @@ const ManageSettings = ({ users = [] }) => {
   const handleSave = () => {
     localStorage.setItem('pos_settings', JSON.stringify(settings));
     window.dispatchEvent(new Event('pos_settings_changed'));
-    fetch(GAS_URL, {
+    fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },

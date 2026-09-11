@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Trash2, RefreshCw, X, Save, ChevronLeft, Clock, Building2 } from 'lucide-react';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../utils/api';
 
 const WASTE_UNITS = ['จาน', 'แก้ว', 'ขวด', 'ชิ้น', 'ถ้วย', 'ที่', 'กรัม', 'รายการ'];
 
@@ -37,7 +36,7 @@ const WasteRecord = ({ currentUser, lang = 'th', branch: loginBranch = '', onBac
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${GAS_URL}?action=getWasteRecords`);
+      const res = await fetch(`${API_URL}?action=getWasteRecords`);
       const data = await res.json();
       if (data.success) setRecords(data.records || []);
     } catch (e) {}
@@ -104,7 +103,7 @@ const WasteRecord = ({ currentUser, lang = 'th', branch: loginBranch = '', onBac
     setSaving(true);
     setSaveMsg('');
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },

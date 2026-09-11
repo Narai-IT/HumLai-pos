@@ -10,7 +10,7 @@ var SHEET_ID = '16TdnUiHIZ0ACWbbNq2h6tXg49LL0N3FCHXMXB5Y9BlM';
 
 // ป้ายเวอร์ชันของสคริปต์ — ใช้ตรวจว่า deployment ที่แอปเรียกอยู่เป็นโค้ดล่าสุดหรือยัง
 // (เปิด <URL>/exec?action=ping ในเบราว์เซอร์แล้วดูค่านี้) แก้โค้ดครั้งต่อไปให้ขยับเลขวันที่ด้วย
-var SCRIPT_BUILD = '2026-08-20-kiosk-sales';
+var SCRIPT_BUILD = '2026-09-11-export-for-sql';
 
 // โฟลเดอร์ Google Drive สำหรับเก็บรูปเมนูที่อัปโหลดจากหน้าจัดการเมนู
 // https://drive.google.com/drive/folders/14n5TTf-0fUD4_BrjPXr8e1Np8GIQwkM3
@@ -382,6 +382,36 @@ function doGet(e) {
       shifts:   allShifts,
       waste:    filterByDate(allWaste,    'timestamp')
     });
+  }
+
+  // ── ส่งออกข้อมูลดิบทั้งชีท (ใช้ตอนย้ายข้อมูลไป SQL Server ครั้งเดียว) ──
+  // ?action=exportSheetNames                              → รายชื่อชีททั้งหมด
+  // ?action=exportSheet&name=Orders&offset=0&limit=2000   → หัวตาราง + ข้อมูลดิบทีละก้อน
+  // แบ่งก้อนเพราะชีทออเดอร์ใหญ่เกินกว่าจะส่งครบในคำขอเดียว (Apps Script มีเพดานเวลารัน)
+  if (action === 'exportSheetNames') {
+    var names = ss.getSheets().map(function(sh) { return { name: sh.getName(), rows: Math.max(0, sh.getLastRow() - 1) }; });
+    return _bomJson({ success: true, sheets: names });
+  }
+
+  if (action === 'exportSheet') {
+    var expName = (e && e.parameter && e.parameter.name) ? e.parameter.name : '';
+    var expSheet = ss.getSheetByName(expName);
+    if (!expSheet) return _bomJson({ success: false, error: 'ไม่พบชีท ' + expName });
+
+    var expLastRow = expSheet.getLastRow();
+    var expLastCol = expSheet.getLastColumn();
+    if (expLastRow < 1 || expLastCol < 1) return _bomJson({ success: true, headers: [], rows: [], total: 0 });
+
+    var expHeaders = expSheet.getRange(1, 1, 1, expLastCol).getValues()[0];
+    var expTotal   = Math.max(0, expLastRow - 1);
+    var expOffset  = Math.max(0, parseInt((e.parameter.offset || '0'), 10) || 0);
+    var expLimit   = Math.min(5000, Math.max(1, parseInt((e.parameter.limit || '2000'), 10) || 2000));
+    var expStart   = 2 + expOffset;
+    if (expStart > expLastRow) return _bomJson({ success: true, headers: expHeaders, rows: [], total: expTotal });
+
+    var expCount = Math.min(expLimit, expLastRow - expStart + 1);
+    var expRows  = expSheet.getRange(expStart, 1, expCount, expLastCol).getValues();
+    return _bomJson({ success: true, headers: expHeaders, rows: expRows, total: expTotal, offset: expOffset, count: expCount });
   }
 
   return _bomJson({ error: 'Unknown GET action' });

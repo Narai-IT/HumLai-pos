@@ -7,7 +7,10 @@
     "dev": "vite --host",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sql:init": "node --env-file=.env scripts/sql-init.mjs",
+    "sql:migrate": "node --env-file=.env scripts/migrate-sheets-to-sql.mjs",
+    "api:serve": "node --env-file=.env sql-api-server.js"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",
@@ -17,6 +20,7 @@
     "jimp": "^1.6.1",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.577.0",
+    "mssql": "^11.0.1",
     "node-thermal-printer": "^4.6.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.4",

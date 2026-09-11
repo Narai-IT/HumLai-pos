@@ -3,8 +3,7 @@ import QRCode from 'qrcode';
 import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer } from 'lucide-react';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { print80mm, scopedSlipCss } from '../utils/print80mm';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../utils/api';
 
 const calcCharges = (subtotal, settings = {}, discount = null) => {
   let discountAmount = 0;
@@ -74,7 +73,7 @@ const CheckoutModal = ({
   const uploadSlip = async (dataUrl) => {
     const base64 = String(dataUrl).split(',')[1];
     if (!base64) return;
-    await fetch(GAS_URL, {
+    await fetch(API_URL, {
       method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({ action: 'uploadSlip', base64, mimeType: 'image/jpeg', filename: `${billNo}.jpg` })
     });
