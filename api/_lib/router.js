@@ -1,0 +1,121 @@
+// ตัวกลางรับคำขอทั้งหมด — พูดภาษาเดียวกับ Apps Script เดิมเป๊ะ ๆ
+//   อ่าน:  GET  ?action=getLive
+//   เขียน: POST body JSON { action: 'insertOrder', ... }
+// หน้าบ้านจึงเปลี่ยนแค่ URL ปลายทาง ไม่ต้องแก้ตรรกะการเรียก
+import { handleGet, getStockLevels, getIngredientsList, getBomRows, generateSalesReport } from './read.js';
+import * as write from './write.js';
+import * as admin from './admin.js';
+import { deductStock, recordStockIn, saveBOM, upsertIngredient, deleteIngredient } from './stock.js';
+import { getPool } from './db.js';
+
+export const BUILD = '2026-09-11-sqlserver';
+
+// ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
+const POST_ACTIONS = {
+  kioskPaidOrder:          write.handleKioskPaidOrder,
+  addTableOrder:           write.addTableOrder,
+  clearAllTableOrders:     write.clearAllTableOrders,
+  clearTableOrders:        write.clearTableOrders,
+  deleteTableOrderItem:    write.deleteTableOrderItem,
+  moveTable:               write.moveTable,
+  moveTableItems:          write.moveTableItems,
+  insertOrder:             write.insertOrder,
+  updateStatus:            write.updateStatus,
+  cancelOrder:             write.cancelOrder,
+  saveOutstandingBills:    write.saveOutstandingBills,
+  createPaymentApproval:   write.createPaymentApproval,
+  respondPaymentApproval:  write.respondPaymentApproval,
+  openShift:               write.openShift,
+  closeShift:              write.closeShift,
+  savePaymentRecord:       write.savePaymentRecord,
+  saveLiquorRecord:        write.saveLiquorRecord,
+  saveWasteRecord:         write.saveWasteRecord,
+
+  upsertMenu:              admin.upsertMenu,
+  deleteMenu:              admin.deleteMenu,
+  saveMenu:                admin.saveMenu,
+  upsertCategory:          admin.upsertCategory,
+  deleteCategory:          admin.deleteCategory,
+  saveCategories:          admin.saveCategories,
+  upsertPromotion:         admin.upsertPromotion,
+  deletePromotion:         admin.deletePromotion,
+  savePromotions:          admin.savePromotions,
+  saveUsers:               admin.saveUsers,
+  savePrinters:            admin.savePrinters,
+  saveDiscounts:           admin.saveDiscounts,
+  saveSettings:            admin.saveSettings,
+  resetAllSheetData:       admin.resetAllSheetData,
+  clearSalesData:          admin.clearSalesData,
+  uploadImage:             admin.uploadImage,
+  uploadSlip:              admin.uploadSlip,
+
+  deductStock,
+  stockIn:                 recordStockIn,
+  saveBOM:                 saveBOM,
+  upsertIngredient,
+  deleteIngredient
+};
+
+// คำสั่งอ่านที่ไม่ได้อยู่ใน read.handleGet (ของเบ็ดเตล็ด/ของที่ใช้ตรวจระบบ)
+async function handleExtraGet(action) {
+  switch (action) {
+    case 'getBOM':            return await getBomRows();
+    case 'getSalesReport':    return await generateSalesReport();
+    case 'getStock':          return await getStockLevels();
+    case 'getIngredients':    return await getIngredientsList();
+    case 'resetAllSheetData': return await admin.resetAllSheetData();
+    case 'clearSalesData':    return await admin.clearSalesData();
+    // ของเดิมมี initSheets ไว้สร้างชีทที่ขาด — ตอนนี้โครงตารางสร้างด้วย db/schema.sql
+    case 'initSheets':        return { success: true, message: 'โครงสร้างตารางสร้างด้วย db/schema.sql (npm run sql:init)' };
+    default: return null;
+  }
+}
+
+// เช็กว่า API ที่หน้าเว็บเรียกอยู่เป็นโค้ดตัวไหน และต่อฐานข้อมูลได้จริงไหม
+// เปิด <URL>?action=ping ในเบราว์เซอร์แล้วดูผลได้เลย
+async function ping() {
+  const out = { success: true, build: BUILD, backend: 'sqlserver', database: process.env.SQL_DATABASE || '', server: process.env.SQL_SERVER || '' };
+  try {
+    const pool = await getPool();
+    const res = await pool.request().query('SELECT COUNT(*) AS n FROM dbo.Menu');
+    out.db = 'connected';
+    out.menuRows = res.recordset[0].n;
+  } catch (err) {
+    out.success = false;
+    out.db = 'error';
+    out.error = String(err.message || err);
+  }
+  return out;
+}
+
+// body อาจมาเป็น object (เมื่อ Content-Type: application/json) หรือข้อความดิบ
+// (หน้าบ้านส่ง text/plain มาตั้งแต่ยุค GAS เพื่อเลี่ยง preflight — ต้องรับได้ทั้งคู่)
+export function parseBody(body) {
+  if (!body) return {};
+  if (typeof body === 'object' && !Buffer.isBuffer(body)) return body;
+  try { return JSON.parse(Buffer.isBuffer(body) ? body.toString('utf8') : String(body)); }
+  catch { return null; }
+}
+
+export async function route({ method, params = {}, body }) {
+  if (method === 'GET') {
+    const action = params.action || 'getAllData';
+    if (action === 'ping') return await ping();
+    const fromRead = await handleGet(action, params);
+    if (fromRead) return fromRead;
+    const extra = await handleExtraGet(action);
+    if (extra) return extra;
+    return { error: 'Unknown GET action' };
+  }
+
+  if (method === 'POST') {
+    const data = parseBody(body);
+    if (data === null) return { success: false, error: 'Invalid Content' };
+    const action = data.action || 'insertOrder';
+    const handler = POST_ACTIONS[action];
+    if (!handler) return { success: false, error: 'Unknown action' };
+    return await handler(data);
+  }
+
+  return { success: false, error: 'Method not allowed' };
+}

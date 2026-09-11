@@ -33,6 +33,7 @@ import { priceForSaleType } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
+import { API_URL } from './utils/api';
 
 const MENU_ITEMS = [];
 
@@ -81,7 +82,7 @@ function App() {
   // เริ่มต้นด้วยค่าว่างเพื่อให้ระบบบังคับให้ผู้ใช้เลือกโต๊ะก่อนสั่งอาหาร
   const [tableNumber, setTableNumber] = useState('');
 
-  // Users & Auth — seed from cache so login shows immediately without waiting for GAS
+  // Users & Auth — seed from cache so login shows immediately without waiting for the API
   const [users, setUsers] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cached_users') || '[]'); } catch { return []; }
   });
@@ -115,11 +116,11 @@ function App() {
   const [saveAlert, setSaveAlert] = useState(null);
 
   const handleOpenShift = async (openCash) => {
-    // อ่านคำตอบให้ได้ เพื่อใช้ shiftId ที่ฝั่ง GAS ออกให้เป็นตัวเดียวกับแถวในชีท Shifts
+    // อ่านคำตอบให้ได้ เพื่อใช้ shiftId ที่ฝั่งเซิร์ฟเวอร์ออกให้เป็นตัวเดียวกับแถวในตาราง Shifts
     // (ถ้าตั้ง id เองในเครื่อง ตอนปิดกะจะหาแถวไม่เจอ ยอดสรุปกะเลยไม่ถูกเขียนลงชีท)
     let shiftId = '';
     try {
-      const res = await fetch(GAS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'openShift', staff: currentUser?.username || '', openCash }) });
+      const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'openShift', staff: currentUser?.username || '', openCash }) });
       const json = await res.json().catch(() => null);
       if (json && json.shiftId) shiftId = String(json.shiftId);
     } catch (e) {}
@@ -178,7 +179,7 @@ function App() {
         localStorage.setItem('outstanding_bills', JSON.stringify([...prev, ...bills]));
       } catch (e) {}
       try {
-        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveOutstandingBills', bills }) });
+        await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveOutstandingBills', bills }) });
       } catch (e) {}
       pendingTables.forEach(t => localStorage.removeItem('customer_count_' + t.tableNo));
     }
@@ -186,13 +187,13 @@ function App() {
     // ล้างโต๊ะทั้งหมดเสมอ รวมรายการที่ลูกค้าจ่ายมาแล้วจากคีออส (บันทึกเป็นบิลไปตั้งแต่ตอนจ่ายแล้ว)
     // ถ้าไม่ล้าง โต๊ะจะยังขึ้นว่ามีลูกค้าค้างข้ามไปกะถัดไป
     try {
-      await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'clearAllTableOrders' }) });
+      await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'clearAllTableOrders' }) });
     } catch (e) {}
     setTableOrders([]);
     (tableOrders || []).forEach(o => localStorage.removeItem('customer_count_' + o.TableNumber));
 
     try {
-      await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'closeShift', shiftId: currentShift.id, staff: currentUser?.username || '', closeCash, note, ...shiftSales }) });
+      await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'closeShift', shiftId: currentShift.id, staff: currentUser?.username || '', closeCash, note, ...shiftSales }) });
     } catch (e) {}
     setCurrentShift(null);
     setShiftSales({ totalSales: 0, totalCash: 0, totalCard: 0, totalTransfer: 0, totalOrders: 0 });
@@ -245,8 +246,6 @@ function App() {
     else localStorage.removeItem('table_number');
   }, [tableNumber]);
 
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
-
   // ── Retry บิลที่ค้างใน localStorage (pending_orders) ──
   // เรียกตอนเปิดแอปและเมื่อเน็ตกลับมา — ส่งซ้ำเฉพาะที่ backend ยังไม่ตอบ success
   const flushingRef = React.useRef(false);
@@ -260,7 +259,7 @@ function App() {
     const stillPending = [];
     for (const entry of pending) {
       try {
-        const res = await fetch(GAS_URL, {
+        const res = await fetch(API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(entry.payload)
@@ -283,7 +282,7 @@ function App() {
         setSaveAlert({ type: 'error', msg: `⚠️ ส่งบิลค้างได้ ${sent} รายการ เหลืออีก ${stillPending.length} รายการที่ยังส่งไม่ได้ — กรุณาเช็กอินเทอร์เน็ต` });
       }
     }
-  }, [GAS_URL]);
+  }, [API_URL]);
 
   React.useEffect(() => {
     flushPendingOrders();
@@ -361,7 +360,7 @@ function App() {
   const appliedRef = React.useRef({});
   const lastRawRef = React.useRef('');
   const lastStaticRef = React.useRef('');
-  // กันยิงซ้อน: GAS ตอบช้า แต่ poll เป็นรอบ — ถ้ารอบก่อนยังไม่เสร็จให้ข้ามรอบนี้ไป
+  // กันยิงซ้อน: เซิร์ฟเวอร์ตอบช้า แต่ poll เป็นรอบ — ถ้ารอบก่อนยังไม่เสร็จให้ข้ามรอบนี้ไป
   const inFlightRef = React.useRef(false);
   const staticInFlightRef = React.useRef(false);
   // ถ้า Apps Script ที่ deploy อยู่ยังเป็นเวอร์ชันเก่า (ไม่รู้จัก getLive/getStatic)
@@ -390,7 +389,7 @@ function App() {
       catch { countedKioskRef.current = []; }
     }
     const counted = countedKioskRef.current;
-    // เทียบด้วยเวลาเปิดกะ ไม่ใช่ shiftId เพราะบิลคีออสถูกผูก shiftId จากฝั่ง GAS
+    // เทียบด้วยเวลาเปิดกะ ไม่ใช่ shiftId เพราะบิลคีออสถูกผูก shiftId จากฝั่งเซิร์ฟเวอร์
     // ซึ่งอาจไม่ใช่ตัวเดียวกับ id ของกะที่เครื่องนี้ถืออยู่ (เช่นตอนเน็ตหลุดตอนเปิดกะ)
     const openedAt = new Date(shift.openTime).getTime();
     const fresh = payments.filter(p => {
@@ -501,31 +500,31 @@ function App() {
   };
 
   // เขียนทับเฉพาะส่วนที่ดึงมา ลงก้อน cache รวม 'gas_all_data'
-  // (หน้าหลังบ้านหลายหน้าอ่าน/แก้ก้อนนี้อยู่ จึงต้องคงเป็นก้อนเดียวเหมือนเดิม)
+  // (ชื่อคีย์ยังใช้ของเดิม เพราะหน้าหลังบ้านหลายหน้าอ่าน/แก้ก้อนนี้อยู่ และเครื่องที่ใช้งานอยู่มีข้อมูลค้างในคีย์นี้)
   const mergeIntoCache = (partial) => {
     try {
       const base = JSON.parse(localStorage.getItem('gas_all_data') || '{}') || {};
       const merged = { ...base, ...partial };
-      delete merged.error; // กันข้อความ error จาก GAS ค้างอยู่ในก้อน cache
+      delete merged.error; // กันข้อความ error จากเซิร์ฟเวอร์ค้างอยู่ในก้อน cache
       localStorage.setItem('gas_all_data', JSON.stringify(merged));
     } catch {}
   };
 
-  // ยิง action ใหม่ก่อน ถ้า GAS ยังเป็นเวอร์ชันเก่าจะตอบ {"error":"Unknown GET action"}
+  // ยิง action ใหม่ก่อน ถ้าปลายทางเป็นเวอร์ชันเก่าจะตอบ {"error":"Unknown GET action"}
   // → จำไว้แล้วถอยไปใช้ getAllData ตลอดทั้ง session
   const fetchAction = async (action, signal) => {
-    if (legacyGasRef.current) return await (await fetch(GAS_URL + '?action=getAllData', { signal })).text();
-    const text = await (await fetch(GAS_URL + '?action=' + action, { signal })).text();
+    if (legacyGasRef.current) return await (await fetch(API_URL + '?action=getAllData', { signal })).text();
+    const text = await (await fetch(API_URL + '?action=' + action, { signal })).text();
     if (text.indexOf('Unknown GET action') !== -1) {
       legacyGasRef.current = true;
-      console.warn(`GAS ยังไม่รองรับ ?action=${action} — ใช้ getAllData แทน (ต้อง deploy สคริปต์เวอร์ชันใหม่)`);
-      return await (await fetch(GAS_URL + '?action=getAllData', { signal })).text();
+      console.warn(`API ยังไม่รองรับ ?action=${action} — ใช้ getAllData แทน (ต้องอัปเดต API เป็นเวอร์ชันใหม่)`);
+      return await (await fetch(API_URL + '?action=getAllData', { signal })).text();
     }
     return text;
   };
 
   // ข้อมูล "เย็น" — เมนู/หมวดหมู่/โปรโมชั่น/พนักงาน/ปริ้นเตอร์/ส่วนลด/ตั้งค่า
-  // เปลี่ยนเฉพาะตอนแก้หลังบ้าน → ฝั่ง GAS cache ไว้ ดึงนาทีละครั้งพอ
+  // เปลี่ยนเฉพาะตอนแก้หลังบ้าน → ดึงนาทีละครั้งพอ
   const fetchStaticFromSheet = async () => {
     if (staticInFlightRef.current) return;
     staticInFlightRef.current = true;
@@ -541,7 +540,7 @@ function App() {
         processAppGASData(data);
       }
     } catch (e) {
-      if (e.name !== 'AbortError') console.error('Error fetching static from GAS:', e);
+      if (e.name !== 'AbortError') console.error('Error fetching static from API:', e);
     } finally {
       clearTimeout(timer);
       staticInFlightRef.current = false;
@@ -568,7 +567,7 @@ function App() {
       }
     } catch (e) {
       clearTimeout(timer);
-      if (e.name !== 'AbortError') console.error('Error fetching from GAS:', e);
+      if (e.name !== 'AbortError') console.error('Error fetching from API:', e);
       // ถ้า cache มีอยู่แล้ว ให้ใช้ cache แสดงแทน
       const cached = localStorage.getItem('gas_all_data');
       if (cached) {
@@ -588,7 +587,7 @@ function App() {
   };
 
   React.useEffect(() => {
-    // แสดงเมนู/หมวดหมู่จาก cache ในเครื่องทันที ไม่ต้องรอ GAS (ตอบช้า + ดึงประวัติออเดอร์ทั้งหมด)
+    // แสดงเมนู/หมวดหมู่จาก cache ในเครื่องทันที ไม่ต้องรอเซิร์ฟเวอร์ตอบ
     // ของจริงจะ sync ทับเบื้องหลัง — changed() กันไม่ให้ re-render ซ้ำถ้าข้อมูลเหมือนเดิม
     const cached = localStorage.getItem('gas_all_data');
     if (cached) {
@@ -597,7 +596,7 @@ function App() {
     fetchStaticFromSheet();
     fetchOrdersFromSheet();
     // แยกจังหวะ: ข้อมูลโต๊ะต้องสด → ทุก 20 วิ (อ่านแค่ 2 ชีท เร็ว)
-    //            เมนู/พนักงาน/ตั้งค่า เปลี่ยนนาน ๆ ที → ทุก 1 นาที และฝั่ง GAS cache ไว้อีกชั้น
+    //            เมนู/พนักงาน/ตั้งค่า เปลี่ยนนาน ๆ ที → ทุก 1 นาที
     // หยุด poll เมื่อแท็บถูกซ่อน (พับจอ/สลับแอป) แล้วดึงทันทีตอนกลับมา
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') fetchOrdersFromSheet();
@@ -898,7 +897,7 @@ function App() {
     }
 
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -927,7 +926,7 @@ function App() {
     setTableNumber('');
     navigate('/index');
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -1051,7 +1050,7 @@ function App() {
 
     // ── สั่งพิมพ์ใบเสร็จก่อนเป็นอย่างแรก ──
     // ใบเสร็จไม่ต้องรอผลบันทึกลงชีต ข้อมูลที่ต้องใช้ครบตั้งแต่ตรงนี้แล้ว
-    // เดิมสั่งพิมพ์เป็นขั้นสุดท้าย จึงต้องรอ GAS ตอบครบ 3 รอบ (บันทึกบิล → ล้างโต๊ะ → ตัดสต็อก)
+    // เดิมสั่งพิมพ์เป็นขั้นสุดท้าย จึงต้องรอเซิร์ฟเวอร์ตอบครบ 3 รอบ (บันทึกบิล → ล้างโต๊ะ → ตัดสต็อก)
     // ใบเสร็จเลยออกช้าหลายวินาที ทั้งที่เครื่องพิมพ์ว่างรออยู่
     try {
       const receiptPrinter = getPrinterByType('receipt');
@@ -1073,7 +1072,6 @@ function App() {
 
     // Save to Orders sheet + payment record ในคำขอเดียว (atomic) — กันบิลขึ้นแต่ payment หาย
     // ใช้ fetch แบบอ่าน response ได้ (ไม่ใช้ no-cors) เพื่อ "ตรวจจับ" ว่าบันทึกสำเร็จจริงหรือไม่
-    // GAS /exec ตอบ 302 → 200 พร้อม Access-Control-Allow-Origin:* จึงอ่านผลข้าม origin ได้ปลอดภัย
     const orderPayload = {
       action: 'insertOrder',
       rows: rowsToSend,
@@ -1088,7 +1086,7 @@ function App() {
       }
     };
     try {
-      const res = await fetch(GAS_URL, {
+      const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(orderPayload)
@@ -1119,7 +1117,7 @@ function App() {
 
     const backgroundJobs = [
       // ปิดบิลแล้ว = โต๊ะจบ ล้างรวมรายการที่ลูกค้าจ่ายเองมาก่อนหน้าด้วย
-      fetch(GAS_URL, {
+      fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -1130,7 +1128,7 @@ function App() {
     if (deductItems.length > 0) {
       // Deduct stock based on BOM
       backgroundJobs.push(
-        fetch(GAS_URL, {
+        fetch(API_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
@@ -1199,7 +1197,7 @@ function App() {
               price: Number(it.ItemPrice) || 0
             }))
           };
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -1229,7 +1227,7 @@ function App() {
     });
 
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -1248,7 +1246,7 @@ function App() {
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -1260,7 +1258,7 @@ function App() {
         })
       });
     } catch (e) {
-      console.error('Failed to update status in GAS:', e);
+      console.error('Failed to update status:', e);
     }
   };
 
@@ -1275,7 +1273,7 @@ function App() {
 
   // ออเดอร์จากคีออส — ลูกค้าโอนเงินและสลิปผ่านการตรวจมาแล้ว จึงต้องบันทึกเป็น "บิลที่จ่ายแล้ว"
   // ไม่ใช่แค่รายการรายโต๊ะ ไม่งั้นยอดไม่เข้ารายงาน/สรุปกะ และพนักงานอาจเก็บเงินซ้ำตอนปิดโต๊ะ
-  // ฝั่ง GAS (action kioskPaidOrder) ออกเลขบิล + ลง Orders/PaymentSummary/TableOrders + ตัดสต็อก
+  // ฝั่งเซิร์ฟเวอร์ (action kioskPaidOrder) ออกเลขบิล + ลง Orders/PaymentSummary/TableOrders + ตัดสต็อก
   // ให้ครบในคำขอเดียวโดยมีล็อกกันหลายโต๊ะกดจ่ายพร้อมกัน
   const handleKioskSendOrder = async (targetTableNo, cartItems, total, paymentMethod, paySessionId) => {
     // sessionId มาจากหน้าคีออส และคงค่าเดิมทุกครั้งที่กดส่งซ้ำ → หลังบ้านใช้กันบิลซ้ำ
@@ -1304,11 +1302,11 @@ function App() {
     };
 
     // ลูกค้าจ่ายเงินไปแล้ว ห้ามเงียบหาย — ยิงซ้ำได้ 3 ครั้ง (เน็ตมือถือหลุดง่าย)
-    // ยิงซ้ำแล้วบิลไม่ซ้ำ เพราะฝั่ง GAS เช็ก sessionId เดิมแล้วคืนเลขบิลเดิมกลับมา
+    // ยิงซ้ำแล้วบิลไม่ซ้ำ เพราะฝั่งเซิร์ฟเวอร์เช็ก sessionId เดิมแล้วคืนเลขบิลเดิมกลับมา
     let lastError = '';
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const res = await fetch(GAS_URL, {
+        const res = await fetch(API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(payload)
@@ -1332,7 +1330,7 @@ function App() {
           ...item,
           note: `${item.note ? item.note + ' ' : ''}💳 ชำระผ่าน QR แล้ว (${paymentMethod || ''})`
         }));
-        await fetch(GAS_URL, {
+        await fetch(API_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },

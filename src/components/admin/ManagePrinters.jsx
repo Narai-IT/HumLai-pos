@@ -15,8 +15,7 @@ import {
   runAutoPrintNow,
   supportsAutoPrint
 } from '../../utils/printServer';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL, apiUrlAbsolute } from '../../utils/api';
 
 const PRINTER_TYPES = [
   { value: 'kitchen', label: 'ครัว (Kitchen)' },
@@ -160,7 +159,8 @@ const ManagePrinters = () => {
   const pushAutoPrint = async (patch = {}) => {
     setAutoPrintBusy(true);
     setAutoPrintMsg(null);
-    const res = await saveAutoPrint({ gasUrl: GAS_URL, printers, ...patch });
+    // Print Server อยู่คนละเครื่องกับหน้าเว็บ จึงต้องส่ง URL แบบเต็ม ไม่ใช่ path สั้น ๆ
+    const res = await saveAutoPrint({ gasUrl: apiUrlAbsolute(), printers, ...patch });
     setAutoPrintBusy(false);
     if (res && res.success) {
       setAutoPrint(res);
@@ -197,7 +197,7 @@ const ManagePrinters = () => {
     window.dispatchEvent(new Event('printers_changed'));
     // เปิดพิมพ์อัตโนมัติไว้ = Print Server ถือรายการเครื่องพิมพ์ชุดของตัวเอง ต้องอัปเดตตามด้วย
     if (autoPrint?.config?.enabled) pushAutoPrint();
-    fetch(GAS_URL, {
+    fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },

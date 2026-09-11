@@ -3,8 +3,7 @@ import {
   FlaskConical, Save, Plus, Trash2, Search,
   Package, RefreshCw, Upload, ChevronRight, Edit2, X
 } from 'lucide-react';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../../utils/api';
 
 // ─── Helper: derive current BOM rows for selectedMenuId from bomConfig ───────
 const getBomRows = (bomConfig, menuId) =>
@@ -63,7 +62,7 @@ const ManageBOM = () => {
     }
     setIngLoading(true);
     try {
-      const resp = await fetch(GAS_URL + '?action=getIngredients');
+      const resp = await fetch(API_URL + '?action=getIngredients');
       const data = await resp.json();
       if (data.success && Array.isArray(data.ingredients)) {
         setIngredients(data.ingredients);
@@ -153,7 +152,7 @@ const ManageBOM = () => {
       });
     });
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
@@ -174,7 +173,7 @@ const ManageBOM = () => {
       : [...ingredients, normalized];
     setIngredients(newList);
     localStorage.setItem('bom_ingredients', JSON.stringify(newList));
-    fetch(GAS_URL, {
+    fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },
@@ -188,7 +187,7 @@ const ManageBOM = () => {
     const newList = ingredients.filter(i => i.id !== id);
     setIngredients(newList);
     localStorage.setItem('bom_ingredients', JSON.stringify(newList));
-    fetch(GAS_URL, {
+    fetch(API_URL, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain' },

@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Printer, FlaskConical, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { emptyPopupFields, extractPopupConfig, flattenPopupConfig, hasOwnPopupSteps } from '../../utils/popupConfig';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../../utils/api';
 
 const ManageMenu = () => {
   const { lang } = useOutletContext();
@@ -77,7 +76,7 @@ const ManageMenu = () => {
     setLoading(true);
 
     try {
-      const resp = await fetch(GAS_URL + '?action=getAllData');
+      const resp = await fetch(API_URL + '?action=getAllData');
       const data = await resp.json();
       if (data) {
         localStorage.setItem('gas_all_data', JSON.stringify(data));
@@ -94,7 +93,7 @@ const ManageMenu = () => {
     if (window.confirm('Are you sure you want to delete this menu item?')) {
       const updated = menuItems.filter(item => item.id !== id);
       try {
-        await fetch(GAS_URL, {
+        await fetch(API_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
@@ -221,7 +220,7 @@ const ManageMenu = () => {
     }
 
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },

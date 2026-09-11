@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Package, AlertTriangle, RefreshCw, Plus, X, Save, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../../utils/api';
 
 const STATUS_CONFIG = {
   OUT: { label: '🔴 หมดแล้ว!',   bg: 'rgba(239,68,68,0.15)',   border: 'rgba(239,68,68,0.4)',   text: '#ef4444' },
@@ -30,7 +29,7 @@ const ManageStock = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${GAS_URL}?action=getStock`);
+      const res = await fetch(`${API_URL}?action=getStock`);
       const data = await res.json();
       if (data.success) {
         setStock(data.stock || []);
@@ -80,7 +79,7 @@ const ManageStock = () => {
     setSaving(true);
     setSaveMsg('');
     try {
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },

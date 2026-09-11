@@ -1,7 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download } from 'lucide-react';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../../utils/api';
 
 const TABS = [
   { key: 'daily',   label: 'สรุปประจำวัน',       icon: <TrendingUp size={15} /> },
@@ -120,7 +119,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   const load = useCallback(async (f, t) => {
     setLoading(true); setError('');
     try {
-      const res  = await fetch(`${GAS_URL}?action=getReportData&from=${f}&to=${t}`);
+      const res  = await fetch(`${API_URL}?action=getReportData&from=${f}&to=${t}`);
       const json = await res.json();
       if (json.success) setData(json); else setError('โหลดข้อมูลไม่สำเร็จ');
     } catch { setError('เชื่อมต่อ GAS ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อ'); }

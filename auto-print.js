@@ -88,22 +88,22 @@ const saveState = () => {
   }
 };
 
-// ── ดึงข้อมูลจาก Google Apps Script ──────────────────────────
+// ── ดึงข้อมูลจาก API ของระบบ (เดิมคือ Google Apps Script ตอนนี้เป็น /api/pos บน SQL Server) ──
 const fetchGas = async (action, timeoutMs = 20000) => {
   const url = `${config.gasUrl}${config.gasUrl.includes('?') ? '&' : '?'}action=${action}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), redirect: 'follow' });
-  if (!res.ok) throw new Error(`GAS ตอบกลับ HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`API ตอบกลับ HTTP ${res.status}`);
   const text = await res.text();
   return JSON.parse(text.replace(/^\uFEFF/, ''));
 };
 
-// คิวใบครัวแบบเบา ๆ — ถ้าสคริปต์ที่ deploy ไว้ยังไม่มี action นี้ ให้ถอยไปใช้ getLive แบบเดิม
+// คิวใบครัวแบบเบา ๆ — ถ้าปลายทางที่ตั้งไว้ยังไม่มี action นี้ ให้ถอยไปใช้ getLive แบบเดิม
 const fetchQueue = async () => {
   if (!legacyGas) {
     const data = await fetchGas('getKitchenQueue');
     if (!data || data.error !== 'Unknown GET action') return data;
     legacyGas = true;
-    console.warn('[auto-print] Apps Script ที่ deploy อยู่ยังไม่รู้จัก getKitchenQueue — ใช้ getLive แทน (deploy สคริปต์เวอร์ชันใหม่จะเบากว่า)');
+    console.warn('[auto-print] ปลายทางที่ตั้งไว้ยังไม่รู้จัก getKitchenQueue — ใช้ getLive แทน (อัปเดต API เป็นเวอร์ชันใหม่จะเบากว่า)');
   }
   return await fetchGas('getLive');
 };
@@ -225,7 +225,7 @@ const printOrder = async (order, menu) => {
 // ── รอบการทำงานหลัก ─────────────────────────────────────────
 export const pollOnce = async ({ force = false } = {}) => {
   if (!config.enabled && !force) return { skipped: 'ปิดสวิตช์อยู่' };
-  if (!config.gasUrl) return { skipped: 'ยังไม่ได้ตั้งค่า URL ของ Google Apps Script' };
+  if (!config.gasUrl) return { skipped: 'ยังไม่ได้ตั้งค่า URL ของ API' };
   if (polling) return { skipped: 'รอบก่อนยังทำงานอยู่' };
   polling = true;
   try {
@@ -313,10 +313,12 @@ export const registerAutoPrint = (app) => {
     res.json({ success: true, config: { ...config, printers: config.printers || [] }, status: publicStatus() });
   });
 
-  // หน้าเว็บส่งค่าที่ตั้งไว้ในเบราว์เซอร์ (รายการเครื่องพิมพ์ + URL ของ GAS) มาเก็บไว้ที่เครื่องนี้
+  // หน้าเว็บส่งค่าที่ตั้งไว้ในเบราว์เซอร์ (รายการเครื่องพิมพ์ + URL ของ API) มาเก็บไว้ที่เครื่องนี้
+  // รับได้ทั้งชื่อเดิม gasUrl และชื่อใหม่ apiUrl — เครื่องที่ยังรันโค้ดเก่าจะได้ไม่พัง
   app.post('/auto-print', (req, res) => {
     const body = req.body || {};
     const wasEnabled = config.enabled;
+    if (body.apiUrl !== undefined) config.gasUrl = String(body.apiUrl || '');
     if (body.gasUrl !== undefined) config.gasUrl = String(body.gasUrl || '');
     if (body.printers !== undefined) config.printers = Array.isArray(body.printers) ? body.printers : [];
     if (body.pollSeconds !== undefined) config.pollSeconds = Math.max(5, Number(body.pollSeconds) || 20);

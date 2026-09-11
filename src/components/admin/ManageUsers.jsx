@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Users, Eye, EyeOff, ShieldCheck, ShieldOff, CheckCircle } from 'lucide-react';
-
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbz_M970PiWeHT4cs94tyddCigncF-blNpgepYO-qOHPFv1mJ5OOybjPfdPF6ALTsXKu/exec';
+import { API_URL } from '../../utils/api';
 
 const AVATAR_COLORS = ['#7c3aed','#ea580c','#0891b2','#16a34a','#dc2626','#d97706','#7c3aed','#db2777'];
 
@@ -80,7 +79,7 @@ export default function ManageUsers() {
     setSaving(true); setSaveMsg('');
     try {
       const clean = users.map(({ isNew, ...u }) => u);
-      await fetch(GAS_URL, {
+      await fetch(API_URL, {
         method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'saveUsers', users: clean }),
       });
