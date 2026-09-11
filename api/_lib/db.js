@@ -55,7 +55,14 @@ export function explainConnectError(err) {
     ].join('\n');
   }
   if (/Login failed/i.test(raw)) {
-    return `ชื่อผู้ใช้หรือรหัสผ่านไม่ถูก (SQL_USER / SQL_PASSWORD) — ${raw}\nถ้ามั่นใจว่าถูก ให้เช็กว่าเปิด SQL Server Authentication (Mixed Mode) แล้วหรือยัง`;
+    return [
+      `ชื่อผู้ใช้หรือรหัสผ่านไม่ถูก (SQL_USER / SQL_PASSWORD) — ${raw}`,
+      'เช็กตามนี้:',
+      // เจอบ่อยสุด: รหัสผ่านมี # แล้วไม่ได้ครอบด้วยเครื่องหมายคำพูด ค่าจึงถูกตัดตั้งแต่ตัว #
+      '  1. รหัสผ่านมีตัว # ไหม ถ้ามีต้องเขียนเป็น SQL_PASSWORD="รหัสผ่าน" ไม่งั้นค่าจะถูกตัดตรงตัว #',
+      '  2. เปิด SQL Server Authentication (Mixed Mode) แล้วหรือยัง — ถ้าเพิ่งเปิดต้องรีสตาร์ตเซอร์วิสด้วย',
+      `  3. ผู้ใช้ "${dbConfig.user}" ถูกสร้างในฐานข้อมูล "${dbConfig.database}" แล้วจริงไหม`
+    ].join('\n');
   }
   if (/Cannot open database/i.test(raw)) {
     return `ไม่พบฐานข้อมูล "${dbConfig.database}" หรือผู้ใช้นี้เข้าไม่ได้ — ${raw}`;
