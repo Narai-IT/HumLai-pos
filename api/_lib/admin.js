@@ -1,12 +1,13 @@
 // ── ข้อมูลหลังบ้าน: เมนู / หมวดหมู่ / โปรโมชั่น / ผู้ใช้ / เครื่องพิมพ์ / ส่วนลด / ตั้งค่า / รูปภาพ ──
 import { query, withTransaction, insertRows, typed, sql } from './db.js';
 import { toText, toBit, toJson, CATEGORY_SPEC } from './rows.js';
+import { nextIds } from './ids.js';
 
 const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
 const CATEGORY_COLS = Object.keys(CATEGORY_SPEC);
 
 const menuValues = (item) => ([
-  String(item.id ?? Date.now()), item.category || 'food', toText(item.name), toText(item.nameEn),
+  String(item.id), item.category || '', toText(item.name), toText(item.nameEn),
   toText(item.description), toText(item.descriptionEn), Number(item.price) || 0, toText(item.image),
   item.isActive !== false ? 1 : 0,
   toJson(item.bundledItems, '[]'), toJson(item.popupConfig, '{}'),
@@ -16,7 +17,7 @@ const menuValues = (item) => ([
 // ค่าเริ่มต้นของแต่ละคอลัมน์ยกมาจากสคริปต์เดิมทั้งหมด
 // (ป๊อปอัพชุดที่ 1 เปิดเป็นค่าเริ่มต้น ชุด 2–6 ปิด, hasDining เปิด)
 const categoryValues = (c) => {
-  const out = [String(c.slug ?? Date.now()), toText(c.name), toText(c.nameEn), c.icon || '📌', c.isActive !== false ? 1 : 0];
+  const out = [String(c.slug), toText(c.name), toText(c.nameEn), c.icon || '📌', c.isActive !== false ? 1 : 0];
   for (let i = 1; i <= 6; i++) {
     const has = i === 1 ? (c.hasPopup1 !== false) : (c[`hasPopup${i}`] === true);
     out.push(has ? 1 : 0);
@@ -56,10 +57,21 @@ async function replaceAll(table, columns, rows) {
   return { success: true, saved: rows.length };
 }
 
+// รายการที่หน้าบ้านส่งมาโดยยังไม่มีรหัส (กดเพิ่มใหม่แล้วเน็ตหลุดตอนขอรหัส) ให้ออกรหัสให้ตรงนี้
+// ออกทีเดียวเป็นชุดเพื่อไม่ให้สองรายการในคำขอเดียวกันได้เลขซ้ำ
+async function withIds(items, key) {
+  const missing = items.filter(item => !item[key]);
+  if (missing.length === 0) return items;
+  const ids = await nextIds(query, missing.length);
+  missing.forEach((item, i) => { item[key] = ids[i]; });
+  return items;
+}
+
 // ── เมนู ──
-export const upsertMenu = (data) => {
+export const upsertMenu = async (data) => {
   const item = data.item;
-  if (!item || !item.id) return { success: false };
+  if (!item) return { success: false };
+  await withIds([item], 'id');
   return upsert('Menu', MENU_COLS, menuValues(item), 'id');
 };
 
@@ -68,12 +80,16 @@ export const deleteMenu = async (data) => {
   return res.rowsAffected[0] > 0 ? { success: true } : { success: false, error: 'Not found' };
 };
 
-export const saveMenu = (data) => replaceAll('Menu', MENU_COLS, (data.items || []).map(menuValues));
+export const saveMenu = async (data) => {
+  const items = await withIds([...(data.items || [])], 'id');
+  return replaceAll('Menu', MENU_COLS, items.map(menuValues));
+};
 
 // ── หมวดหมู่ ──
-export const upsertCategory = (data) => {
+export const upsertCategory = async (data) => {
   const c = data.item;
-  if (!c || !c.slug) return { success: false };
+  if (!c) return { success: false };
+  await withIds([c], 'slug');
   return upsert('Categories', CATEGORY_COLS, categoryValues(c), 'slug');
 };
 
@@ -82,7 +98,10 @@ export const deleteCategory = async (data) => {
   return { success: res.rowsAffected[0] > 0 };
 };
 
-export const saveCategories = (data) => replaceAll('Categories', CATEGORY_COLS, (data.categories || []).map(categoryValues));
+export const saveCategories = async (data) => {
+  const items = await withIds([...(data.categories || [])], 'slug');
+  return replaceAll('Categories', CATEGORY_COLS, items.map(categoryValues));
+};
 
 // ── โปรโมชั่น ──
 const promoValues = (p) => ([String(p.id ?? Date.now()), toText(p.name), toText(p.nameEn), Number(p.price) || 0, toText(p.origPrice)]);

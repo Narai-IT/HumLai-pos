@@ -28,7 +28,7 @@ const OutstandingBills = lazy(() => import('./components/OutstandingBills'));
 const LiquorStorage = lazy(() => import('./components/LiquorStorage'));
 const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
-import { resolvePopupSource, flattenPopupConfig, getPriceOptions } from './utils/popupConfig';
+import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining } from './utils/popupConfig';
 import { priceForSaleType } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
@@ -672,8 +672,9 @@ function App() {
     const cats = allCategories.length > 0 ? allCategories : categories;
     const cfg = resolvePopupSource(food, cats);
     const hasPopups = [1, 2, 3, 4, 5, 6].some(i => cfg[`hasPopup${i}`] === true);
-    // เมนูที่ไม่ใช่เครื่องดื่มและไม่ได้ปิดคำถามไว้ ต้องเปิด popup เพื่อถามการรับประทาน
-    const needsDining = askDining && food.category !== 'drink' && cfg.hasDining !== false;
+    // เมนูที่หมวดไม่ได้ปิดคำถามไว้ ต้องเปิด popup เพื่อถามการรับประทาน
+    // (หมวดเครื่องดื่มตั้ง hasDining = false ไว้ จึงข้ามคำถามนี้ไปเหมือนเดิม)
+    const needsDining = askDining && cfg.hasDining !== false;
 
     if (hasPopups || needsDining) {
       setSelectedFood(food);
@@ -683,8 +684,8 @@ function App() {
         allPopups: [],
         dining: customerType === 'Takehome'
           ? { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' }
-          : (food.category === 'drink'
-            ? { id: 'drink', name: 'เครื่องดื่ม', nameEn: 'Drinks' }
+          : (cfg.hasDining === false
+            ? categoryDining(food, cats)
             : { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' })
       });
     }
@@ -1578,6 +1579,7 @@ function App() {
             onComplete={handleCheckoutComplete}
             settings={checkoutSettings}
             discounts={posDiscounts}
+            categories={allCategories.length > 0 ? allCategories : categories}
             initialDiscount={checkoutDiscount}
             users={users}
             currentUser={currentUser}

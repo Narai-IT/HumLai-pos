@@ -16,3 +16,21 @@ export const apiUrlAbsolute = () => {
   if (typeof window === 'undefined') return API_URL;
   return new URL(API_URL, window.location.origin).href;
 };
+
+// รหัสถัดไปสำหรับเมนู/หมวดหมู่ที่กำลังจะสร้าง — รูปแบบ HL + เลข 5 หลัก
+// ขอจากเซิร์ฟเวอร์เป็นหลัก (เป็นตัวเดียวที่เห็นข้อมูลครบทุกเครื่อง)
+// ถ้าเรียกไม่ได้ค่อยคำนวณเองจากรายการที่โหลดมาแล้ว เพื่อให้ยังกดเพิ่มรายการได้ตอนเน็ตสะดุด
+export const nextItemId = async (existingIds = []) => {
+  try {
+    const res = await fetch(`${API_URL}?action=nextId`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.ids) && data.ids[0]) return data.ids[0];
+  } catch {
+    // ตกไปใช้การคำนวณฝั่งเครื่องด้านล่าง
+  }
+  const max = existingIds.reduce((best, value) => {
+    const s = String(value ?? '');
+    return /^HL\d{5}$/.test(s) ? Math.max(best, Number(s.slice(2))) : best;
+  }, 0);
+  return `HL${String(max + 1).padStart(5, '0')}`;
+};

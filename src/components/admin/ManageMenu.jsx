@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Printer, FlaskConical, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { emptyPopupFields, extractPopupConfig, flattenPopupConfig, hasOwnPopupSteps } from '../../utils/popupConfig';
-import { API_URL } from '../../utils/api';
+import { API_URL, nextItemId } from '../../utils/api';
 
 const ManageMenu = () => {
   const { lang } = useOutletContext();
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
+
+  // ตารางเมนูเคยโชว์รหัสหมวดดิบ ๆ ซึ่งอ่านรู้เรื่องตอนรหัสเป็นคำอย่าง 'food'
+  // พอรหัสเป็น HL##### ต้องแปลงเป็นชื่อหมวดก่อนแสดง
+  const catLabel = (slug) => categories.find(c => c.slug === slug)?.name || slug || '—';
   const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -132,10 +136,12 @@ const ManageMenu = () => {
     setIsModalOpen(true);
   };
 
-  const handleAddNew = () => {
+  const handleAddNew = async () => {
+    // รหัสเดินต่อจากของเดิมเสมอ (HL00001, HL00002, …) ไม่ใช่ timestamp เหมือนเมื่อก่อน
+    const id = await nextItemId([...menuItems.map(m => m.id), ...categories.map(c => c.slug)]);
     setEditingItem({
-      id: Date.now(),
-      category: 'food',
+      id,
+      category: categories[0]?.slug || '',
       categories: [],
       name: '',
       nameEn: '',
@@ -405,11 +411,11 @@ const ManageMenu = () => {
                     <td>
                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
                          <span style={{ background: 'rgba(249,115,22,0.18)', border: '1px solid rgba(249,115,22,0.35)', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem' }}>
-                           {item.category || 'food'}
+                           {catLabel(item.category)}
                          </span>
                          {Array.isArray(item.categories) && item.categories.map(slug => (
                            <span key={slug} style={{ background: 'rgba(255,255,255,0.1)', padding: '0.3rem 0.6rem', borderRadius: '6px', fontSize: '0.8rem' }}>
-                             +{slug}
+                             +{catLabel(slug)}
                            </span>
                          ))}
                        </div>

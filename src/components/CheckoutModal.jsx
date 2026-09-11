@@ -26,8 +26,11 @@ const calcCharges = (subtotal, settings = {}, discount = null) => {
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
-  settings = {}, discounts = [], initialDiscount = null
+  settings = {}, discounts = [], categories = [], initialDiscount = null
 }) => {
+  // ส่วนลดเก็บเป็น "รหัสหมวดหมู่" (HL#####) ซึ่งอ่านไม่รู้เรื่องถ้าโชว์ดิบ ๆ
+  // แปลงเป็นชื่อหมวดให้แคชเชียร์อ่านออกก่อนแสดง
+  const categoryLabel = (slug) => categories.find(c => c.slug === slug)?.name || slug;
   const [paymentStep, setPaymentStep] = useState('summary');
   const [cashInput, setCashInput] = useState('');
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
@@ -391,7 +394,7 @@ const CheckoutModal = ({
                         {d.categories && d.categories.length > 0 && (
                           <div style={{ fontSize: '0.78rem', color: '#475569', paddingLeft: '23px', fontWeight: '500' }}>
                             {lang === 'th' ? 'ใช้กับ: ' : 'Applies to: '}
-                            {d.categories.join(', ')}
+                            {d.categories.map(categoryLabel).join(', ')}
                           </div>
                         )}
                         <div style={{ fontSize: '0.82rem', color: '#64748b', paddingLeft: '23px', marginTop: '2px', fontWeight: '500' }}>

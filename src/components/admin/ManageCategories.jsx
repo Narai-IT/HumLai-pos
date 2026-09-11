@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
-import { API_URL } from '../../utils/api';
+import { API_URL, nextItemId } from '../../utils/api';
 
 const ManageCategories = () => {
   const { lang } = useOutletContext();
@@ -126,9 +126,11 @@ const ManageCategories = () => {
     setIsModalOpen(true);
   };
 
-  const handleAddNew = () => {
+  const handleAddNew = async () => {
+    // หมวดหมู่ใช้ชุดเลขเดียวกับเมนู รหัสจึงไม่มีทางซ้ำกันข้ามสองตาราง
+    const id = await nextItemId(categories.map(c => c.slug));
     setEditingItem({
-      slug: `cat_${Date.now()}`,
+      slug: id,
       name: '',
       nameEn: '',
       icon: '📌',
@@ -309,8 +311,10 @@ const ManageCategories = () => {
             <form onSubmit={handleFormSubmit}>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <div className="admin-form-group" style={{ flex: 1 }}>
-                  <label>{lang === 'th' ? 'Slug (รหัสภาษาอังกฤษ เช่น "drinks")' : 'Slug (Machine readable ID, e.g. "drinks")'}</label>
-                  <input required value={editingItem.slug} onChange={e => setEditingItem({...editingItem, slug: e.target.value})} />
+                  {/* รหัสหมวดหมู่ระบบออกให้เอง แก้เองไม่ได้ — เมนู ส่วนลด และป๊อปอัพอ้างถึงรหัสนี้อยู่
+                      ถ้าแก้มือ ของที่ผูกไว้จะหลุดทันที */}
+                  <label>{lang === 'th' ? 'รหัสหมวดหมู่ (ระบบออกให้)' : 'Category ID (auto-generated)'}</label>
+                  <input value={editingItem.slug} readOnly style={{ opacity: 0.7, cursor: 'not-allowed' }} />
                 </div>
                 <div className="admin-form-group" style={{ flex: 0.5 }}>
                   <label>{lang === 'th' ? 'ไอคอน (อีโมจิ)' : 'Icon (Emoji)'}</label>

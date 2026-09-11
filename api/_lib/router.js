@@ -6,7 +6,8 @@ import { handleGet, getStockLevels, getIngredientsList, getBomRows, generateSale
 import * as write from './write.js';
 import * as admin from './admin.js';
 import { deductStock, recordStockIn, saveBOM, upsertIngredient, deleteIngredient } from './stock.js';
-import { getPool, explainConnectError } from './db.js';
+import { getPool, query, explainConnectError } from './db.js';
+import { nextIds } from './ids.js';
 
 export const BUILD = '2026-09-11-sqlserver';
 
@@ -57,9 +58,12 @@ const POST_ACTIONS = {
 };
 
 // คำสั่งอ่านที่ไม่ได้อยู่ใน read.handleGet (ของเบ็ดเตล็ด/ของที่ใช้ตรวจระบบ)
-async function handleExtraGet(action) {
+async function handleExtraGet(action, params = {}) {
   switch (action) {
     case 'getBOM':            return await getBomRows();
+    // รหัสถัดไปสำหรับเมนู/หมวดหมู่ที่กำลังจะสร้าง (HL00001, HL00002, …)
+    // หน้าหลังบ้านเรียกตอนกดเพิ่มรายการใหม่ เพื่อให้รหัสเดินต่อจากของเดิมเสมอ
+    case 'nextId':            return { success: true, ids: await nextIds(query, Math.min(50, Math.max(1, Number(params.count) || 1))) };
     case 'getSalesReport':    return await generateSalesReport();
     case 'getStock':          return await getStockLevels();
     case 'getIngredients':    return await getIngredientsList();
@@ -103,7 +107,7 @@ export async function route({ method, params = {}, body }) {
     if (action === 'ping') return await ping();
     const fromRead = await handleGet(action, params);
     if (fromRead) return fromRead;
-    const extra = await handleExtraGet(action);
+    const extra = await handleExtraGet(action, params);
     if (extra) return extra;
     return { error: 'Unknown GET action' };
   }

@@ -87,3 +87,14 @@ export const hasOwnPopupSteps = (item) => {
   if (!hasItemPopupConfig(cfg)) return false;
   return POPUP_NUMS.some(n => cfg[`hasPopup${n}`] === true);
 };
+
+// หมวดที่ปิดคำถาม "ทานที่ร้าน / ห่อกลับบ้าน" ไว้ (hasDining === false) เช่นหมวดเครื่องดื่ม
+// ป้ายกำกับการรับประทานของรายการนั้นใช้ "ชื่อหมวด" แทน
+//
+// เดิมโค้ดเช็กตรง ๆ ว่า category === 'drink' ซึ่งผูกกับรหัสหมวดที่ตั้งชื่อไว้แบบนั้นพอดี
+// พอเปลี่ยนรหัสหมวดเป็น HL##### การเช็กแบบนั้นใช้ไม่ได้อีก จึงย้ายมาอ่านจากค่าที่ตั้งไว้ในหมวดแทน
+export const categoryDining = (food, categories = []) => {
+  const cat = categories.find(c => c.slug === (food && food.category));
+  if (cat && cat.name) return { id: cat.slug, name: cat.name, nameEn: cat.nameEn || cat.name };
+  return { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
+};

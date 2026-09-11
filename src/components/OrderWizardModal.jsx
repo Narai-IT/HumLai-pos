@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
-import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps } from '../utils/popupConfig';
+import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps, categoryDining } from '../utils/popupConfig';
 import { TAKEHOME_ALIASES, normName as norm, isChannelPriceName } from '../utils/salePricing';
 
 // ชื่อเมนูในการ์ดป๊อปอัพต้องอยู่บรรทัดเดียวเสมอ — ชื่อยาว ๆ ที่ตัดบรรทัด
@@ -98,8 +98,9 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     return match || opts[0];
   });
 
-  const isDrink = !!food && food.category === 'drink';
   const categoryConfig = food ? resolvePopupSource(food, categories) : {};
+  // หมวดที่ปิดคำถามการรับประทานไว้ (เดิมเช็กว่าเป็นหมวด 'drink' ตรง ๆ)
+  const skipDining = categoryConfig.hasDining === false;
 
   // อ่านค่าตั้งของป๊อปอัพลำดับที่ n จากเมนู (หรือหมวดหมู่ ถ้าเมนูยังไม่ได้ตั้งเอง)
   const resolvePopupConfig = (n) => {
@@ -296,7 +297,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const validSteps = [
     hasMultiplePrices ? 'price' : null,
     ...[1, 2, 3, 4, 5, 6].map(n => (stepIsUsable(n) ? n : null)),
-    (askDining && !isDrink && categoryConfig.hasDining !== false) ? 7 : null
+    (askDining && !skipDining) ? 7 : null
   ].filter(s => s !== null);
 
   const step = validSteps[currentStepIndex] || 1;
@@ -390,7 +391,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
       selectedPrice: effectivePrice(),
       allPopups: getExpandedPopups(),
       separateItems: getSeparateItems(),
-      dining: isDrink ? { id: 'drink', name: 'เครื่องดื่ม', nameEn: 'Drinks' } : selectedDining
+      dining: skipDining ? categoryDining(food, categories) : selectedDining
     });
   };
 
