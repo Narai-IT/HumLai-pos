@@ -249,6 +249,18 @@
   border-color: var(--accent);
 }
 
+/* กฎด้านบนตั้งใจให้ช่องกรอกข้อความเต็มความกว้าง แต่ไปโดนช่องติ๊กด้วย
+   ช่องติ๊กจึงกว้างเท่ากล่องทั้งใบ บีบข้อความข้าง ๆ จนเหลือบรรทัดละตัวอักษร */
+.admin-form-group input[type="checkbox"],
+.admin-form-group input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  flex: none;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .admin-search-input {
   width: 100%;
   padding: 0.85rem 1rem;
