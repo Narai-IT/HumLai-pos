@@ -13,7 +13,10 @@ import { query } from './api/_lib/db.js';
 const app = express();
 const PORT = Number(process.env.API_PORT || 8080);
 
-app.use(cors());
+// เปิดออกอินเทอร์เน็ตผ่าน Tunnel = ใครก็ยิงมาได้ จำกัดโดเมนที่เบราว์เซอร์เรียกได้ด้วย API_ALLOW_ORIGIN
+// (ไม่ตั้ง = อนุญาตทุกโดเมนเหมือนเดิม — Print Server กับเครื่องในร้านยังเรียกได้ตามปกติ)
+const allowOrigin = String(process.env.API_ALLOW_ORIGIN || '').trim();
+app.use(cors(allowOrigin ? { origin: allowOrigin.split(',').map(s => s.trim()).filter(Boolean) } : {}));
 // หน้าบ้านส่ง Content-Type: text/plain มาตั้งแต่ยุค GAS — ต้องรับทั้งสองแบบ
 app.use(express.json({ limit: '12mb' }));
 app.use(express.text({ type: 'text/*', limit: '12mb' }));
