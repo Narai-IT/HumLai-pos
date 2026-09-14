@@ -595,40 +595,70 @@ const ManageMenu = () => {
               {categories.length > 0 && (
                 <div className="admin-form-group">
                   <label>{lang === 'th' ? 'อยู่ในหมวดเพิ่มเติม (เลือกได้หลายหมวด)' : 'Also show in (multiple categories)'}</label>
-                  {/* ตารางคอลัมน์เท่ากัน ไม่ใช่ flex-wrap — ชื่อหมวดยาวสั้นไม่เท่ากันมาก
-                      ถ้าปล่อยให้กล่องกว้างตามชื่อ ช่องติ๊กจะเยื้องกันทุกแถวจนอ่านยาก */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-                    gap: '0.5rem',
-                    marginTop: '0.35rem'
-                  }}>
-                    {categories.filter(c => c.slug !== editingItem.category).map(c => {
-                      const checked = Array.isArray(editingItem.categories) && editingItem.categories.includes(c.slug);
-                      return (
-                        <label
-                          key={c.slug}
-                          style={{
-                            // ชิดบน ไม่ใช่กึ่งกลาง — ชื่อที่ยาวจนขึ้นสองบรรทัดจะได้ไม่ดันช่องติ๊กให้ลอยกลางกล่อง
-                            display: 'flex', alignItems: 'flex-start', gap: '0.5rem',
-                            padding: '0.5rem 0.65rem', borderRadius: '8px', cursor: 'pointer',
-                            background: checked ? 'rgba(234,179,8,0.18)' : 'var(--bg-main)',
-                            border: `1.5px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`,
-                            fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--text-main)',
-                            fontWeight: checked ? '700' : '500'
-                          }}
+                  {(() => {
+                    const picked = Array.isArray(editingItem.categories) ? editingItem.categories : [];
+                    // หมวดหลักไม่ต้องเลือกซ้ำ และที่เลือกไปแล้วก็ไม่ต้องโผล่ในรายการให้เลือกอีก
+                    const pickable = categories.filter(c => c.slug !== editingItem.category && !picked.includes(c.slug));
+                    const pickedCats = picked
+                      .filter(slug => slug !== editingItem.category)
+                      .map(slug => categories.find(c => c.slug === slug) || { slug, name: slug, nameEn: slug });
+
+                    return (
+                      <>
+                        <select
+                          value=""
+                          disabled={pickable.length === 0}
+                          onChange={e => { if (e.target.value) handleExtraCategoryToggle(e.target.value); }}
                         >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => handleExtraCategoryToggle(c.slug)}
-                            style={{ marginTop: '0.15rem', flexShrink: 0, accentColor: 'var(--accent)', cursor: 'pointer' }}
-                          />
-                          <span style={{ minWidth: 0, wordBreak: 'break-word' }}>{lang === 'th' ? c.name : c.nameEn}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
+                          <option value="">
+                            {pickable.length === 0
+                              ? (lang === 'th' ? '— เลือกครบทุกหมวดแล้ว —' : '— All categories added —')
+                              : (lang === 'th' ? '— เลือกหมวดที่จะเพิ่ม —' : '— Add a category —')}
+                          </option>
+                          {pickable.map(c => (
+                            <option key={c.slug} value={c.slug}>{lang === 'th' ? c.name : c.nameEn}</option>
+                          ))}
+                        </select>
+
+                        {pickedCats.length > 0 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.6rem' }}>
+                            {pickedCats.map(c => (
+                              <span
+                                key={c.slug}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.45rem',
+                                  padding: '0.35rem 0.5rem 0.35rem 0.7rem', borderRadius: '999px',
+                                  background: 'rgba(234,179,8,0.18)', border: '1.5px solid var(--accent)',
+                                  fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-main)'
+                                }}
+                              >
+                                {lang === 'th' ? c.name : c.nameEn}
+                                <button
+                                  type="button"
+                                  onClick={() => handleExtraCategoryToggle(c.slug)}
+                                  title={lang === 'th' ? 'เอาออก' : 'Remove'}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    width: '1.15rem', height: '1.15rem', padding: 0, borderRadius: '999px',
+                                    border: 'none', background: 'rgba(0,0,0,0.12)', color: 'var(--text-main)',
+                                    fontSize: '0.85rem', lineHeight: 1, cursor: 'pointer'
+                                  }}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {lang === 'th'
+                              ? 'ยังไม่ได้เลือกหมวดเพิ่มเติม — เมนูนี้จะขึ้นเฉพาะในหมวดหลักเท่านั้น'
+                              : 'No extra categories — this item shows only in its primary category.'}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
