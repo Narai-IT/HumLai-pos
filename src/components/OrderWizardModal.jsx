@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
-import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps, categoryDining } from '../utils/popupConfig';
+import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps, categoryDining, itemAsksNotes, NOTE_MAX_LENGTH } from '../utils/popupConfig';
 import { TAKEHOME_ALIASES, normName as norm, isChannelPriceName } from '../utils/salePricing';
 
 // ชื่อเมนูในการ์ดป๊อปอัพต้องอยู่บรรทัดเดียวเสมอ — ชื่อยาว ๆ ที่ตัดบรรทัด
@@ -70,7 +70,7 @@ const MAX_POPUP_DEPTH = 3;
 // เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
 const isChannelPrice = (name) => isChannelPriceName(name);
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true }) => {
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false }) => {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedPopup1, setSelectedPopup1] = useState({});
   const [selectedPopup2, setSelectedPopup2] = useState({});
@@ -84,6 +84,9 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const [subOptions, setSubOptions] = useState({});
   // เมนูในป๊อปอัพที่กำลังเปิดป๊อปอัพของตัวเองอยู่
   const [nestedPending, setNestedPending] = useState(null);
+  // หมายเหตุถึงครัว — ปุ่มที่กดเลือกไว้ (id → true) และข้อความที่ลูกค้าพิมพ์เอง
+  const [pickedNotes, setPickedNotes] = useState({});
+  const [customNote, setCustomNote] = useState('');
 
   const allPriceOptions = getPriceOptions(food);
   // ราคาที่ให้เลือกในขั้นตอน "เลือกราคา/ขนาด" = ตัดราคาช่องทางขาย (Takehome/Deli) ออก
@@ -294,9 +297,16 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const stepIsUsable = (n) => categoryConfig[`hasPopup${n}`] === true
     && stepConfigs[n].items.some(m => !stepConfigs[n].unpricedIds.has(m.id));
 
+  // ขั้นตอนหมายเหตุ — โผล่เมื่อเมนูนี้เปิดไว้ และร้านมีอะไรให้เลือกหรือให้พิมพ์เองได้
+  // ป๊อปอัพซ้อน (depth > 0) ไม่ถาม เพราะรายการข้างในเป็นตัวเลือกของจานหลักอีกที
+  const noteStepUsable = depth === 0
+    && itemAsksNotes(categoryConfig)
+    && (noteOptions.length > 0 || allowCustomNote);
+
   const validSteps = [
     hasMultiplePrices ? 'price' : null,
     ...[1, 2, 3, 4, 5, 6].map(n => (stepIsUsable(n) ? n : null)),
+    noteStepUsable ? 'notes' : null,
     (askDining && !skipDining) ? 7 : null
   ].filter(s => s !== null);
 
@@ -386,11 +396,23 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
     return total;
   };
 
+  // หมายเหตุที่เลือก + ที่พิมพ์เอง รวมเป็นข้อความเดียว เก็บลงช่อง note ของรายการในตะกร้า
+  // (ช่องเดียวกับที่พนักงานพิมพ์เองได้ในตะกร้า บิลกับใบครัวจึงแสดงได้อยู่แล้ว)
+  const buildNote = () => {
+    const parts = noteOptions
+      .filter(o => pickedNotes[o.id])
+      .map(o => (lang === 'th' ? o.name : (o.nameEn || o.name)));
+    const typed = allowCustomNote ? customNote.trim() : '';
+    if (typed) parts.push(typed);
+    return parts.join(', ');
+  };
+
   const handleSubmit = () => {
     onConfirm(food, {
       selectedPrice: effectivePrice(),
       allPopups: getExpandedPopups(),
       separateItems: getSeparateItems(),
+      note: buildNote(),
       dining: skipDining ? categoryDining(food, categories) : selectedDining
     });
   };
@@ -603,6 +625,77 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
           {step === 4 && renderPopupStep(4, pop4Config, selectedPopup4)}
           {step === 5 && renderPopupStep(5, pop5Config, selectedPopup5)}
           {step === 6 && renderPopupStep(6, pop6Config, selectedPopup6)}
+
+          {step === 'notes' && (() => {
+            const pickedCount = noteOptions.filter(o => pickedNotes[o.id]).length;
+            return (
+              <div className="wizard-step">
+                <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>
+                  {lang === 'th' ? 'หมายเหตุถึงครัว' : 'Note for the kitchen'}
+                </h3>
+                <p className="step-desc" style={{ color: '#475569', fontWeight: '600' }}>
+                  {lang === 'th'
+                    ? `เลือกได้หลายข้อ หรือข้ามไปก็ได้ — เลือกแล้ว ${pickedCount} ข้อ`
+                    : `Pick as many as you like, or skip — ${pickedCount} selected`}
+                </p>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  {noteOptions.map(o => {
+                    const on = !!pickedNotes[o.id];
+                    return (
+                      <button
+                        key={o.id}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => setPickedNotes(prev => {
+                          const next = { ...prev };
+                          if (next[o.id]) delete next[o.id]; else next[o.id] = true;
+                          return next;
+                        })}
+                        style={{
+                          fontFamily: 'inherit', fontSize: '0.9rem', fontWeight: 700, lineHeight: 1.3,
+                          color: '#0f172a', background: on ? '#fff7ed' : '#ffffff',
+                          border: `2px solid ${on ? '#ea580c' : '#cbd5e1'}`,
+                          borderRadius: '10px', padding: '0.6rem 0.85rem', cursor: 'pointer'
+                        }}
+                      >
+                        {on && <span style={{ color: '#ea580c', marginRight: '0.35rem', fontWeight: 800 }}>✓</span>}
+                        {lang === 'th' ? o.name : (o.nameEn || o.name)}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {allowCustomNote && (
+                  <div style={{ marginTop: noteOptions.length > 0 ? '1.1rem' : 0 }}>
+                    <label
+                      htmlFor="wizard-custom-note"
+                      style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem' }}
+                    >
+                      {lang === 'th' ? 'พิมพ์หมายเหตุเอง' : 'Type your own note'}
+                    </label>
+                    <textarea
+                      id="wizard-custom-note"
+                      value={customNote}
+                      maxLength={NOTE_MAX_LENGTH}
+                      onChange={e => setCustomNote(e.target.value)}
+                      placeholder={lang === 'th'
+                        ? 'เช่น แพ้กุ้ง ไม่ใส่เลย / ขอข้าวเยอะหน่อย'
+                        : 'e.g. shrimp allergy / extra rice please'}
+                      style={{
+                        width: '100%', boxSizing: 'border-box', minHeight: '62px', resize: 'vertical',
+                        padding: '0.7rem 0.75rem', borderRadius: '10px', border: '2px solid #cbd5e1',
+                        background: '#ffffff', color: '#0f172a', fontFamily: 'inherit', fontSize: '0.95rem'
+                      }}
+                    />
+                    <div style={{ fontSize: '0.76rem', color: '#64748b', textAlign: 'right', marginTop: '0.3rem', fontVariantNumeric: 'tabular-nums' }}>
+                      {customNote.length} / {NOTE_MAX_LENGTH}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {step === 7 && (
             <div className="wizard-step">

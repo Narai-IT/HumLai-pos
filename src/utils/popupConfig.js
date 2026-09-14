@@ -6,7 +6,7 @@
 export const POPUP_NUMS = [1, 2, 3, 4, 5, 6];
 
 const popupFieldKeys = () => {
-  const keys = ['hasDining', 'popupConfigured'];
+  const keys = ['hasDining', 'hasNotes', 'popupConfigured'];
   POPUP_NUMS.forEach(n => {
     keys.push(
       `hasPopup${n}`, `popup${n}Category`, `popup${n}Items`, `popup${n}ItemsMax`,
@@ -19,7 +19,7 @@ const popupFieldKeys = () => {
 
 // Default flattened popup fields for a brand-new menu item.
 export const emptyPopupFields = () => {
-  const obj = { hasDining: true, popupConfigured: false };
+  const obj = { hasDining: true, hasNotes: true, popupConfigured: false };
   POPUP_NUMS.forEach(n => {
     obj[`hasPopup${n}`] = false;
     obj[`popup${n}Category`] = '';
@@ -98,3 +98,34 @@ export const categoryDining = (food, categories = []) => {
   if (cat && cat.name) return { id: cat.slug, name: cat.name, nameEn: cat.nameEn || cat.name };
   return { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
 };
+
+// ── หมายเหตุถึงครัว (ขั้นตอนท้าย ๆ ของป๊อปอัพ) ──
+
+// รายการตั้งต้นสำหรับร้านที่ยังไม่เคยเข้าไปตั้งค่า — ตั้งค่าครั้งแรกเมื่อไหร่ค่านี้จะถูกแทนที่ทั้งชุด
+export const DEFAULT_NOTE_OPTIONS = [
+  { id: 'note_no_spicy',      name: 'ไม่เผ็ด',         nameEn: 'Not spicy' },
+  { id: 'note_less_spicy',    name: 'เผ็ดน้อย',        nameEn: 'Less spicy' },
+  { id: 'note_extra_spicy',   name: 'เผ็ดมาก',         nameEn: 'Extra spicy' },
+  { id: 'note_no_coriander',  name: 'ไม่ใส่ผักชี',      nameEn: 'No coriander' },
+  { id: 'note_sauce_side',    name: 'แยกน้ำจิ้ม',       nameEn: 'Sauce on the side' },
+  { id: 'note_no_cutlery',    name: 'ไม่ใส่ช้อนส้อม',   nameEn: 'No cutlery' }
+];
+
+// ความยาวสูงสุดของหมายเหตุที่พิมพ์เอง — ยาวกว่านี้ใบครัว 80 มม. ตัดคำจนอ่านไม่ออก
+export const NOTE_MAX_LENGTH = 120;
+
+// อ่านค่าหมายเหตุจาก settings ของร้าน
+//   kiosk = true  → หน้าลูกค้าสแกน QR สั่งเอง (ค่าเริ่มต้นคือพิมพ์เองไม่ได้)
+//   kiosk = false → หน้าขายที่พนักงานกดให้ (ค่าเริ่มต้นคือพิมพ์เองได้)
+export const resolveNoteConfig = (settings, { kiosk = false } = {}) => {
+  const raw = settings && typeof settings.orderNotes === 'object' ? settings.orderNotes : null;
+  const options = (raw && Array.isArray(raw.options) ? raw.options : DEFAULT_NOTE_OPTIONS)
+    .filter(o => o && String(o.name || '').trim())
+    .map(o => ({ id: String(o.id || o.name), name: String(o.name).trim(), nameEn: String(o.nameEn || o.name).trim() }));
+  const flag = kiosk ? 'allowCustomKiosk' : 'allowCustomPos';
+  const allowCustom = raw && raw[flag] !== undefined ? !!raw[flag] : !kiosk;
+  return { options, allowCustom };
+};
+
+// เมนูนี้ถามหมายเหตุไหม — ไม่เคยตั้งค่า = ถาม (เมนูเดิมทั้งหมดจึงได้ใช้ทันทีโดยไม่ต้องไล่เปิดทีละอัน)
+export const itemAsksNotes = (cfg) => !!cfg && cfg.hasNotes !== false;

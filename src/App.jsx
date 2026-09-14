@@ -28,7 +28,7 @@ const OutstandingBills = lazy(() => import('./components/OutstandingBills'));
 const LiquorStorage = lazy(() => import('./components/LiquorStorage'));
 const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
-import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining } from './utils/popupConfig';
+import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining, resolveNoteConfig } from './utils/popupConfig';
 import { priceForSaleType } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob } from './utils/printServer';
@@ -668,6 +668,9 @@ function App() {
   // (ถ้าหัวตะกร้าเลือก Takehome/Deli ไว้แล้ว ถือว่ารู้ชุดราคาแน่นอน ไม่ต้องถามซ้ำ)
   const askDining = customerType === '';
 
+  // รายการหมายเหตุที่ร้านตั้งไว้ ใช้ในป๊อปอัพหน้าขาย
+  const posNoteConfig = React.useMemo(() => resolveNoteConfig(posSettings), [posSettings]);
+
   const handleOrderClick = (food) => {
     const cats = allCategories.length > 0 ? allCategories : categories;
     const cfg = resolvePopupSource(food, cats);
@@ -693,9 +696,10 @@ function App() {
 
   // เพิ่ม 1 รายการลงตะกร้า — ถ้ามีรายการเหมือนกันเป๊ะอยู่แล้ว (เมนู/ราคา/ตัวเลือก/ชื่อลูกค้า/การรับประทาน)
   // ให้บวกจำนวนแทนการเพิ่มบรรทัดใหม่
-  const mergeIntoCart = (list, { food, popups = [], customerName: name = '', spice, promo, dining, fromPopupOf }) => {
+  const mergeIntoCart = (list, { food, popups = [], customerName: name = '', spice, promo, dining, fromPopupOf, note = '' }) => {
     const popupsIds = popups.map(p => p.id).sort().join('-') || 'no_popups';
-    const cartItemId = `${food.id}_${food.priceName || ''}_${name}_${popupsIds}_${spice?.id}_${promo?.id}_${dining?.id}_${fromPopupOf || ''}`;
+    // หมายเหตุคนละแบบ = คนละบรรทัด ไม่งั้น "ไม่เผ็ด" กับ "เผ็ดมาก" จะถูกรวมเป็นจานเดียวกัน
+    const cartItemId = `${food.id}_${food.priceName || ''}_${name}_${popupsIds}_${spice?.id}_${promo?.id}_${dining?.id}_${fromPopupOf || ''}_${note}`;
     const existingIndex = list.findIndex(item => item.cartItemId === cartItemId);
     if (existingIndex >= 0) {
       const next = [...list];
@@ -709,6 +713,7 @@ function App() {
       quantity: 1,
       customerName: name,
       allPopups: popups,
+      note,
       spice,
       promo,
       dining,
@@ -742,6 +747,7 @@ function App() {
       customerName: orderCustomerName,
       spice: orderDetails.spice,
       promo: orderDetails.promo,
+      note: orderDetails.note || '',
       dining: orderDetails.dining
     });
 
@@ -1535,6 +1541,8 @@ function App() {
           basePrice={Number(resolvePrice(selectedFood)?.price) || 0}
           askDining={askDining}
           hasPriceForCustomerType={hasPriceForCustomerType}
+          noteOptions={posNoteConfig.options}
+          allowCustomNote={posNoteConfig.allowCustom}
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmOrder}
         />
