@@ -9,17 +9,33 @@ echo    ยกเลิกการเปิด API SERVER อัตโนมั
 echo =========================================
 echo.
 
-set "LNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HumLai API Server.lnk"
-
-if exist "%LNK%" (
-  del "%LNK%"
-  echo    ลบทางลัดใน Startup แล้ว
-) else (
-  echo    ไม่พบทางลัดใน Startup อยู่แล้ว
+net session >nul 2>&1
+if errorlevel 1 (
+  echo [ผิดพลาด] ต้องเปิดไฟล์นี้ด้วยสิทธิ์ผู้ดูแลระบบ
+  echo คลิกขวาที่ไฟล์ uninstall-api-autostart.bat แล้วเลือก "Run as administrator"
+  echo.
+  pause
+  exit /b 1
 )
 
-echo กำลังหยุด API Server ที่ทำงานอยู่...
-rem ปิดเฉพาะตัวที่รัน API Server เท่านั้น — Print Server ในเครื่องเดียวกันต้องทำงานต่อได้
+echo กำลังหยุดและลบ Scheduled Task...
+schtasks /End    /TN "HumLai API Server" >nul 2>&1
+schtasks /Delete /TN "HumLai API Server" /F >nul 2>&1
+if errorlevel 1 (
+  echo    ไม่พบ Scheduled Task อยู่แล้ว
+) else (
+  echo    ลบเรียบร้อย
+)
+
+rem ของเวอร์ชันเก่าที่ใช้โฟลเดอร์ Startup — เก็บให้ด้วยเผื่อยังค้างอยู่
+set "OLDLNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HumLai API Server.lnk"
+if exist "%OLDLNK%" (
+  del "%OLDLNK%"
+  echo    ลบทางลัดแบบเก่าในโฟลเดอร์ Startup แล้ว
+)
+
+echo กำลังปิด API Server ที่ทำงานอยู่...
+rem ปิดเฉพาะตัวที่รัน API Server — Print Server ในเครื่องเดียวกันต้องทำงานต่อได้
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process -Filter \"Name='wscript.exe' OR Name='node.exe'\" | Where-Object { $_.CommandLine -match 'api-server-daemon\.vbs|sql-api-server\.js' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
 
 echo.

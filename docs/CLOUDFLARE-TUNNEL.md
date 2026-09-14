@@ -47,6 +47,52 @@ Cloudflare Tunnel แก้ทั้งสามเรื่องพร้อ�
 
 4. **Save hostname** — Cloudflare สร้าง DNS ให้เองอัตโนมัติ (จะเห็นแถว Tunnel เพิ่มมาอีกหนึ่ง)
 
+### ถ้าหน้า Routes ขึ้นว่า "This tunnel is locally managed"
+
+แปลว่า tunnel นี้อ่านค่าจาก**ไฟล์ config ในเครื่อง** ปุ่ม Add route บนหน้าเว็บจึงใช้ไม่ได้
+ต้องไปแก้ไฟล์ที่เครื่องที่รัน cloudflared แทน
+
+หาไฟล์ก่อน — เซอร์วิสรันเป็น LocalSystem จึงอ่าน config จากโฟลเดอร์ของบัญชีนั้น:
+
+```powershell
+sc.exe qc cloudflared        # ดู command line ว่ามี --config ระบุไว้ไหม
+Get-ChildItem "C:\Windows\System32\config\systemprofile\.cloudflared\", "$env:USERPROFILE\.cloudflared\", "C:\ProgramData\cloudflared\" -ErrorAction SilentlyContinue | Select-Object FullName
+```
+
+ส่วนใหญ่คือ `C:\Windows\System32\config\systemprofile\.cloudflared\config.yml`
+เปิดดูจะเห็นโครงแบบนี้ — **เพิ่มเฉพาะสองบรรทัดของ `pos-api` ก่อนบรรทัด `http_status:404`**
+(กฎถูกไล่จากบนลงล่าง ตัว catch-all ต้องอยู่ท้ายสุดเสมอ):
+
+```yaml
+tunnel: <tunnel id>
+credentials-file: C:\Users\Administrator\.cloudflared\<tunnel id>.json
+
+ingress:
+  - hostname: api.โดเมนคุณ
+    service: http://localhost:14365
+  - hostname: pos-api.โดเมนคุณ        # ← เพิ่มบรรทัดนี้
+    service: http://localhost:8080     # ← และบรรทัดนี้
+  - service: http_status:404
+```
+
+ตรวจไวยากรณ์ก่อนเสมอ แล้วค่อยรีสตาร์ต (YAML ผิดเว้นวรรคช่องเดียว hostname เดิมจะดับไปด้วย):
+
+```powershell
+C:\tools\cloudflared.exe --config "<path ของ config.yml>" tunnel ingress validate
+Restart-Service cloudflared
+```
+
+ต้องได้คำว่า `OK` ก่อนถึงจะรีสตาร์ต
+
+**DNS ของ tunnel แบบนี้ไม่ถูกสร้างให้อัตโนมัติ** สร้างเองด้วยคำสั่งเดียว (ใช้ `cert.pem` ที่มีอยู่แล้ว):
+
+```powershell
+C:\tools\cloudflared.exe tunnel route dns <ชื่อ tunnel> pos-api.โดเมนคุณ
+```
+
+ได้ `Added CNAME ... which will route to this tunnel` = เรียบร้อย
+หรือจะเพิ่มเองในหน้า DNS ก็ได้: CNAME ชื่อ `pos-api` ชี้ไปที่ `<tunnel id>.cfargotunnel.com` แบบ **Proxied**
+
 **ข้อควรระวังข้อเดียว:** ช่อง URL ต้องเป็นที่อยู่ที่ **เครื่องซึ่งรัน cloudflared** มองเห็น
 
 - API Server อยู่เครื่องเดียวกับ cloudflared → ใส่ `localhost:8080`
@@ -98,8 +144,12 @@ Cloudflare Tunnel แก้ทั้งสามเรื่องพร้อ�
    ต้องได้ `"db": "connected"` พร้อม `menuRows` — **ถ้ายังไม่ได้ อย่าเพิ่งไปขั้นต่อไป**
    ข้อความ error จะบอกเองว่าติดตรงไหน (ต่อไม่ติด / รหัสผ่านผิด / ยังไม่ได้สร้างตาราง)
 
-4. ได้ `connected` แล้วปิดหน้าต่างนั้นทิ้ง แล้วดับเบิลคลิก **`install-api-autostart.bat`**
+4. ได้ `connected` แล้วปิดหน้าต่างนั้นทิ้ง แล้ว**คลิกขวา**ที่ **`install-api-autostart.bat`** เลือก **Run as administrator**
    คราวนี้ API Server จะเปิดเองทุกครั้งที่เปิดเครื่อง และดับเมื่อไหร่ก็เปิดใหม่ให้เองใน 5 วินาที
+
+   > สคริปต์นี้สร้าง **Scheduled Task** ที่ทำงานตั้งแต่บูตในนาม SYSTEM จึงขึ้นเองแม้ไม่มีใครล็อกอิน
+   > (เครื่องเซิร์ฟเวอร์ที่ปล่อยไว้เฉย ๆ จะไม่มีใครล็อกอิน ทางลัดในโฟลเดอร์ Startup จึงใช้ไม่ได้)
+   > ตรวจสถานะภายหลังได้ด้วย `schtasks /Query /TN "HumLai API Server"`
 
 ## ขั้นที่ 2 — ติดตั้ง cloudflared
 

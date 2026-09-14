@@ -10,6 +10,16 @@ echo    ตั้งค่าให้ API SERVER เปิดเองอัต
 echo =========================================
 echo.
 
+rem สร้าง Scheduled Task ต้องใช้สิทธิ์ผู้ดูแล — เช็คก่อนจะได้ไม่ล้มกลางคัน
+net session >nul 2>&1
+if errorlevel 1 (
+  echo [ผิดพลาด] ต้องเปิดไฟล์นี้ด้วยสิทธิ์ผู้ดูแลระบบ
+  echo คลิกขวาที่ไฟล์ install-api-autostart.bat แล้วเลือก "Run as administrator"
+  echo.
+  pause
+  exit /b 1
+)
+
 where node >nul 2>&1
 if errorlevel 1 (
   echo [ผิดพลาด] ไม่พบ Node.js ในเครื่องนี้
@@ -60,23 +70,31 @@ if not exist "%~dp0api-server-daemon.vbs" (
   exit /b 1
 )
 
-set "SCRIPTDIR=%~dp0"
-set "LNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HumLai API Server.lnk"
+rem เวอร์ชันก่อนหน้าใช้ทางลัดในโฟลเดอร์ Startup ซึ่งทำงานตอน "ล็อกอิน" เท่านั้น
+rem เครื่องเซิร์ฟเวอร์ที่ไม่มีคนล็อกอินจึงไม่เคยเปิดให้เลย — เก็บของเก่าทิ้งก่อน
+set "OLDLNK=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\HumLai API Server.lnk"
+if exist "%OLDLNK%" (
+  del "%OLDLNK%"
+  echo    ลบทางลัดแบบเก่าในโฟลเดอร์ Startup แล้ว
+)
 
-echo กำลังสร้างทางลัดในโฟลเดอร์ Startup...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$dir=$env:SCRIPTDIR; $lnk=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\HumLai API Server.lnk'; $s=(New-Object -ComObject WScript.Shell).CreateShortcut($lnk); $s.TargetPath='wscript.exe'; $s.Arguments=[char]34+(Join-Path $dir 'api-server-daemon.vbs')+[char]34; $s.WorkingDirectory=$dir; $s.Description='HumLai POS API Server'; $s.Save()"
-
-if not exist "%LNK%" (
-  echo [ผิดพลาด] สร้างทางลัดไม่สำเร็จ
+echo กำลังสร้าง Scheduled Task ที่ทำงานตั้งแต่เปิดเครื่อง...
+schtasks /Create /TN "HumLai API Server" /TR "wscript.exe \"%~dp0api-server-daemon.vbs\"" /SC ONSTART /RU SYSTEM /RL HIGHEST /F
+if errorlevel 1 (
+  echo.
+  echo [ผิดพลาด] สร้าง Scheduled Task ไม่สำเร็จ
   echo.
   pause
   exit /b 1
 )
-echo    สร้างเรียบร้อย
 echo.
 
 echo กำลังเปิด API Server ตอนนี้เลย...
-start "" wscript.exe "%~dp0api-server-daemon.vbs"
+schtasks /Run /TN "HumLai API Server" >nul
+
+echo กำลังรอให้เซิร์ฟเวอร์พร้อม (ครั้งแรกอาจใช้เวลาสักครู่)...
+rem ping ตัวเองคือวิธีหน่วงเวลาที่มีอยู่ในทุกเครื่อง ไม่ต้องพึ่งโปรแกรมเสริม
+ping -n 21 127.0.0.1 >nul
 
 echo.
 echo =========================================
@@ -84,16 +102,13 @@ echo    เสร็จสิ้น
 echo =========================================
 echo.
 echo    - API Server ทำงานอยู่แล้วตอนนี้ (ไม่มีหน้าต่างแสดง)
-echo    - เปิดเครื่องครั้งต่อไปจะเริ่มทำงานเองอัตโนมัติ
+echo    - เปิดเครื่องครั้งต่อไปจะเริ่มทำงานเองทันที ไม่ต้องมีคนล็อกอิน
 echo    - ถ้าเซิร์ฟเวอร์ดับเอง จะถูกเปิดใหม่ให้ภายใน 5 วินาที
 echo    - บันทึกการทำงานอยู่ที่ logs\api-server.log
 echo.
 echo    ทดสอบ: เปิด http://localhost:8080/api/pos?action=ping ในเบราว์เซอร์
 echo    ต้องได้ "db": "connected" พร้อมจำนวนแถวในตาราง Menu
 echo.
-echo    ขั้นต่อไปคือเปิดออกอินเทอร์เน็ตด้วย Cloudflare Tunnel
-echo    ดูขั้นตอนที่ docs\CLOUDFLARE-TUNNEL.md
-echo.
-echo    ถ้าต้องการยกเลิก ให้รัน uninstall-api-autostart.bat
+echo    ถ้าต้องการยกเลิก ให้รัน uninstall-api-autostart.bat (ด้วยสิทธิ์ผู้ดูแลเช่นกัน)
 echo.
 pause
