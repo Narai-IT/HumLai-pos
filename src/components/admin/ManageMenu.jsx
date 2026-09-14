@@ -595,26 +595,36 @@ const ManageMenu = () => {
               {categories.length > 0 && (
                 <div className="admin-form-group">
                   <label>{lang === 'th' ? 'อยู่ในหมวดเพิ่มเติม (เลือกได้หลายหมวด)' : 'Also show in (multiple categories)'}</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.35rem' }}>
+                  {/* ตารางคอลัมน์เท่ากัน ไม่ใช่ flex-wrap — ชื่อหมวดยาวสั้นไม่เท่ากันมาก
+                      ถ้าปล่อยให้กล่องกว้างตามชื่อ ช่องติ๊กจะเยื้องกันทุกแถวจนอ่านยาก */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+                    gap: '0.5rem',
+                    marginTop: '0.35rem'
+                  }}>
                     {categories.filter(c => c.slug !== editingItem.category).map(c => {
                       const checked = Array.isArray(editingItem.categories) && editingItem.categories.includes(c.slug);
                       return (
                         <label
                           key={c.slug}
                           style={{
-                            display: 'flex', alignItems: 'center', gap: '0.4rem',
-                            padding: '0.45rem 0.75rem', borderRadius: '8px', cursor: 'pointer',
+                            // ชิดบน ไม่ใช่กึ่งกลาง — ชื่อที่ยาวจนขึ้นสองบรรทัดจะได้ไม่ดันช่องติ๊กให้ลอยกลางกล่อง
+                            display: 'flex', alignItems: 'flex-start', gap: '0.5rem',
+                            padding: '0.5rem 0.65rem', borderRadius: '8px', cursor: 'pointer',
                             background: checked ? 'rgba(234,179,8,0.18)' : 'var(--bg-main)',
                             border: `1.5px solid ${checked ? 'var(--accent)' : 'var(--border-color)'}`,
-                            fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: checked ? '700' : '500'
+                            fontSize: '0.85rem', lineHeight: 1.35, color: 'var(--text-main)',
+                            fontWeight: checked ? '700' : '500'
                           }}
                         >
                           <input
                             type="checkbox"
                             checked={checked}
                             onChange={() => handleExtraCategoryToggle(c.slug)}
+                            style={{ marginTop: '0.15rem', flexShrink: 0, accentColor: 'var(--accent)', cursor: 'pointer' }}
                           />
-                          {lang === 'th' ? c.name : c.nameEn}
+                          <span style={{ minWidth: 0, wordBreak: 'break-word' }}>{lang === 'th' ? c.name : c.nameEn}</span>
                         </label>
                       );
                     })}
