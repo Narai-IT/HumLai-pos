@@ -895,6 +895,19 @@ const ManageMenu = () => {
                       <input type="checkbox" checked={editingItem.hasDining !== false} onChange={e => setEditingItem({ ...editingItem, hasDining: e.target.checked })} style={{ width: 'auto', marginBottom: 0 }} />
                       <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{lang === 'th' ? 'แสดง ทานร้าน/ห่อกลับ' : 'Show Dining Options'}</span>
                     </label>
+
+                    {/* หมายเหตุถึงครัว — รายการที่ให้เลือกตั้งรวมไว้ที่หน้าตั้งค่า ตรงนี้แค่เปิด/ปิดของเมนูนี้ */}
+                    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer', marginBottom: 0, marginTop: '0.6rem' }}>
+                      <input type="checkbox" checked={editingItem.hasNotes !== false} onChange={e => setEditingItem({ ...editingItem, hasNotes: e.target.checked })} style={{ width: 'auto', marginBottom: 0, marginTop: '0.15rem' }} />
+                      <span>
+                        <span style={{ display: 'block', fontSize: '0.9rem', fontWeight: 'bold' }}>{lang === 'th' ? 'ถามหมายเหตุถึงครัว' : 'Ask for a kitchen note'}</span>
+                        <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                          {lang === 'th'
+                            ? 'เช่น ไม่เผ็ด / ไม่ใส่ผักชี — แก้รายการที่ให้เลือกได้ที่ จัดการหลังบ้าน → ตั้งค่า'
+                            : 'e.g. not spicy / no coriander — edit the list under Admin → Settings'}
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 )}
               </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Settings, ToggleLeft, ToggleRight, Save, Info, QrCode, Upload, CheckCircle2, AlertTriangle } from 'lucide-react';
 import jsQR from 'jsqr';
 import { parseKShopPayload } from '../../utils/promptpay';
+import { DEFAULT_NOTE_OPTIONS } from '../../utils/popupConfig';
 import { API_URL } from '../../utils/api';
 
 const DEFAULT_SETTINGS = {
@@ -13,7 +14,9 @@ const DEFAULT_SETTINGS = {
   kshopRawPayload: '',
   qrShopName: '',
   qrAccountName: '',
-  branchQR: {} // { [ชื่อสาขา]: { qrType, kshopRawPayload, qrShopName, qrAccountName, promptPayId, staticQrUrl } }
+  branchQR: {}, // { [ชื่อสาขา]: { qrType, kshopRawPayload, qrShopName, qrAccountName, promptPayId, staticQrUrl } }
+  // หมายเหตุถึงครัวที่ลูกค้าเลือกได้ตอนสั่ง
+  orderNotes: { options: DEFAULT_NOTE_OPTIONS, allowCustomPos: true, allowCustomKiosk: false }
 };
 
 // ชื่อสาขา = คอลัม branch ของชีต Users (เผื่อข้อมูลเก่าใช้ id/username)
@@ -68,6 +71,9 @@ const ManageSettings = ({ users = [] }) => {
   // สาขาที่กำลังตั้งค่า QR แยก + error ของการอัปโหลดรูปสาขานั้น
   const [branchTab, setBranchTab] = useState('');
   const [branchUploadError, setBranchUploadError] = useState('');
+  // ช่องพิมพ์หมายเหตุใหม่ที่กำลังจะเพิ่ม
+  const [newNote, setNewNote] = useState('');
+  const [newNoteEn, setNewNoteEn] = useState('');
 
   useEffect(() => {
     const stored = localStorage.getItem('pos_settings');
@@ -142,6 +148,40 @@ const ManageSettings = ({ users = [] }) => {
   const update = (key, field, value) => {
     setSettings(prev => ({ ...prev, [key]: { ...prev[key], [field]: value } }));
     setSaved(false);
+  };
+
+  // ── รายการหมายเหตุถึงครัว ──
+  const noteCfg = settings.orderNotes && typeof settings.orderNotes === 'object'
+    ? settings.orderNotes
+    : DEFAULT_SETTINGS.orderNotes;
+  const noteOptions = Array.isArray(noteCfg.options) ? noteCfg.options : [];
+
+  const setNoteOptions = (next) => {
+    setSettings(prev => ({ ...prev, orderNotes: { ...noteCfg, options: next } }));
+    setSaved(false);
+  };
+
+  const addNoteOption = () => {
+    const text = newNote.trim();
+    if (!text) return;
+    setNoteOptions([...noteOptions, { id: `note_${Date.now()}`, name: text, nameEn: newNoteEn.trim() || text }]);
+    setNewNote('');
+    setNewNoteEn('');
+  };
+
+  const editNoteOption = (index, field, value) => {
+    setNoteOptions(noteOptions.map((o, i) => (i === index ? { ...o, [field]: value } : o)));
+  };
+
+  const removeNoteOption = (index) => setNoteOptions(noteOptions.filter((_, i) => i !== index));
+
+  // สลับที่กับรายการข้างบน/ข้างล่าง — ลำดับนี้คือลำดับที่ลูกค้าเห็นในป๊อปอัพ
+  const moveNoteOption = (index, delta) => {
+    const target = index + delta;
+    if (target < 0 || target >= noteOptions.length) return;
+    const next = [...noteOptions];
+    [next[index], next[target]] = [next[target], next[index]];
+    setNoteOptions(next);
   };
 
   const handleQrUpload = (e) => {
@@ -561,6 +601,104 @@ const ManageSettings = ({ users = [] }) => {
             )}
           </>
         )}
+      </div>
+
+      {/* ─── หมายเหตุถึงครัว ─── */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.25rem' }}>
+        <div style={{ marginBottom: '1.1rem' }}>
+          <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>หมายเหตุถึงครัว</h3>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
+            รายการที่ลูกค้ากดเลือกได้ตอนสั่ง เช่น ไม่เผ็ด / ไม่ใส่ผักชี — ตั้งที่นี่ที่เดียว ใช้ได้ทุกเมนู
+            (ปิดเป็นรายเมนูได้ในหน้าจัดการเมนู)
+          </p>
+        </div>
+
+        {noteOptions.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.9rem', background: 'rgba(0,0,0,0.03)', borderRadius: 10, margin: 0 }}>
+            ยังไม่มีรายการหมายเหตุ — ลูกค้าจะเห็นเฉพาะช่องพิมพ์เอง (ถ้าเปิดไว้) หรือไม่เห็นขั้นตอนนี้เลย
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {noteOptions.map((o, i) => (
+              <div
+                key={o.id || i}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', padding: '0.6rem', border: '1px solid rgba(0,0,0,0.1)', borderRadius: 10 }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', flexShrink: 0 }}>
+                  <button
+                    onClick={() => moveNoteOption(i, -1)}
+                    disabled={i === 0}
+                    title="เลื่อนขึ้น"
+                    style={{ width: 24, height: 20, lineHeight: 1, border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, background: '#fff', cursor: i === 0 ? 'default' : 'pointer', opacity: i === 0 ? 0.35 : 1, fontFamily: 'inherit', fontSize: '0.7rem' }}
+                  >▲</button>
+                  <button
+                    onClick={() => moveNoteOption(i, 1)}
+                    disabled={i === noteOptions.length - 1}
+                    title="เลื่อนลง"
+                    style={{ width: 24, height: 20, lineHeight: 1, border: '1px solid rgba(0,0,0,0.12)', borderRadius: 6, background: '#fff', cursor: i === noteOptions.length - 1 ? 'default' : 'pointer', opacity: i === noteOptions.length - 1 ? 0.35 : 1, fontFamily: 'inherit', fontSize: '0.7rem' }}
+                  >▼</button>
+                </div>
+
+                <input
+                  value={o.name || ''}
+                  onChange={e => editNoteOption(i, 'name', e.target.value)}
+                  placeholder="ภาษาไทย"
+                  style={{ flex: '1 1 150px', minWidth: 0, padding: '0.55rem 0.7rem', borderRadius: 8, border: '1px solid rgba(0,0,0,0.15)', background: '#fff', color: 'var(--text-main)', fontFamily: 'inherit', fontSize: '0.9rem' }}
+                />
+                <input
+                  value={o.nameEn || ''}
+                  onChange={e => editNoteOption(i, 'nameEn', e.target.value)}
+                  placeholder="English"
+                  style={{ flex: '1 1 150px', minWidth: 0, padding: '0.55rem 0.7rem', borderRadius: 8, border: '1px solid rgba(0,0,0,0.15)', background: '#fff', color: 'var(--text-main)', fontFamily: 'inherit', fontSize: '0.9rem' }}
+                />
+                <button
+                  onClick={() => removeNoteOption(i)}
+                  title="ลบรายการนี้"
+                  style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#ef4444', cursor: 'pointer', fontFamily: 'inherit', fontSize: '1rem', lineHeight: 1 }}
+                >×</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+          <input
+            value={newNote}
+            onChange={e => setNewNote(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNoteOption(); } }}
+            placeholder="หมายเหตุใหม่ เช่น ไม่ใส่ถั่ว"
+            maxLength={40}
+            style={{ flex: '1 1 170px', minWidth: 0, padding: '0.6rem 0.75rem', borderRadius: 8, border: '1px solid rgba(0,0,0,0.15)', background: '#fff', color: 'var(--text-main)', fontFamily: 'inherit', fontSize: '0.9rem' }}
+          />
+          <input
+            value={newNoteEn}
+            onChange={e => setNewNoteEn(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addNoteOption(); } }}
+            placeholder="English (ไม่ใส่ = ใช้ภาษาไทย)"
+            maxLength={40}
+            style={{ flex: '1 1 170px', minWidth: 0, padding: '0.6rem 0.75rem', borderRadius: 8, border: '1px solid rgba(0,0,0,0.15)', background: '#fff', color: 'var(--text-main)', fontFamily: 'inherit', fontSize: '0.9rem' }}
+          />
+          <button
+            onClick={addNoteOption}
+            style={{ flexShrink: 0, padding: '0.6rem 1.2rem', borderRadius: 8, border: 'none', background: 'var(--text-main)', color: '#fff', fontWeight: 700, fontSize: '0.88rem', cursor: 'pointer', fontFamily: 'inherit' }}
+          >เพิ่ม</button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginTop: '1.25rem', paddingTop: '1.1rem', borderTop: '1px solid rgba(0,0,0,0.07)' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: '0.92rem' }}>หน้าขาย — ให้พิมพ์หมายเหตุเองได้</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>พนักงานพิมพ์เพิ่มเองได้ในป๊อปอัพ นอกเหนือจากรายการข้างบน</div>
+          </div>
+          <ToggleBtn checked={noteCfg.allowCustomPos !== false} onChange={(v) => update('orderNotes', 'allowCustomPos', v)} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginTop: '0.9rem' }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: '0.92rem' }}>ลูกค้าสแกน QR สั่งเอง — ให้พิมพ์หมายเหตุเองได้</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>ปิดไว้ = ลูกค้าเลือกได้เฉพาะรายการข้างบน กันพิมพ์สิ่งที่ครัวทำให้ไม่ได้</div>
+          </div>
+          <ToggleBtn checked={noteCfg.allowCustomKiosk === true} onChange={(v) => update('orderNotes', 'allowCustomKiosk', v)} />
+        </div>
       </div>
 
       <button

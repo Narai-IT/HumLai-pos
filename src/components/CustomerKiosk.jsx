@@ -4,6 +4,7 @@ import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X,
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
+import { resolveNoteConfig } from '../utils/popupConfig';
 
 const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOrder, lang: initialLang = 'th' }) => {
   const [searchParams] = useSearchParams();
@@ -118,6 +119,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     const idx = list.findIndex(c =>
       String(c.food.id) === String(row.food.id) &&
       (c.fromPopupOf || '') === (row.fromPopupOf || '') &&
+      // หมายเหตุคนละแบบ = คนละบรรทัด ครัวจะได้ไม่ทำรวมกันเป็นจานเดียว
+      (c.note || '') === (row.note || '') &&
       plain(c) && plain(row)
     );
     if (idx >= 0) return list.map((c, i) => (i === idx ? { ...c, quantity: c.quantity + row.quantity } : c));
@@ -142,6 +145,9 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     }
   };
 
+  // หมายเหตุฝั่งลูกค้าสั่งเอง — สวิตช์พิมพ์เองแยกจากหน้าขาย (ค่าเริ่มต้นคือเลือกได้เฉพาะปุ่ม)
+  const kioskNoteConfig = useMemo(() => resolveNoteConfig(settings, { kiosk: true }), [settings]);
+
   const handleConfirmWizardOrder = (rawFood, orderDetails) => {
     const chosenPrice = orderDetails?.selectedPrice;
     const baseFood = chosenPrice ? { ...rawFood, price: Number(chosenPrice.price) || 0, priceName: chosenPrice.name } : rawFood;
@@ -152,6 +158,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
       food: baseFood,
       quantity: 1,
       allPopups: orderDetails.allPopups || [],
+      note: orderDetails.note || '',
       dining
     }];
 
@@ -787,6 +794,8 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
           liveMenu={liveMenu}
           categories={categories}
           basePrice={Number(selectedFood.price) || 0}
+          noteOptions={kioskNoteConfig.options}
+          allowCustomNote={kioskNoteConfig.allowCustom}
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmWizardOrder}
         />
