@@ -329,7 +329,7 @@ const ManagePrinters = () => {
         </div>
       </div>
 
-      <div className="admin-card" style={{ maxWidth: '900px' }}>
+      <div className="admin-card">
         {/* ---------- Print Server status ---------- */}
         <div style={{
           background: statusStyles.bg,

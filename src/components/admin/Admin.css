@@ -64,10 +64,62 @@
   background: rgba(239, 68, 68, 0.1);
 }
 
+/* ปุ่มกลับหน้าร้าน/ออกจากระบบ ใต้หัวเมนูซ้าย — เดิมอยู่ท้ายเมนูยาว ๆ ต้องเลื่อนลงไปหา */
+.admin-quick {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.admin-quick button {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 0.5rem;
+  border-radius: 10px;
+  border: 1px solid rgba(0,0,0,0.12);
+  background: var(--bg-dark);
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.admin-quick button:hover { background: rgba(234, 179, 8, 0.15); }
+.admin-quick button.danger { color: #ef4444; border-color: rgba(239, 68, 68, 0.3); }
+.admin-quick button.danger:hover { background: rgba(239, 68, 68, 0.1); }
+
 .admin-main {
   flex-grow: 1;
+  min-width: 0;
   padding: 2.5rem 3rem;
   overflow-y: auto;
+}
+
+/* หน้าที่เนื้อหาเป็นการ์ดเรียงลงมา — จอกว้างให้ไหลเป็นหลายคอลัมน์แทนที่จะทิ้งที่ว่างไว้ครึ่งจอ
+   (การ์ดใบไหนอยากกินเต็มแถวใส่ class admin-card-wide) */
+.admin-page { width: 100%; }
+
+@media (min-width: 1180px) {
+  .admin-page-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+    gap: 0 1.25rem;
+    align-content: start;
+    /* การ์ดสูงไม่เท่ากัน — ไม่ต้องยืดใบเตี้ยให้สูงตามใบข้าง ๆ */
+    align-items: start;
+  }
+  .admin-page-cards > h2,
+  .admin-page-cards > p,
+  .admin-page-cards > button {
+    grid-column: 1 / -1;
+  }
 }
 
 .admin-header {

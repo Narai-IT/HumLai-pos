@@ -14,6 +14,20 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
           <div className="admin-logo">
              <h2>👑 {lang === 'th' ? 'แผงควบคุม' : 'Admin Panel'}</h2>
              <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>ข้าวมันไก่หำไหล</p>
+
+             {/* กลับหน้าร้าน/ออกจากระบบ อยู่บนสุด — เดิมอยู่ท้ายเมนูยาว ๆ ต้องเลื่อนลงไปหา */}
+             <div className="admin-quick">
+                <button type="button" onClick={() => navigate('/index')}>
+                   <Store size={16} /> {lang === 'th' ? 'กลับหน้าร้าน' : 'Storefront'}
+                </button>
+                <button
+                   type="button"
+                   className="danger"
+                   onClick={() => { if (onLogout && window.confirm(lang === 'th' ? 'ออกจากระบบ?' : 'Log out?')) onLogout(); }}
+                >
+                   <LogOut size={16} /> {lang === 'th' ? 'ออกจากระบบ' : 'Logout'}
+                </button>
+             </div>
           </div>
           <nav className="admin-nav">
              <NavLink to="/admin" end className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
@@ -76,18 +90,6 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
                onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
              >
                 <Globe size={20} /> {lang === 'th' ? 'English' : 'ภาษาไทย'}
-             </button>
-
-             <button className="admin-link logout" style={{ marginTop: '0.5rem' }} onClick={() => navigate('/index')}>
-                <LogOut size={20} /> {lang === 'th' ? 'กลับสู่หน้าร้าน' : 'Exit to Storefront'}
-             </button>
-
-             <button
-                className="admin-link logout"
-                style={{ marginTop: '0.25rem', color: '#f87171' }}
-                onClick={() => { if (onLogout && window.confirm(lang === 'th' ? 'ออกจากระบบ?' : 'Log out?')) onLogout(); }}
-             >
-                <LogOut size={20} /> {lang === 'th' ? 'ออกจากระบบ' : 'Logout'}
              </button>
           </nav>
        </aside>

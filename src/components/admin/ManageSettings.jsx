@@ -207,7 +207,7 @@ const ManageSettings = ({ users = [] }) => {
   const grandTotal = exampleSubtotal + scAmount + vatAmount;
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '640px' }}>
+    <div className="admin-page admin-page-cards" style={{ padding: '2rem' }}>
       <h2 style={{ color: 'var(--text-main)', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '1.4rem' }}>
         <Settings size={22} color="var(--accent-hover)" /> ตั้งค่าค่าบริการ
       </h2>
