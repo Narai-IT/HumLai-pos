@@ -529,6 +529,45 @@ const ManagePrinters = () => {
             </div>
           ) : (
             <>
+              {/* Print Server เก็บที่อยู่ API ไว้เองในเครื่อง ย้ายปลายทางเมื่อไหร่ค่านี้จะค้างของเก่า
+                  แล้วใบครัวจะเงียบไปเฉย ๆ โดยไม่มีอะไรฟ้อง — เทียบให้เห็นตรงนี้เลย */}
+              {(() => {
+                const want = apiUrlAbsolute();
+                const have = String(autoPrint?.config?.gasUrl || '');
+                const norm = (u) => u.replace(/\/+$/, '').toLowerCase();
+                if (!autoPrint || norm(have) === norm(want)) return null;
+                return (
+                  <div style={{
+                    background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '10px',
+                    padding: '0.75rem 0.85rem', marginBottom: '0.65rem',
+                    display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between'
+                  }}>
+                    <div style={{ fontSize: '0.8rem', color: '#92400e', fontWeight: 600, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800, marginBottom: '0.25rem' }}>
+                        ⚠️ Print Server ยังชี้ไปที่อยู่เดิม — ใบครัวจะไม่ออก
+                      </div>
+                      <div style={{ wordBreak: 'break-all' }}>
+                        ตอนนี้ตั้งไว้: <code>{have || '(ยังไม่ได้ตั้ง)'}</code>
+                      </div>
+                      <div style={{ wordBreak: 'break-all' }}>
+                        ต้องเป็น: <code>{want}</code>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => pushAutoPrint()}
+                      disabled={autoPrintBusy}
+                      style={{
+                        flexShrink: 0, background: '#d97706', color: '#fff', border: 'none', borderRadius: '10px',
+                        padding: '0.55rem 1rem', fontWeight: 800, fontSize: '0.85rem',
+                        cursor: autoPrintBusy ? 'wait' : 'pointer', fontFamily: 'inherit'
+                      }}
+                    >
+                      อัปเดตให้ตรงกันเดี๋ยวนี้
+                    </button>
+                  </div>
+                );
+              })()}
+
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.65rem' }}>
                 <button
                   onClick={() => pushAutoPrint({ enabled: !autoPrint?.config?.enabled })}
