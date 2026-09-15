@@ -1467,7 +1467,6 @@ function App() {
               currentUser={currentUser}
               shiftOpen={!!currentShift}
               onOpenShift={() => setShiftModalMode('open')}
-              onCloseShift={() => setShiftModalMode('close')}
               onLogout={handleLogout}
               onRefresh={refreshTableOrders}
               isRefreshing={isRefreshing}

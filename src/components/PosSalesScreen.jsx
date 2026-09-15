@@ -26,7 +26,7 @@ const PosSalesScreen = ({
   customerName, setCustomerName,
   settings = {},
   isAdmin, isCashier, branch, currentUser,
-  shiftOpen, onOpenShift, onCloseShift,
+  shiftOpen, onOpenShift,
   onLogout, onRefresh, isRefreshing,
   onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onDecreaseQuantity
 }) => {
@@ -334,12 +334,15 @@ const PosSalesScreen = ({
         </div>
 
         <div className="pos2-top-right">
-          <button
-            className={`pos2-btn ${shiftOpen ? '' : 'primary'}`}
-            onClick={shiftOpen ? onCloseShift : onOpenShift}
-          >
-            {shiftOpen ? t('🔒 ปิดกะ', '🔒 Close shift') : t('🕐 เปิดกะ', '🕐 Open shift')}
-          </button>
+          {/* ร้านไม่ได้ใช้การปิดกะแล้ว ปุ่มนี้จึงเหลือแค่ "เปิดกะ"
+              ตอนเปิดกะอยู่แสดงเป็นสถานะเฉย ๆ เพราะการสั่งอาหารยังผูกกับกะที่เปิดอยู่ */}
+          {shiftOpen ? (
+            <span className="pos2-shift-on">{t('🟢 เปิดกะอยู่', '🟢 Shift open')}</span>
+          ) : (
+            <button className="pos2-btn primary" onClick={onOpenShift}>
+              {t('🕐 เปิดกะ', '🕐 Open shift')}
+            </button>
+          )}
           {/* หน้ารายละเอียดบิล เหลือไว้สำหรับงานที่ทำในแผงขวาไม่ได้ — ย้ายโต๊ะ / รวมโต๊ะ / แยกบิล */}
           <button className="pos2-btn" onClick={onOpenBill} disabled={!tableNumber}>
             <Receipt size={15} /> {t('ย้าย/รวมโต๊ะ', 'Move/Merge')}
