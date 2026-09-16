@@ -6,7 +6,6 @@ import PaymentApprovalListener from './components/PaymentApprovalListener';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import TableOrderView from './components/TableOrderView';
 import LoginScreen from './components/LoginScreen';
-import ShiftModal from './components/ShiftModal';
 // โหลดแบบ lazy: 2 โมดอลนี้ลากไลบรารีหนัก (html2canvas, qrcode) เปิดตอนกดเท่านั้น → bundle หน้าแรกเล็กลง
 const SalesSummaryModal = lazy(() => import('./components/SalesSummaryModal'));
 const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
@@ -101,106 +100,10 @@ function App() {
   // สาขาของผู้ใช้ปัจจุบัน = คอลัม A ของชีต Users (branch) — ใช้บันทึกลง Orders.RecordedBy และกรองรายงาน
   const branch = String(currentUser?.branch || currentUser?.id || currentUser?.username || '').trim();
 
-  // Shift state
-  const [currentShift, setCurrentShift] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('current_shift') || 'null'); } catch { return null; }
-  });
-  const [shiftSales, setShiftSales] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('shift_sales') || 'null') || { totalSales: 0, totalCash: 0, totalCard: 0, totalTransfer: 0, totalOrders: 0 }; } catch { return { totalSales: 0, totalCash: 0, totalCard: 0, totalTransfer: 0, totalOrders: 0 }; }
-  });
-  const [shiftModalMode, setShiftModalMode] = useState(null); // null | 'open' | 'close'
-
   // แจ้งเตือนเมื่อบันทึกบิล/การชำระเงินขึ้น Google Sheet ไม่สำเร็จ (เน็ตหลุด/แบ็กเอนด์ error)
   // — กันเคส payment หายเงียบ ๆ แบบช่วงบิล #233–#296 ที่ผ่านมา
   // ค่า: null | { type: 'error' | 'success', msg: string }
   const [saveAlert, setSaveAlert] = useState(null);
-
-  const handleOpenShift = async (openCash) => {
-    // อ่านคำตอบให้ได้ เพื่อใช้ shiftId ที่ฝั่งเซิร์ฟเวอร์ออกให้เป็นตัวเดียวกับแถวในตาราง Shifts
-    // (ถ้าตั้ง id เองในเครื่อง ตอนปิดกะจะหาแถวไม่เจอ ยอดสรุปกะเลยไม่ถูกเขียนลงชีท)
-    let shiftId = '';
-    try {
-      const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'openShift', staff: currentUser?.username || '', openCash }) });
-      const json = await res.json().catch(() => null);
-      if (json && json.shiftId) shiftId = String(json.shiftId);
-    } catch (e) {}
-    if (!shiftId) shiftId = 'SHIFT-' + Date.now();
-    const shift = { id: shiftId, openTime: new Date().toISOString(), openStaff: currentUser?.username || '', openCash };
-    const freshSales = { totalSales: 0, totalCash: 0, totalCard: 0, totalTransfer: 0, totalOrders: 0 };
-    // เริ่มนับยอดคีออสของกะใหม่จากศูนย์ (รายการของกะก่อนถูกนับไปแล้ว)
-    countedKioskRef.current = [];
-    localStorage.removeItem('kiosk_counted_orders');
-    setCurrentShift(shift);
-    setShiftSales(freshSales);
-    localStorage.setItem('current_shift', JSON.stringify(shift));
-    localStorage.setItem('shift_sales', JSON.stringify(freshSales));
-    setShiftModalMode(null);
-  };
-
-  // โต๊ะที่ยังไม่ชำระ (ใช้ตอนปิดกะ → บิลค้าง)
-  const getPendingTables = () => {
-    const pending = (tableOrders || []).filter(o => o.Status !== 'paid');
-    const map = {};
-    pending.forEach(o => {
-      const t = String(o.TableNumber);
-      if (!map[t]) map[t] = { tableNo: t, count: 0, total: 0, items: [] };
-      map[t].count += Number(o.Quantity) || 1;
-      map[t].total += (Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1);
-      map[t].items.push(o);
-    });
-    return Object.values(map).sort((a, b) => String(a.tableNo).localeCompare(String(b.tableNo), 'th', { numeric: true }));
-  };
-
-  const handleCloseShift = async (closeCash, note, billInfo = {}) => {
-    if (!currentShift) return;
-
-    // สร้างบิลค้างจากโต๊ะที่ยังไม่ชำระ
-    const pendingTables = getPendingTables();
-    const createdAt = getThaiTimeISO();
-    const bills = pendingTables.map(t => {
-      const info = billInfo[t.tableNo] || {};
-      return {
-        id: `OB-${currentShift.id}-${t.tableNo}`,
-        shiftId: currentShift.id,
-        tableNo: t.tableNo,
-        customerName: (info.name || '').trim(),
-        phone: (info.phone || '').trim(),
-        total: t.total,
-        items: t.items,
-        createdAt,
-        status: 'unpaid'
-      };
-    });
-
-    if (bills.length > 0) {
-      // เก็บลง localStorage ทันที (ให้หน้าบิลค้างแสดงได้เลย)
-      try {
-        const prev = JSON.parse(localStorage.getItem('outstanding_bills') || '[]');
-        localStorage.setItem('outstanding_bills', JSON.stringify([...prev, ...bills]));
-      } catch (e) {}
-      try {
-        await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'saveOutstandingBills', bills }) });
-      } catch (e) {}
-      pendingTables.forEach(t => localStorage.removeItem('customer_count_' + t.tableNo));
-    }
-
-    // ล้างโต๊ะทั้งหมดเสมอ รวมรายการที่ลูกค้าจ่ายมาแล้วจากคีออส (บันทึกเป็นบิลไปตั้งแต่ตอนจ่ายแล้ว)
-    // ถ้าไม่ล้าง โต๊ะจะยังขึ้นว่ามีลูกค้าค้างข้ามไปกะถัดไป
-    try {
-      await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'clearAllTableOrders' }) });
-    } catch (e) {}
-    setTableOrders([]);
-    (tableOrders || []).forEach(o => localStorage.removeItem('customer_count_' + o.TableNumber));
-
-    try {
-      await fetch(API_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'closeShift', shiftId: currentShift.id, staff: currentUser?.username || '', closeCash, note, ...shiftSales }) });
-    } catch (e) {}
-    setCurrentShift(null);
-    setShiftSales({ totalSales: 0, totalCash: 0, totalCard: 0, totalTransfer: 0, totalOrders: 0 });
-    localStorage.removeItem('current_shift');
-    localStorage.removeItem('shift_sales');
-    setShiftModalMode(null);
-  };
 
   // เวลาที่ล็อกอินเข้าระบบ — ใช้เช็ก auto-logout เมื่อครบ 8 ชั่วโมง
   const loginAtRef = React.useRef(null);
@@ -373,53 +276,6 @@ function App() {
     return true;
   };
 
-  // ── ยอดขายจากคีออสเข้าสรุปกะ ──
-  // บิลที่ลูกค้าจ่ายเองเกิดบนมือถือลูกค้า ตัวนับยอดกะ (shiftSales) อยู่ในเครื่องขาย
-  // จึงต้องอ่าน PaymentSummary ที่ poll มาแล้วบวกเข้ายอดกะเอง ไม่งั้นสรุปกะจะขาดยอดส่วนนี้
-  const currentShiftRef = React.useRef(null);
-  React.useEffect(() => { currentShiftRef.current = currentShift; }, [currentShift]);
-  // เลขบิลคีออสที่บวกเข้ายอดกะไปแล้ว — กันบวกซ้ำทุกครั้งที่ poll หรือเปิดแอปใหม่
-  const countedKioskRef = React.useRef(null);
-
-  const absorbKioskPayments = (payments) => {
-    const shift = currentShiftRef.current;
-    if (!shift || !Array.isArray(payments)) return;
-    if (countedKioskRef.current === null) {
-      try { countedKioskRef.current = JSON.parse(localStorage.getItem('kiosk_counted_orders') || '[]'); }
-      catch { countedKioskRef.current = []; }
-    }
-    const counted = countedKioskRef.current;
-    // เทียบด้วยเวลาเปิดกะ ไม่ใช่ shiftId เพราะบิลคีออสถูกผูก shiftId จากฝั่งเซิร์ฟเวอร์
-    // ซึ่งอาจไม่ใช่ตัวเดียวกับ id ของกะที่เครื่องนี้ถืออยู่ (เช่นตอนเน็ตหลุดตอนเปิดกะ)
-    const openedAt = new Date(shift.openTime).getTime();
-    const fresh = payments.filter(p => {
-      if (!p || String(p.staff || '') !== 'Self-Order' || !p.orderNumber) return false;
-      if (counted.indexOf(String(p.orderNumber)) !== -1) return false;
-      if (String(p.shiftId || '') === String(shift.id)) return true;
-      const paidAt = new Date(p.timestamp).getTime();
-      return !isNaN(openedAt) && !isNaN(paidAt) && paidAt >= openedAt - 60000;
-    });
-    if (fresh.length === 0) return;
-
-    fresh.forEach(p => counted.push(String(p.orderNumber)));
-    countedKioskRef.current = counted.slice(-300); // เท่าจำนวนแถวที่ getLive ส่งมาพอ
-    localStorage.setItem('kiosk_counted_orders', JSON.stringify(countedKioskRef.current));
-
-    // คีออสรับเฉพาะโอนผ่าน QR — ไม่มีเงินสดเข้าลิ้นชักจากช่องทางนี้
-    const addTotal = fresh.reduce((sum, p) => sum + (Number(p.grandTotal) || 0), 0);
-    setShiftSales(prev => {
-      const updated = {
-        totalSales:    (prev.totalSales    || 0) + addTotal,
-        totalOrders:   (prev.totalOrders   || 0) + fresh.length,
-        totalCash:      prev.totalCash     || 0,
-        totalTransfer: (prev.totalTransfer || 0) + addTotal,
-        totalCard:      prev.totalCard     || 0,
-      };
-      localStorage.setItem('shift_sales', JSON.stringify(updated));
-      return updated;
-    });
-  };
-
   const processAppGASData = (data) => {
     if (data.categories && Array.isArray(data.categories) && changed('categories', data.categories)) {
       setAllCategories(data.categories);
@@ -474,7 +330,6 @@ function App() {
       setAllMenu(flatMenu);
       setLiveMenu(flatMenu.filter(m => m.isActive !== false));
     }
-    if (data.payments) absorbKioskPayments(data.payments);
     if (data.tableOrders && Array.isArray(data.tableOrders)) {
       // โต๊ะเป็นข้อมูลที่เปลี่ยนบ่อยและต้องตรงเสมอ → อัปเดตทุกครั้งที่ payload เปลี่ยน
       setTableOrders(data.tableOrders);
@@ -991,30 +846,6 @@ function App() {
   const handleCheckoutComplete = async (grandTotal, paymentMethod, paymentDetails) => {
     const finalTotal = grandTotal || checkoutTotal;
 
-    // Update shift sales accumulator
-    setShiftSales(prev => {
-      let addCash, addTransfer, addCard;
-      if (paymentDetails) {
-        // แยกจ่าย — กระจายตามจำนวนเงินที่ระบุแต่ละประเภท
-        addCash     = Number(paymentDetails.cash)     || 0;
-        addTransfer = Number(paymentDetails.transfer) || 0;
-        addCard     = Number(paymentDetails.card)     || 0;
-      } else {
-        const m = (paymentMethod || '').toLowerCase();
-        addCash     = (m.includes('สด') || m === 'cash') ? finalTotal : 0;
-        addTransfer = (m.includes('โอน') || m.includes('qr')) ? finalTotal : 0;
-        addCard     = (m.includes('บัตร') || m === 'card') ? finalTotal : 0;
-      }
-      const updated = {
-        totalSales:    (prev.totalSales    || 0) + finalTotal,
-        totalOrders:   (prev.totalOrders   || 0) + 1,
-        totalCash:     (prev.totalCash     || 0) + addCash,
-        totalTransfer: (prev.totalTransfer || 0) + addTransfer,
-        totalCard:     (prev.totalCard     || 0) + addCard,
-      };
-      localStorage.setItem('shift_sales', JSON.stringify(updated));
-      return updated;
-    });
     const nextNum = (branchMaxMap[branch] || 0) + 1;
     setBranchMaxMap(prev => ({ ...prev, [branch]: nextNum }));
     const newOrderNumber = `${branchPrefix(branch)}-#${String(nextNum).padStart(3, '0')}`;
@@ -1088,7 +919,7 @@ function App() {
         paymentMethod,
         grandTotal: finalTotal,
         staff: currentUser?.username || '',
-        shiftId: currentShift?.id || '',
+        shiftId: '', // เลิกใช้ระบบกะแล้ว เก็บช่องไว้ให้โครงสร้างข้อมูลเดิมไม่เปลี่ยน
         splitDetail: paymentDetails ? JSON.stringify(paymentDetails) : ''
       }
     };
@@ -1465,8 +1296,6 @@ function App() {
               isCashier={isCashier}
               branch={branch}
               currentUser={currentUser}
-              shiftOpen={!!currentShift}
-              onOpenShift={() => setShiftModalMode('open')}
               onLogout={handleLogout}
               onRefresh={refreshTableOrders}
               isRefreshing={isRefreshing}
@@ -1544,19 +1373,6 @@ function App() {
           allowCustomNote={posNoteConfig.allowCustom}
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmOrder}
-        />
-      )}
-
-      {shiftModalMode && (
-        <ShiftModal
-          mode={shiftModalMode}
-          currentShift={currentShift}
-          shiftSales={shiftSales}
-          currentUser={currentUser}
-          pendingTables={shiftModalMode === 'close' ? getPendingTables() : []}
-          onConfirmOpen={handleOpenShift}
-          onConfirmClose={handleCloseShift}
-          onClose={() => setShiftModalMode(null)}
         />
       )}
 
