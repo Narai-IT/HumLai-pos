@@ -65,19 +65,6 @@
 .pos2-btn.danger { background: #fee2e2; border-color: #fecaca; color: #b91c1c; }
 .pos2-btn:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ป้ายบอกว่ากะเปิดอยู่ — ไม่ใช่ปุ่ม กดไม่ได้ (ร้านเลิกใช้การปิดกะแล้ว) */
-.pos2-shift-on {
-  display: inline-flex; align-items: center;
-  border-radius: 999px;
-  padding: 0.45rem 0.85rem;
-  font-size: 0.82rem;
-  font-weight: 800;
-  white-space: nowrap;
-  background: #f0fdf4;
-  border: 1.5px solid #bbf7d0;
-  color: #166534;
-}
-
 /* เมนู "เพิ่มเติม" */
 .pos2-more { position: relative; }
 .pos2-more-menu {

@@ -26,7 +26,6 @@ const PosSalesScreen = ({
   customerName, setCustomerName,
   settings = {},
   isAdmin, isCashier, branch, currentUser,
-  shiftOpen, onOpenShift,
   onLogout, onRefresh, isRefreshing,
   onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onDecreaseQuantity
 }) => {
@@ -120,10 +119,6 @@ const PosSalesScreen = ({
   };
 
   const handleTableClick = (name) => {
-    if (!shiftOpen) {
-      alert(t('กรุณาเปิดกะก่อนจึงจะเปิดโต๊ะและสั่งอาหารได้', 'Please open a shift first.'));
-      return;
-    }
     if (sameTable(name, tableNumber)) return;
     if (cart.length > 0 && !window.confirm(t(
       'ยังมีรายการในตะกร้าที่ยังไม่ได้ส่ง ถ้าเปลี่ยนโต๊ะรายการจะถูกล้าง ต้องการเปลี่ยนหรือไม่?',
@@ -168,7 +163,6 @@ const PosSalesScreen = ({
 
   // สั่งอาหารได้ต่อเมื่อเปิดกะและเลือกโต๊ะแล้ว — กันคีย์ของลอยแล้วหายตอนเลือกโต๊ะทีหลัง
   const guardedOrderClick = (food) => {
-    if (!shiftOpen) { alert(t('กรุณาเปิดกะก่อนจึงจะสั่งอาหารได้', 'Please open a shift first.')); return; }
     if (!tableNumber) { alert(t('กรุณาเลือกโต๊ะด้านบนก่อนเริ่มคีย์รายการ', 'Please pick a table first.')); return; }
     // การ์ด/ผลค้นหาปิดปุ่มไว้อยู่แล้ว ตัวนี้กันทางอื่นที่อาจเรียกเข้ามาโดยตรง
     if (isUnpriced(food)) { alert(unpricedNote()); return; }
@@ -334,15 +328,6 @@ const PosSalesScreen = ({
         </div>
 
         <div className="pos2-top-right">
-          {/* ร้านไม่ได้ใช้การปิดกะแล้ว ปุ่มนี้จึงเหลือแค่ "เปิดกะ"
-              ตอนเปิดกะอยู่แสดงเป็นสถานะเฉย ๆ เพราะการสั่งอาหารยังผูกกับกะที่เปิดอยู่ */}
-          {shiftOpen ? (
-            <span className="pos2-shift-on">{t('🟢 เปิดกะอยู่', '🟢 Shift open')}</span>
-          ) : (
-            <button className="pos2-btn primary" onClick={onOpenShift}>
-              {t('🕐 เปิดกะ', '🕐 Open shift')}
-            </button>
-          )}
           {/* หน้ารายละเอียดบิล เหลือไว้สำหรับงานที่ทำในแผงขวาไม่ได้ — ย้ายโต๊ะ / รวมโต๊ะ / แยกบิล */}
           <button className="pos2-btn" onClick={onOpenBill} disabled={!tableNumber}>
             <Receipt size={15} /> {t('ย้าย/รวมโต๊ะ', 'Move/Merge')}
@@ -389,13 +374,7 @@ const PosSalesScreen = ({
       <div className="pos2-body">
         <div className="pos2-main">
           {/* ── แถบเตือนสถานะ ── */}
-          {!shiftOpen && (
-            <div className="pos2-notice warn">
-              ⚠️ {t('ยังไม่ได้เปิดกะ — กดปุ่ม "เปิดกะ" มุมขวาบนก่อนจึงจะเปิดโต๊ะและสั่งอาหารได้',
-                    'Shift not open — use "Open shift" before taking orders.')}
-            </div>
-          )}
-          {shiftOpen && !tableNumber && (
+          {!tableNumber && (
             <div className="pos2-notice">
               👆 {t('เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ',
                     'Pick a table below, then tap menu items to add them.')}
