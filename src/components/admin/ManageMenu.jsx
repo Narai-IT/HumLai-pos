@@ -609,7 +609,6 @@ const ManageMenu = () => {
             </div>
           </div>
         ))}
-        )}
       </div>
 
       {isModalOpen && editingItem && (
