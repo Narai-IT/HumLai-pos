@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<!--
+  ต้นฉบับของ docs/INSTALL-GUIDE.pdf — แก้ที่ไฟล์นี้แล้วสร้าง PDF ใหม่ด้วย Chromium:
+    chrome --headless --no-pdf-header-footer --print-to-pdf=docs/INSTALL-GUIDE.pdf docs/install-guide/INSTALL-GUIDE.html
+-->
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<title>คู่มือติดตั้งระบบ HumLai POS</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root {
+    --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb; --accent: #ea580c; --accent-soft: #fff7ed;
+    --ok: #15803d; --ok-soft: #f0fdf4; --warn: #b45309; --warn-soft: #fffbeb; --bad: #b91c1c; --bad-soft: #fef2f2;
+    --code-bg: #f3f4f6;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Loma", "FreeSerif", sans-serif; color: var(--ink); font-size: 10.5pt; line-height: 1.6; margin: 0; }
+  h1, h2, h3 { line-height: 1.3; }
+  h2 { font-size: 17pt; color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 4px; margin: 0 0 10px; break-after: avoid; }
+  h3 { font-size: 12.5pt; margin: 16px 0 6px; break-after: avoid; }
+  p { margin: 5px 0; }
+  code, pre { font-family: "DejaVu Sans Mono", "Loma", monospace; font-size: 9pt; }
+  code { background: var(--code-bg); padding: 1px 4px; border-radius: 3px; }
+  pre { background: var(--code-bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; white-space: pre-wrap; word-break: break-all; margin: 6px 0; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 9.5pt; break-inside: auto; }
+  th, td { border: 1px solid var(--line); padding: 5px 7px; text-align: left; vertical-align: top; }
+  th { background: #f9fafb; }
+  tr { break-inside: avoid; }
+  ol, ul { margin: 4px 0 6px; padding-left: 22px; }
+  li { margin: 2px 0; }
+  .chapter { break-before: page; }
+  .box { border-radius: 6px; padding: 7px 10px; margin: 8px 0; break-inside: avoid; border: 1px solid; }
+  .note { background: var(--accent-soft); border-color: #fed7aa; }
+  .warn { background: var(--warn-soft); border-color: #fde68a; }
+  .danger { background: var(--bad-soft); border-color: #fecaca; }
+  .ok { background: var(--ok-soft); border-color: #bbf7d0; }
+  .box b.t { display: block; margin-bottom: 2px; }
+  .check li { list-style: none; margin-left: -18px; }
+  .check li::before { content: "☐  "; }
+  .muted { color: var(--muted); }
+  .small { font-size: 9pt; }
+
+  /* หน้าปก */
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .cover .tag { color: var(--accent); font-weight: bold; letter-spacing: 1px; }
+  .cover h1 { font-size: 30pt; margin: 6px 0 4px; }
+  .cover .sub { font-size: 14pt; color: var(--muted); }
+  .cover .meta { margin-top: 30px; font-size: 10.5pt; color: var(--muted); }
+  .toc { margin-top: 26px; columns: 2; font-size: 10pt; }
+  .toc div { break-inside: avoid; margin: 2px 0; }
+
+  /* แผนภาพระบบ */
+  .diagram { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
+  .node { border: 1.5px solid var(--line); border-radius: 8px; padding: 8px; text-align: center; background: #fff; font-size: 9.5pt; }
+  .node b { display: block; font-size: 10.5pt; }
+  .node.cloud { border-color: #93c5fd; background: #eff6ff; }
+  .node.server { border-color: #fdba74; background: var(--accent-soft); }
+  .node.shop { border-color: #86efac; background: var(--ok-soft); }
+  .arrow { text-align: center; color: var(--muted); font-size: 9pt; }
+  .row3 { grid-column: span 3; }
+</style>
+</head>
+<body>
+
+<!-- ───────────── ปก ───────────── -->
+<section class="cover">
+  <div class="tag">HUMLAI POS · ระบบขายหน้าร้านหลายสาขา</div>
+  <h1>คู่มือติดตั้งระบบใหม่</h1>
+  <div class="sub">ตั้งแต่เครื่องเปล่า จนเปิดขายได้ และการเพิ่มสาขาใหม่</div>
+  <div class="meta">
+    ฉบับวันที่ 23 กันยายน 2026 · ตรงกับโค้ดรุ่น <code>2026-09-23-stock</code><br>
+    ต้นฉบับอยู่ที่ <code>docs/install-guide/INSTALL-GUIDE.html</code> ใน GitHub (Narai-IT/HumLai-pos)
+  </div>
+  <div class="toc">
+    <div>1. ภาพรวมระบบและสิ่งที่ต้องเตรียม</div>
+    <div>2. เตรียมเครื่องเซิร์ฟเวอร์และ SQL Server</div>
+    <div>3. ติดตั้ง API Server</div>
+    <div>4. เปิดทางเข้าด้วย Cloudflare Tunnel</div>
+    <div>5. ติดตั้งหน้าเว็บบน Vercel</div>
+    <div>6. ตั้งค่าร้านในหลังบ้าน</div>
+    <div>7. ติดตั้ง Print Server ในร้าน</div>
+    <div>8. เปิดบังคับล็อกอิน</div>
+    <div>9. เปิดสาขาใหม่</div>
+    <div>10. การอัปเดตระบบ</div>
+    <div>11. ความปลอดภัย</div>
+    <div>12. แก้ปัญหาที่เจอบ่อย</div>
+  </div>
+</section>
+
+<!-- ───────────── 1 ───────────── -->
+<section class="chapter">
+<h2>1. ภาพรวมระบบและสิ่งที่ต้องเตรียม</h2>
+<p>ระบบมี 3 ส่วน: <b>หน้าเว็บ</b> อยู่บน Vercel, <b>API + ฐานข้อมูล</b> อยู่บนเครื่องเซิร์ฟเวอร์เครื่องเดียว (ใช้ร่วมกันทุกสาขา) และ <b>Print Server</b> อยู่ในร้านแต่ละสาขา สาขาละหนึ่งเครื่อง</p>
+
+<div class="diagram">
+  <div class="node cloud"><b>หน้าเว็บ POS</b>Vercel<br><span class="small">hum-lai-pos.vercel.app</span></div>
+  <div class="node cloud"><b>Cloudflare Tunnel</b><span class="small">pos-api.&lt;โดเมนร้าน&gt;</span></div>
+  <div class="node server"><b>เครื่องเซิร์ฟเวอร์</b>API Server (พอร์ต 8080)<br>SQL Server (พอร์ต 1433)</div>
+  <div class="arrow row3">หน้าเว็บ → Tunnel → API → SQL Server &nbsp;·&nbsp; ไม่ต้องเปิดพอร์ตขาเข้าที่เครื่องเซิร์ฟเวอร์</div>
+  <div class="node shop"><b>เครื่อง POS / แท็บเล็ต</b>เปิดหน้าเว็บ</div>
+  <div class="node shop"><b>Print Server</b>เครื่องในร้าน (พอร์ต 3001)</div>
+  <div class="node shop"><b>ปริ้นเตอร์</b>ใบเสร็จ / ครัว / บาร์<br>(พอร์ต 9100 ในวงแลน)</div>
+  <div class="arrow row3">การพิมพ์วิ่งในวงแลนของร้าน ไม่ข้ามอินเทอร์เน็ต — Print Server ดึงออเดอร์ที่ลูกค้าสั่งเองจาก API มาพิมพ์ใบครัว</div>
+</div>
+
+<h3>สิ่งที่ต้องมี</h3>
+<table>
+  <tr><th style="width:30%">รายการ</th><th>รายละเอียด</th></tr>
+  <tr><td>เครื่องเซิร์ฟเวอร์ 1 เครื่อง</td><td>Windows 10/11 หรือ Windows Server เปิดทิ้งไว้ตลอด ใช้ติดตั้ง SQL Server + API Server + cloudflared</td></tr>
+  <tr><td>เครื่อง Print Server สาขาละ 1 เครื่อง</td><td>Windows ในวงแลนเดียวกับปริ้นเตอร์ เปิดตลอดเวลาที่ร้านเปิด (ใช้เครื่องแคชเชียร์ได้)</td></tr>
+  <tr><td>ปริ้นเตอร์ความร้อน ESC/POS</td><td>ต่อสาย LAN ตั้ง IP คงที่ รับงานพอร์ต 9100</td></tr>
+  <tr><td>บัญชีและบริการ</td><td>GitHub (เข้า repo <code>Narai-IT/HumLai-pos</code> ได้), Vercel, Cloudflare + โดเมนที่ย้าย DNS มาที่ Cloudflare แล้ว, SlipOK (ถ้ารับโอนผ่าน QR)</td></tr>
+  <tr><td>โปรแกรม</td><td>SQL Server (Express ก็ได้) + SQL Server Management Studio, Node.js <b>20 ขึ้นไป</b> (LTS), Git for Windows</td></tr>
+</table>
+
+<h3>พอร์ตที่ใช้</h3>
+<table>
+  <tr><th>พอร์ต</th><th>ของ</th><th>เปิดจากที่ไหน</th></tr>
+  <tr><td>1433</td><td>SQL Server</td><td>ในเครื่องเซิร์ฟเวอร์เท่านั้น <b>ห้ามเปิดออกอินเทอร์เน็ต</b></td></tr>
+  <tr><td>8080</td><td>API Server</td><td>ในเครื่องเซิร์ฟเวอร์ (Cloudflare Tunnel ต่อเข้ามาเอง)</td></tr>
+  <tr><td>3001</td><td>Print Server</td><td>ในเครื่อง/วงแลนของร้าน</td></tr>
+  <tr><td>9100</td><td>ปริ้นเตอร์</td><td>ในวงแลนของร้าน</td></tr>
+</table>
+
+<div class="box note"><b class="t">ลำดับการติดตั้ง</b>
+ทำตามบทที่ 2 → 8 ตามลำดับ แต่ละบทมีจุดทดสอบ ผ่านแล้วค่อยไปบทถัดไป ถ้าติดให้ดูบทที่ 12</div>
+</section>
+
+<!-- ───────────── 2 ───────────── -->
+<section class="chapter">
+<h2>2. เตรียมเครื่องเซิร์ฟเวอร์และ SQL Server</h2>
+
+<h3>2.1 ติดตั้งโปรแกรม</h3>
+<ol>
+  <li><b>SQL Server</b> (Express ใช้ได้) + <b>SQL Server Management Studio (SSMS)</b></li>
+  <li><b>Node.js LTS</b> จาก <code>https://nodejs.org</code> (ต้องรุ่น 20 ขึ้นไป) — ติดตั้งแบบค่าเริ่มต้น</li>
+  <li><b>Git for Windows</b> จาก <code>https://git-scm.com/download/win</code> — ติดตั้งแบบค่าเริ่มต้น (เปิด Git Credential Manager ไว้)</li>
+</ol>
+<p>เช็กใน PowerShell (ปิดแล้วเปิดใหม่หลังติดตั้ง): <code>node -v</code> ต้องได้ v20 ขึ้นไป และ <code>git --version</code> ต้องขึ้นเลขรุ่น</p>
+
+<h3>2.2 ตั้งค่า SQL Server</h3>
+<ol>
+  <li>เปิด <b>SQL Server Configuration Manager</b> → SQL Server Network Configuration → Protocols → เปิด <b>TCP/IP</b> → รีสตาร์ตเซอร์วิส SQL Server</li>
+  <li>ใน SSMS คลิกขวาที่เซิร์ฟเวอร์ → Properties → Security → เลือก <b>SQL Server and Windows Authentication mode</b> → รีสตาร์ตเซอร์วิส</li>
+</ol>
+
+<h3>2.3 สร้างฐานข้อมูลและผู้ใช้ <code>pos_app</code></h3>
+<p>ใน SSMS เปิด New Query แล้วรัน (เปลี่ยนรหัสผ่านเป็นของจริง ยาวและเดายาก):</p>
+<pre>CREATE DATABASE HumLaiPOS;
+GO
+USE HumLaiPOS;
+GO
+CREATE LOGIN pos_app WITH PASSWORD = 'ตั้งรหัสผ่านที่เดายาก';
+CREATE USER  pos_app FOR LOGIN pos_app;
+ALTER ROLE db_owner ADD MEMBER pos_app;   -- ต้องสร้าง/แก้ตารางได้ตอนรัน sql:init
+GO</pre>
+<div class="box warn"><b class="t">จดรหัสผ่านไว้ในที่ปลอดภัย</b>
+ใช้ใส่ในไฟล์ <code>.env</code> ในบทที่ 3 ห้ามส่งในแชท ห้ามใส่ในไฟล์ที่ขึ้น GitHub</div>
+</section>
+
+<!-- ───────────── 3 ───────────── -->
+<section class="chapter">
+<h2>3. ติดตั้ง API Server</h2>
+
+<h3>3.1 สร้าง token อ่านอย่างเดียวของ GitHub</h3>
+<p>repo เป็นแบบส่วนตัว เครื่องเซิร์ฟเวอร์ต้องมีสิทธิ์อ่าน ใช้ token ที่อ่านได้เฉพาะ repo นี้ แทนการล็อกอินบัญชีของคน</p>
+<ol>
+  <li>GitHub → รูปโปรไฟล์ → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token</li>
+  <li>Resource owner: <code>Narai-IT</code> · Repository access: เฉพาะ <code>HumLai-pos</code> · Permissions → Contents: <b>Read-only</b> · Expiration: 1 ปี (จดวันหมดอายุ)</li>
+  <li>คัดลอก token เก็บไว้ (เห็นได้ครั้งเดียว)</li>
+</ol>
+
+<h3>3.2 ดึงโค้ดลงเครื่อง</h3>
+<p>เปิด <b>PowerShell แบบ Run as administrator</b>:</p>
+<pre>cd D:\
+git config --global credential.useHttpPath true
+git clone https://github.com/Narai-IT/HumLai-pos.git humlai-pos
+cd D:\humlai-pos
+git config --global --add safe.directory D:/humlai-pos</pre>
+<p>ตอน clone จะมีหน้าต่างให้ล็อกอิน → เลือก <b>Token</b> แล้ววาง token จากข้อ 3.1 (Windows จำไว้ ครั้งหน้าไม่ถาม)</p>
+
+<h3>3.3 สร้างไฟล์ <code>.env</code></h3>
+<pre>copy .env.example .env
+notepad .env</pre>
+<p>แก้ค่าเหล่านี้แล้วบันทึก:</p>
+<pre>SQL_SERVER=localhost
+SQL_PORT=1433
+SQL_DATABASE=HumLaiPOS
+SQL_USER=pos_app
+SQL_PASSWORD="รหัสผ่านจากข้อ 2.3"
+SQL_ENCRYPT=false
+SQL_TRUST_CERT=true
+API_PORT=8080</pre>
+<div class="box danger"><b class="t">รหัสผ่านต้องมีเครื่องหมายคำพูดครอบ</b>
+ถ้ารหัสมีตัว <code>#</code> แล้วไม่ครอบด้วย <code>"..."</code> ค่าจะถูกตัดตั้งแต่ตัว <code>#</code> แล้วขึ้น <code>Login failed for user 'pos_app'</code></div>
+<p class="small muted">ถ้า SQL Server ติดตั้งเป็นอินสแตนซ์ชื่อ (เช่น <code>SQLEXPRESS</code>) ใช้ <code>SQL_SERVER=localhost\SQLEXPRESS</code> และลบบรรทัด <code>SQL_PORT</code></p>
+
+<h3>3.4 ติดตั้งส่วนประกอบและสร้างตาราง</h3>
+<pre>npm install
+npm run sql:init</pre>
+<p>ต้องจบด้วย <code>✅ สร้าง/ตรวจสอบโครงสร้างครบ ... ชุดคำสั่ง</code> — รันซ้ำได้ ไม่มีข้อมูลหาย</p>
+
+<h3>3.5 ทดสอบ แล้วตั้งให้เปิดเองทุกครั้งที่เปิดเครื่อง</h3>
+<ol>
+  <li>ดับเบิลคลิก <code>start-api.bat</code> แล้วเปิดเบราว์เซอร์ในเครื่องนั้น: <code>http://localhost:8080/api/pos?action=ping</code></li>
+  <li>ต้องได้ <code>"db":"connected"</code> — ถ้าไม่ได้ ข้อความจะบอกสาเหตุ (ต่อไม่ติด / รหัสผิด / ยังไม่มีฐานข้อมูล)</li>
+  <li>ปิดหน้าต่าง <code>start-api.bat</code> แล้ว <b>คลิกขวา <code>install-api-autostart.bat</code> → Run as administrator</b></li>
+</ol>
+<div class="box ok"><b class="t">ผ่านแล้วเมื่อ</b>
+รีสตาร์ตเครื่องแล้วเปิด <code>http://localhost:8080/api/pos?action=ping</code> ยังได้ <code>"db":"connected"</code> (API ทำงานเองโดยไม่ต้องมีคนล็อกอิน)</div>
+
+<h3>3.6 (ถ้ามี) ย้ายข้อมูลเดิมจาก Google Sheet</h3>
+<p>ใส่ <code>GAS_EXPORT_URL</code> ใน <code>.env</code> แล้วรัน <code>npm run sql:migrate -- --write</code> — รายละเอียดใน <code>docs/SQL-MIGRATION.md</code> ร้านที่เริ่มใหม่ข้ามข้อนี้ได้</p>
+</section>
+
+<!-- ───────────── 4 ───────────── -->
+<section class="chapter">
+<h2>4. เปิดทางเข้าด้วย Cloudflare Tunnel</h2>
+<p>ให้หน้าเว็บบน Vercel เรียก API ได้ โดยไม่ต้องเปิดพอร์ตขาเข้าที่เครื่องเซิร์ฟเวอร์ — เครื่องเป็นฝ่ายต่อออกไปหา Cloudflare เอง IP เปลี่ยนก็ไม่พัง</p>
+<ol>
+  <li>เข้า <code>https://one.dash.cloudflare.com</code> → <b>Networks → Tunnels → Create a tunnel</b> → เลือก <b>Cloudflared</b> → ตั้งชื่อ เช่น <code>humlai-pos</code></li>
+  <li>เลือก <b>Windows 64-bit</b> → คัดลอกคำสั่ง <code>cloudflared.exe service install eyJ...</code> ไปรันใน PowerShell แบบ Run as administrator บนเครื่องเซิร์ฟเวอร์
+    <br><span class="small muted">ถ้าไม่รู้จักคำสั่ง cloudflared ให้ติดตั้งจาก <code>https://github.com/cloudflare/cloudflared/releases/latest</code> (ไฟล์ .msi) ก่อน</span></li>
+  <li>รอสถานะเป็น <b>HEALTHY</b> → เพิ่ม Public Hostname:
+    <table>
+      <tr><th>Subdomain</th><th>Domain</th><th>Type</th><th>URL</th></tr>
+      <tr><td><code>pos-api</code></td><td>โดเมนของร้าน</td><td><b>HTTP</b></td><td><code>localhost:8080</code></td></tr>
+    </table></li>
+  <li>ทดสอบจาก <b>มือถือที่ใช้เน็ตมือถือ</b> (ไม่ใช่ Wi-Fi ร้าน): <code>https://pos-api.&lt;โดเมน&gt;/api/pos?action=ping</code> ต้องได้ <code>"db":"connected"</code></li>
+  <li>เพิ่ม 2 บรรทัดนี้ใน <code>D:\humlai-pos\.env</code> แล้วรัน <code>update-api.bat</code> (Run as administrator) เพื่อรีสตาร์ต API:
+<pre>IMAGE_BASE_URL=https://pos-api.&lt;โดเมน&gt;
+API_ALLOW_ORIGIN=https://hum-lai-pos.vercel.app</pre>
+    <span class="small muted"><code>IMAGE_BASE_URL</code> ทำให้รูปเมนูที่อัปโหลดเปิดได้ · <code>API_ALLOW_ORIGIN</code> จำกัดให้เฉพาะหน้าเว็บของร้านเรียก API จากเบราว์เซอร์ได้ (หลายโดเมนคั่นด้วยจุลภาค ไม่มี / ปิดท้าย)</span></li>
+</ol>
+<div class="box note"><b class="t">มี Tunnel ของระบบอื่นอยู่แล้ว?</b>
+ไม่ต้องสร้างใหม่ — เปิด Tunnel เดิมแล้วเพิ่ม Public Hostname ตามข้อ 3 ได้เลย (ดู <code>docs/CLOUDFLARE-TUNNEL.md</code>)</div>
+</section>
+
+<!-- ───────────── 5 ───────────── -->
+<section class="chapter">
+<h2>5. ติดตั้งหน้าเว็บบน Vercel</h2>
+<ol>
+  <li>Vercel → <b>Add New → Project</b> → Import repo <code>Narai-IT/HumLai-pos</code> (Framework: Vite — ใช้ค่าที่ Vercel ตรวจเจอ)</li>
+  <li><b>Settings → Environment Variables</b> ตั้ง:
+    <table>
+      <tr><th>ชื่อ</th><th>ค่า</th></tr>
+      <tr><td><code>VITE_API_URL</code></td><td><code>https://pos-api.&lt;โดเมน&gt;/api/pos</code> (ไม่มี / ปิดท้าย)</td></tr>
+      <tr><td><code>SLIPOK_API_KEY</code></td><td>คีย์จากหน้า SlipOK (ถ้ารับโอนผ่าน QR ที่ตรวจสลิปอัตโนมัติ)</td></tr>
+      <tr><td><code>SLIPOK_BRANCH_ID</code></td><td>Branch ID จาก SlipOK</td></tr>
+    </table>
+    <span class="small muted">ไม่ต้องตั้ง <code>SQL_*</code> ที่ Vercel — หน้าเว็บคุยกับ API ผ่าน Tunnel ไม่ได้ต่อฐานข้อมูลเอง</span></li>
+  <li>กด <b>Deploy</b> (ทุกครั้งที่แก้ Environment Variables ต้อง <b>Redeploy</b> ถึงจะมีผล)</li>
+  <li>เปิดหน้าเว็บ → กด F12 → แท็บ Network → ต้องเห็นคำขอไปที่ <code>pos-api.&lt;โดเมน&gt;</code></li>
+</ol>
+<div class="box ok"><b class="t">ผ่านแล้วเมื่อ</b>
+หน้าเว็บเปิดได้ ไม่มีแถบแดง และเข้าหลังบ้านได้ (ตอนนี้ยังไม่บังคับล็อกอิน ระบบเข้าเป็นแอดมินให้เอง)</div>
+</section>
+
+<!-- ───────────── 6 ───────────── -->
+<section class="chapter">
+<h2>6. ตั้งค่าร้านในหลังบ้าน</h2>
+<p>ทำจากเครื่องไหนก็ได้ที่เปิดหน้าเว็บ ตามลำดับนี้ (ลำดับสำคัญ: สาขาต้องมาก่อนพนักงาน/โต๊ะ/ปริ้นเตอร์)</p>
+
+<h3>6.1 สาขา — หลังบ้าน → สาขา</h3>
+<ol>
+  <li><b>เพิ่มสาขา</b>: รหัสสาขา (เช่น <code>hl01</code> — ภาษาอังกฤษ/ตัวเลข <b>เปลี่ยนภายหลังไม่ได้</b>), ชื่อสาขา, ตัวนำหน้าเลขบิล (เช่น <code>HL01</code> → บิล <code>HL01-#001</code>)</li>
+  <li>กรอก ที่อยู่ เบอร์โทร เลขประจำตัวผู้เสียภาษี ข้อความท้ายใบเสร็จ — ใช้พิมพ์หัวใบเสร็จของสาขานั้น</li>
+  <li>กด <b>บันทึกทั้งหมด</b></li>
+</ol>
+<div class="box note"><b class="t">⭐ สาขาหลัก</b>
+สาขาแรกที่เปิดใช้งานในรายการ = สาขาหลัก ข้อมูลที่ไม่ระบุสาขา (เครื่องที่ยังไม่ผูกสาขา, QR โต๊ะแบบเก่า) จะลงที่นี่ และแอดมินที่อยู่สาขาหลักนับเป็นแอดมินสำนักงานใหญ่</div>
+
+<h3>6.2 พนักงาน — หลังบ้าน → พนักงาน</h3>
+<table>
+  <tr><th>ระดับสิทธิ์</th><th>ใช้กับ</th><th>สาขาที่ควรเลือก</th></tr>
+  <tr><td>👑 แอดมิน</td><td>เจ้าของ / ผู้จัดการ</td><td>🌐 ทุกสาขา = สำนักงานใหญ่ · สาขาเดียว = ผู้จัดการสาขานั้น</td></tr>
+  <tr><td>💳 แคชเชียร์</td><td>เก็บเงิน รับของเข้าสต็อก จัดผังโต๊ะ</td><td>สาขาที่ทำงาน</td></tr>
+  <tr><td>พนักงานทั่วไป</td><td>รับออเดอร์</td><td>สาขาที่ทำงาน</td></tr>
+</table>
+<p>ตั้งรหัสผ่านให้ทุกคน และต้องมี <b>แอดมินที่ตั้งรหัสไว้อย่างน้อย 1 คน</b> ก่อนเปิดบังคับล็อกอินในบทที่ 8 · พนักงาน "ทุกสาขา" ล็อกอินแล้วจะมีหน้าให้เลือกสาขาที่ทำงานวันนั้น</p>
+
+<h3>6.3 ตั้งค่าร้าน — หลังบ้าน → ตั้งค่าร้าน</h3>
+<p>เซอร์วิสชาร์จ, VAT, QR รับเงิน (ตั้งแยกรายสาขาได้), หมายเหตุถึงครัว → กดบันทึก · สวิตช์ "บังคับล็อกอินทุกเครื่อง" ให้เปิดในบทที่ 8</p>
+
+<h3>6.4 เมนู</h3>
+<ol>
+  <li><b>หมวดหมู่</b> → สร้างหมวด (อาหาร, เครื่องดื่ม, ...)</li>
+  <li><b>จัดการเมนู</b> → เพิ่มเมนู ราคา รูป และเลือกปริ้นเตอร์ของเมนู (ตั้งหลังบทที่ 7) — นี่คือ <b>เมนูกลาง</b> ใช้ทุกสาขา</li>
+  <li><b>เมนูรายสาขา</b> (ถ้าสาขาต่างกัน) → เลือกสาขา → ปิดไม่ขาย / ใส่ราคาเฉพาะสาขา / เลือกปริ้นเตอร์ของสาขา — ช่องว่าง = ตามเมนูกลาง</li>
+  <li><b>BOM / สูตรอาหาร</b> และ <b>สต็อกวัตถุดิบ</b> (ถ้าใช้) — วัตถุดิบและสูตรใช้ร่วมกันทุกสาขา แต่ยอดคงเหลือแยกสาขา</li>
+</ol>
+
+<h3>6.5 โต๊ะและ QR — หลังบ้าน → จัดการโต๊ะ</h3>
+<ol>
+  <li>ต้องเห็นบรรทัด <b>🏠 ผังโต๊ะของสาขา: …</b> ถูกสาขา (ผังโต๊ะแยกสาขา)</li>
+  <li>เพิ่ม/แก้โต๊ะ และประเภทราคา (ทานที่ร้าน / กลับบ้าน / เดลิเวอรี่)</li>
+  <li>กดปุ่ม QR ของแต่ละโต๊ะ → พิมพ์ติดโต๊ะ (ลิงก์มีรหัสสาขา ออเดอร์ที่ลูกค้าสั่งเองเข้าสาขาถูกต้อง)</li>
+</ol>
+</section>
+
+<!-- ───────────── 7 ───────────── -->
+<section class="chapter">
+<h2>7. ติดตั้ง Print Server ในร้าน</h2>
+<p>ทำที่เครื่อง Print Server ของสาขานั้น (อยู่วงแลนเดียวกับปริ้นเตอร์)</p>
+
+<h3>7.1 ติดตั้งโปรแกรม</h3>
+<ol>
+  <li>ติดตั้ง <b>Node.js LTS</b> และ <b>Git for Windows</b> (เหมือนข้อ 2.1)</li>
+  <li>PowerShell:
+<pre>cd C:\
+git config --global credential.useHttpPath true
+git clone https://github.com/Narai-IT/HumLai-pos.git humlai-pos</pre>
+  ใช้ token อ่านอย่างเดียวแบบข้อ 3.1 (สร้างอีกตัวชื่อ <code>humlai-print-&lt;สาขา&gt;</code> ได้) · ไม่ใช้ Git → โหลด ZIP จาก GitHub แตกไฟล์ไว้ที่ <code>C:\humlai-pos</code></li>
+  <li>ดับเบิลคลิก <code>C:\humlai-pos\install-autostart.bat</code> — ลงส่วนประกอบและตั้งให้ Print Server เปิดเองทุกครั้งที่ล็อกอินเครื่อง</li>
+  <li>เช็ก: เปิด <code>http://127.0.0.1:3001/health</code> ต้องมีข้อความตอบกลับ</li>
+</ol>
+<div class="box note"><b class="t">ไม่ต้องมี .env บนเครื่อง Print Server</b>
+ที่อยู่ API ส่งมาจากหน้าหลังบ้าน (ข้อ 7.3) และเก็บไว้ใน <code>print-auto-config.json</code> ในเครื่องเอง</div>
+
+<h3>7.2 ตั้งปริ้นเตอร์ — หลังบ้าน → ปริ้นเตอร์ (เปิดจากเครื่อง Print Server)</h3>
+<ol>
+  <li>ล็อกอินด้วยพนักงานของสาขานี้ → ต้องเห็น <b>🏠 ปริ้นเตอร์ของสาขา: …</b> ถูกสาขา</li>
+  <li>สถานะ Print Server ต้องเป็นสีเขียว (ถ้าแดงและหน้าเว็บเป็น https ให้กดใช้ <code>127.0.0.1</code> ในส่วนตั้งค่า Print Server)</li>
+  <li>กด <b>สแกนหาเครื่องพิมพ์</b> หรือเพิ่มเองด้วย IP → ตั้งชื่อ + ประเภท (ใบเสร็จ / ครัว / บาร์) → บันทึก</li>
+  <li>กดพิมพ์ทดสอบแต่ละเครื่อง</li>
+</ol>
+<div class="box warn"><b class="t">ตั้งชื่อปริ้นเตอร์ให้เหมือนกันทุกสาขา</b>
+เช่น "ครัว", "บาร์" — เมนูที่ตั้งให้ออกปริ้นเตอร์ "บาร์" ในเมนูกลาง จะไปออกปริ้นเตอร์ชื่อ "บาร์" ของแต่ละสาขาให้เอง</div>
+
+<h3>7.3 เปิดพิมพ์ใบครัวอัตโนมัติ (ออเดอร์ที่ลูกค้าสแกน QR สั่งเอง)</h3>
+<ol>
+  <li>ในหน้าปริ้นเตอร์ กด <b>เปิดการพิมพ์อัตโนมัติ</b> (ระบบส่งที่อยู่ API + สาขา + หัวใบเสร็จให้ Print Server)</li>
+  <li>ถ้ามีกล่องสีเหลือง "Print Server ยังชี้ไปที่อยู่เดิม" → กด <b>อัปเดตให้ตรงกันเดี๋ยวนี้</b></li>
+  <li>ทดสอบ: สแกน QR โต๊ะด้วยมือถือ สั่ง 1 รายการ → ภายใน 20 วินาทีใบครัวต้องออก</li>
+</ol>
+<div class="box ok"><b class="t">ผ่านแล้วเมื่อ</b>
+ขายที่หน้า POS 1 บิล ใบเสร็จออกพร้อมหัวใบของสาขา และออเดอร์จาก QR ออกใบครัวเอง</div>
+</section>
+
+<!-- ───────────── 8 ───────────── -->
+<section class="chapter">
+<h2>8. เปิดบังคับล็อกอิน</h2>
+<p>ขั้นสุดท้ายและสำคัญที่สุดด้านความปลอดภัย — ก่อนเปิด ใครรู้ที่อยู่ API ก็เรียกได้ทุกคำสั่ง</p>
+<ol>
+  <li>เช็กว่าพนักงานทุกคนมีรหัส และมีแอดมินที่ตั้งรหัสแล้ว (ข้อ 6.2)</li>
+  <li>หลังบ้าน → ตั้งค่าร้าน → เปิด <b>บังคับล็อกอินทุกเครื่อง</b> → บันทึก</li>
+  <li>ทุกเครื่องจะกลับไปหน้าล็อกอินภายใน 1 นาที → ลองล็อกอินด้วยรหัสพนักงานแต่ละคน</li>
+  <li>ลองสแกน QR สั่งอาหารอีกครั้ง (หน้าลูกค้าไม่ต้องล็อกอิน ต้องยังใช้ได้)</li>
+</ol>
+<table>
+  <tr><th>กลุ่ม</th><th>ทำได้</th></tr>
+  <tr><td>ไม่ต้องล็อกอิน</td><td>ลูกค้าสแกน QR สั่งและจ่าย, Print Server ดึงคิวใบครัว</td></tr>
+  <tr><td>พนักงานทั่วไป</td><td>ขาย จัดการโต๊ะ เช็กบิล — เฉพาะสาขาตัวเอง</td></tr>
+  <tr><td>แคชเชียร์</td><td>+ ผังโต๊ะ รับวัตถุดิบ ดูสต็อก</td></tr>
+  <tr><td>ผู้จัดการสาขา</td><td>+ ปริ้นเตอร์และเมนูรายสาขาของสาขาตัวเอง</td></tr>
+  <tr><td>แอดมินสำนักงานใหญ่</td><td>ทุกอย่าง: สาขา พนักงาน ตั้งค่าร้าน เมนูกลาง BOM ล้างข้อมูล</td></tr>
+</table>
+<p class="small muted">ใส่รหัสผิด 5 ครั้งติดกัน ผู้ใช้นั้นถูกล็อก 5 นาที · ล็อกอินหนึ่งครั้งใช้ได้ 12 ชั่วโมง · รายละเอียดใน <code>docs/LOGIN-AND-PERMISSIONS.md</code></p>
+</section>
+
+<!-- ───────────── 9 ───────────── -->
+<section class="chapter">
+<h2>9. เปิดสาขาใหม่</h2>
+<p>ใช้เครื่องเซิร์ฟเวอร์ ฐานข้อมูล และหน้าเว็บเดิม — เพิ่มแค่ข้อมูลสาขาและ Print Server ของร้านใหม่</p>
+<ul class="check">
+  <li>หลังบ้าน → สาขา → เพิ่มสาขา (รหัส ชื่อ ตัวนำหน้าเลขบิล ที่อยู่ เบอร์ เลขภาษี) → บันทึก</li>
+  <li>หลังบ้าน → พนักงาน → เพิ่มพนักงานของสาขาใหม่พร้อมรหัส (เลือกสาขาใหม่)</li>
+  <li>ตั้งค่าร้าน → QR รับเงินของสาขาใหม่ (ถ้าบัญชีรับเงินต่างจากสาขาอื่น)</li>
+  <li>ล็อกอินด้วยพนักงานสาขาใหม่ (หรือพนักงานทุกสาขาแล้วเลือกสาขาใหม่) → จัดการโต๊ะ → สร้างผังโต๊ะ → พิมพ์ QR</li>
+  <li>เมนูรายสาขา → ปิดเมนูที่ไม่ขาย / ใส่ราคาที่ต่างจากเมนูกลาง</li>
+  <li>ติดตั้ง Print Server ที่ร้านใหม่ (บทที่ 7) → ปริ้นเตอร์ชื่อเดียวกับสาขาอื่น → เปิดพิมพ์อัตโนมัติ</li>
+  <li>สต็อก → เลือกสาขาใหม่ → รับวัตถุดิบเข้ายอดตั้งต้น (ถ้าใช้สต็อก)</li>
+  <li>ทดลองขาย 1 บิล + สแกน QR 1 ครั้ง → เช็กใบเสร็จ ใบครัว และว่าไม่เห็นโต๊ะของสาขาอื่น</li>
+</ul>
+</section>
+
+<!-- ───────────── 10 ───────────── -->
+<section class="chapter">
+<h2>10. การอัปเดตระบบ</h2>
+<table>
+  <tr><th style="width:28%">ส่วน</th><th>วิธีอัปเดต</th></tr>
+  <tr><td>หน้าเว็บ (Vercel)</td><td>อัตโนมัติทุกครั้งที่ merge เข้า <code>main</code> — ที่ร้านกด Ctrl+F5</td></tr>
+  <tr><td>API Server (เครื่องเซิร์ฟเวอร์)</td><td>Remote Desktop → คลิกขวา <code>D:\humlai-pos\update-api.bat</code> → Run as administrator<br>ทำให้ครบ: ดึงโค้ด → ลงส่วนประกอบถ้าเปลี่ยน → <code>sql:init</code> → รีสตาร์ต API → ping ให้ดู</td></tr>
+  <tr><td>Print Server (แต่ละร้าน)</td><td>ดับเบิลคลิก <code>update-printer.bat</code> (ไม่ได้ใช้ Git → วาง ZIP ทับโฟลเดอร์แล้วรีสตาร์ตเครื่อง)</td></tr>
+</table>
+<div class="box note"><b class="t">อัปเดตตอนร้านปิด</b>
+ถ้าขั้นไหนพัง สคริปต์หยุดก่อนรีสตาร์ต ตัวเดิมยังทำงานต่อ — แต่ควรทำนอกเวลาขายแล้วทดลองขาย 1 บิลก่อนเปิดร้าน</div>
+<p>เช็กรุ่นที่ทำงานอยู่: <code>https://pos-api.&lt;โดเมน&gt;/api/pos?action=ping</code> → ค่า <code>build</code></p>
+<div class="box danger"><b class="t">ห้าม <code>git reset --hard</code> ในโฟลเดอร์ที่ใช้งานอยู่</b>
+จะลบไฟล์ที่เคยแก้ไว้ในเครื่อง ถ้า <code>update-api.bat</code> บอกว่าไฟล์ในเครื่องถูกแก้ ให้ดูด้วย <code>git status</code> ก่อน</div>
+</section>
+
+<!-- ───────────── 11 ───────────── -->
+<section class="chapter">
+<h2>11. ความปลอดภัย</h2>
+<ul class="check">
+  <li>เปิด <b>บังคับล็อกอินทุกเครื่อง</b> (บทที่ 8)</li>
+  <li><b>ปิดพอร์ต 1433</b> ขาเข้าจากอินเทอร์เน็ต ทั้งที่เราเตอร์และ Windows Firewall — API ต่อฐานข้อมูลผ่าน <code>localhost</code> ไม่ต้องใช้พอร์ตนี้จากข้างนอก</li>
+  <li>รหัสผ่าน <code>pos_app</code> ยาวและเดายาก เก็บแค่ใน <code>.env</code> ของเครื่องเซิร์ฟเวอร์ ไม่ใส่ในไฟล์ที่ขึ้น GitHub หรือส่งทางแชท</li>
+  <li>ไม่เก็บค่า <code>SQL_*</code> ไว้ที่ Vercel</li>
+  <li>คีย์ SlipOK อยู่ใน Environment Variables ของ Vercel เท่านั้น</li>
+  <li>token GitHub ของเครื่องเซิร์ฟเวอร์/Print Server เป็นแบบ Read-only เฉพาะ repo — จดวันหมดอายุไว้ต่ออายุก่อนหมด</li>
+  <li>สงสัยว่ามีคนได้ token ล็อกอินไป → ตั้ง <code>API_SECRET</code> ใหม่ใน <code>.env</code> แล้วรัน <code>update-api.bat</code> (ทุกเครื่องต้องล็อกอินใหม่)</li>
+</ul>
+</section>
+
+<!-- ───────────── 12 ───────────── -->
+<section class="chapter">
+<h2>12. แก้ปัญหาที่เจอบ่อย</h2>
+<table>
+  <tr><th style="width:34%">อาการ</th><th>สาเหตุ / วิธีแก้</th></tr>
+  <tr><td>ping ขึ้น <code>Login failed for user 'pos_app'</code></td><td>รหัสใน <code>.env</code> ผิด หรือมี <code>#</code> แต่ไม่ครอบด้วย <code>"..."</code> · ยังไม่ได้เปิด Mixed Mode</td></tr>
+  <tr><td>ping ขึ้น <code>Failed to connect</code></td><td>SQL Server ไม่ทำงาน / ไม่ได้เปิด TCP/IP / ชื่ออินสแตนซ์ผิด (<code>localhost\SQLEXPRESS</code>)</td></tr>
+  <tr><td>ลิงก์ <code>pos-api...</code> ขึ้น error 502</td><td>Tunnel ทำงานแต่ API ดับ → ดู <code>D:\humlai-pos\logs\api-server.log</code> / รัน <code>update-api.bat</code></td></tr>
+  <tr><td>ลิงก์ <code>pos-api...</code> ขึ้น error 1033 / Tunnel DOWN</td><td>cloudflared ไม่ทำงาน → PowerShell <code>sc.exe query cloudflared</code> / <code>sc.exe start cloudflared</code></td></tr>
+  <tr><td>แถบแดง "บันทึกบิล … ขึ้นระบบไม่สำเร็จ"</td><td>บิลไม่หาย ถูกเก็บในเครื่องและส่งซ้ำเองทุก 1.5 นาที อ่านสาเหตุในแถบ แล้วเช็ก ping · <b>ห้ามล้างข้อมูลเบราว์เซอร์</b></td></tr>
+  <tr><td>หน้าเว็บยังเรียก API ที่อยู่เดิม</td><td>ยังไม่ได้ Redeploy หลังตั้ง <code>VITE_API_URL</code> / เบราว์เซอร์จำของเก่า → Ctrl+F5</td></tr>
+  <tr><td>หน้าเว็บขึ้น error เรื่อง CORS</td><td><code>API_ALLOW_ORIGIN</code> ไม่ตรงกับโดเมนหน้าเว็บ (ต้องมี <code>https://</code> ไม่มี <code>/</code> ท้าย)</td></tr>
+  <tr><td>ใบเสร็จไม่ออก</td><td>Print Server ปิด (<code>http://127.0.0.1:3001/health</code>) / ปริ้นเตอร์ดับหรือกระดาษหมด / IP ปริ้นเตอร์เปลี่ยน</td></tr>
+  <tr><td>ออเดอร์ QR ไม่ออกใบครัว</td><td>ยังไม่เปิดพิมพ์อัตโนมัติ / มีกล่องเหลือง "ยังชี้ที่อยู่เดิม" → กดอัปเดต (ข้อ 7.3)</td></tr>
+  <tr><td>หัวใบเสร็จยังเป็นข้อความเดิม</td><td>Print Server รุ่นเก่า → <code>update-printer.bat</code> แล้วกดบันทึกการพิมพ์อัตโนมัติอีกครั้ง</td></tr>
+  <tr><td>ล็อกอินไม่ได้ "ใส่รหัสผิดหลายครั้ง"</td><td>รอ 5 นาที หรือให้แอดมินเช็กรหัสในหน้าพนักงาน</td></tr>
+  <tr><td>ล็อกอินแล้วเด้งกลับหน้าล็อกอินเรื่อย ๆ</td><td>API ยังเป็นรุ่นเก่า → <code>update-api.bat</code> · หรือเวลาเครื่องเพี้ยนมาก</td></tr>
+  <tr><td>เปิดบังคับล็อกอินไม่ได้</td><td>ต้องมีแอดมินที่ตั้งรหัสไว้อย่างน้อย 1 คนก่อน</td></tr>
+  <tr><td>ไม่เห็นโต๊ะ/บิล/เมนูที่ควรเห็น</td><td>ล็อกอินผิดสาขา — ดูชื่อสาขามุมบนหน้าขาย · พนักงาน "ทุกสาขา" ออกจากระบบแล้วเลือกสาขาใหม่</td></tr>
+  <tr><td><code>update-api.bat</code>: ดึงโค้ดไม่สำเร็จ</td><td>token GitHub หมดอายุ → Credential Manager → ลบเฉพาะ <code>git:https://github.com/Narai-IT/HumLai-pos.git</code> แล้วรันใหม่ใส่ token ใหม่</td></tr>
+</table>
+
+<h3>คู่มือเพิ่มเติมใน GitHub (โฟลเดอร์ <code>docs/</code>)</h3>
+<table>
+  <tr><th>ไฟล์</th><th>เรื่อง</th></tr>
+  <tr><td><code>CLOUDFLARE-TUNNEL.md</code></td><td>Tunnel แบบละเอียด / ใช้ Tunnel ที่มีอยู่แล้ว / Quick Tunnel</td></tr>
+  <tr><td><code>UPDATE-API-WITH-GIT.md</code></td><td>เชื่อมโฟลเดอร์เดิมกับ Git และ update-api.bat</td></tr>
+  <tr><td><code>PRINT-SERVER-AFTER-API-MOVE.md</code></td><td>Print Server, เช็กทุกเช้า, หลายสาขา</td></tr>
+  <tr><td><code>LOGIN-AND-PERMISSIONS.md</code></td><td>ล็อกอินและสิทธิ์</td></tr>
+  <tr><td><code>SQL-MIGRATION.md</code></td><td>ย้ายข้อมูลจาก Google Sheet</td></tr>
+</table>
+</section>
+
+</body>
+</html>
