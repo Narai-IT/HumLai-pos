@@ -127,7 +127,7 @@ const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskP
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([
   'saveBranches', 'saveUsers', 'getUsers', 'saveSettings', 'resetAllSheetData', 'clearSalesData',
-  'upsertMenu', 'deleteMenu', 'saveMenu', 'upsertCategory', 'deleteCategory', 'saveCategories',
+  'upsertMenu', 'deleteMenu', 'saveMenu', 'saveMenuOrder', 'upsertCategory', 'deleteCategory', 'saveCategories',
   'upsertPromotion', 'deletePromotion', 'savePromotions', 'saveDiscounts', 'uploadImage',
   'saveBOM', 'upsertIngredient', 'deleteIngredient'
 ]);

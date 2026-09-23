@@ -499,3 +499,10 @@ GO
 IF COL_LENGTH('dbo.Printers', 'categories') IS NULL
   ALTER TABLE dbo.Printers ADD categories NVARCHAR(MAX) NULL;
 GO
+
+-- ─────────────────────────────────────────
+-- ลำดับการแสดงเมนู (หน้าจัดการเมนู > จัดลำดับ) — น้อยขึ้นก่อน, NULL (เมนูเพิ่มใหม่) ต่อท้ายตามลำดับที่สร้าง
+-- ─────────────────────────────────────────
+IF COL_LENGTH('dbo.Menu', 'sortOrder') IS NULL
+  ALTER TABLE dbo.Menu ADD sortOrder INT NULL;
+GO

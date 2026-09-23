@@ -87,6 +87,19 @@ export const saveMenu = async (data) => {
   return replaceAll('Menu', MENU_COLS, items.map(menuValues));
 };
 
+// ── ลำดับการแสดงเมนู ── รับรายการรหัสเมนูเรียงตามที่ต้องการ แก้เฉพาะคอลัมน์ sortOrder
+// (ไม่เขียนเมนูทั้งแถวใหม่ — ค่าตั้งอื่นอย่างป๊อปอัพ/ราคาไม่ถูกแตะ)
+export const saveMenuOrder = async (data) => {
+  const ids = Array.isArray(data.ids) ? data.ids.map(v => String(v)).filter(Boolean) : [];
+  if (ids.length === 0) return { success: false, error: 'ไม่มีรายการเมนู' };
+  await withTransaction(async (runner) => {
+    for (let i = 0; i < ids.length; i++) {
+      await runner(`UPDATE dbo.Menu SET sortOrder = @o WHERE CAST(id AS NVARCHAR(60)) = @id`, { o: i + 1, id: ids[i] });
+    }
+  });
+  return { success: true, saved: ids.length };
+};
+
 // ── หมวดหมู่ ──
 export const upsertCategory = async (data) => {
   const c = data.item;
