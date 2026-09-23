@@ -33,7 +33,7 @@ const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining, resolveNoteConfig } from './utils/popupConfig';
 import { priceForSaleType } from './utils/salePricing';
 import './index.css';
-import { sendPrintJob } from './utils/printServer';
+import { sendPrintJob, setReceiptHeader } from './utils/printServer';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { API_URL } from './utils/api';
 
@@ -263,6 +263,8 @@ function App() {
     try { return String(JSON.parse(localStorage.getItem('gas_all_data') || '{}').defaultBranch || ''); } catch { return ''; }
   });
   const [branchTables, setBranchTables] = useState(null);
+  // ปริ้นเตอร์จากเซิร์ฟเวอร์ (ทุกสาขา) — ใช้เฉพาะของสาขานี้ ดูเอฟเฟกต์ด้านล่าง
+  const [serverPrinters, setServerPrinters] = useState(null);
   // สาขาที่ใช้เลือกผังโต๊ะและลิงก์ QR — ผู้ใช้ไม่ได้อยู่สาขาที่มีในรายการ ให้ถือเป็นสาขาหลัก
   const tablesBranch = branchKey || defaultBranch;
   // ตัวดึงข้อมูลถูกเรียกจาก setInterval ที่ผูกไว้ตั้งแต่เปิดแอป — ต้องอ่านสาขาปัจจุบันผ่าน ref
@@ -312,6 +314,30 @@ function App() {
     fetchOrdersFromSheet();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchKey]);
+
+  // ปริ้นเตอร์ของสาขานี้เท่านั้น → ที่เดิม (printers_config) ที่หน้าขาย/หน้าครัวใช้พิมพ์
+  // แถวที่ไม่มีสาขา (API รุ่นเก่า) ถือว่าเป็นของทุกสาขาเหมือนเดิม
+  React.useEffect(() => {
+    if (!serverPrinters || !tablesBranch) return;
+    const mine = serverPrinters.filter(p => !p.branchId || String(p.branchId) === String(tablesBranch));
+    // รวมกับค่าที่ตั้งไว้ในเครื่องก่อน ไม่งั้นค่าที่เซิร์ฟเวอร์ไม่มีคอลัมน์ให้ (เช่น แยกใบ/รวมใบ) จะถูกล้างทิ้ง
+    const json = JSON.stringify(mergeServerPrinters(mine));
+    try {
+      if (localStorage.getItem('printers_config') !== json) {
+        localStorage.setItem('printers_config', json);
+        window.dispatchEvent(new Event('printers_changed'));
+      }
+    } catch {}
+  }, [serverPrinters, tablesBranch]);
+
+  // หัวใบเสร็จของสาขานี้ — แนบไปกับทุกงานพิมพ์
+  React.useEffect(() => {
+    const b = branches.find(x => String(x.id) === String(tablesBranch));
+    setReceiptHeader(b ? {
+      name: b.name || b.id, address: b.address || '', phone: b.phone || '',
+      taxId: b.taxId || '', footer: b.receiptFooter || ''
+    } : null);
+  }, [branches, tablesBranch]);
 
   // ผังโต๊ะของสาขานี้จากเซิร์ฟเวอร์ → เขียนลงที่เดิม (pos_tables_config) ที่หน้าขายอ่านอยู่แล้ว
   // สาขาที่ยังไม่เคยบันทึกผังขึ้นระบบ → ใช้ผังเดิมในเครื่องไปก่อน
@@ -458,10 +484,7 @@ function App() {
       setPosSettings(data.settings);
     }
     if (data.printers && Array.isArray(data.printers) && data.printers.length > 0 && changed('printers', data.printers)) {
-      // รวมกับค่าที่ตั้งไว้ในเครื่องก่อน ไม่งั้นค่าที่ชีตไม่มีคอลัมน์ให้ (เช่น แยกใบ/รวมใบ) จะถูกล้างทิ้ง
-      const mergedPrinters = mergeServerPrinters(data.printers);
-      localStorage.setItem('printers_config', JSON.stringify(mergedPrinters));
-      window.dispatchEvent(new Event('printers_changed'));
+      setServerPrinters(data.printers);
     }
     if (data.discounts && Array.isArray(data.discounts) && data.discounts.length > 0 && changed('discounts', data.discounts)) {
       localStorage.setItem('pos_discounts', JSON.stringify(data.discounts));
@@ -1476,7 +1499,7 @@ function App() {
           <Route path="users" element={isAdmin ? <ManageUsers /> : <Navigate to="/admin" replace />} />
           <Route path="branches" element={isAdmin ? <ManageBranches /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
-          <Route path="printers" element={isAdmin ? <ManagePrinters /> : <Navigate to="/admin" replace />} />
+          <Route path="printers" element={isAdmin ? <ManagePrinters branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
           <Route path="bom" element={isAdmin ? <ManageBOM /> : <Navigate to="/admin" replace />} />
           <Route path="stock" element={<ManageStock />} />

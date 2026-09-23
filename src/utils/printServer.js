@@ -140,7 +140,16 @@ export const scanPrinters = async (options = {}, timeoutMs = 120000) => {
 };
 
 // สั่งพิมพ์ผ่าน Print Server — คืนค่า { success, error }
-export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData }, timeoutMs = 15000) => {
+// หัวใบเสร็จของสาขาที่เครื่องนี้ทำงานอยู่ — App ตั้งให้ตามสาขาของผู้ใช้ที่ล็อกอิน
+// ทุกงานพิมพ์แนบไปใน orderData.header ให้ Print Server พิมพ์ชื่อร้าน/ที่อยู่ของสาขานั้น
+let receiptHeader = null;
+export const setReceiptHeader = (header) => { receiptHeader = header || null; };
+export const getReceiptHeader = () => receiptHeader;
+
+export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: rawOrderData }, timeoutMs = 15000) => {
+  const orderData = receiptHeader && rawOrderData && !rawOrderData.header
+    ? { ...rawOrderData, header: receiptHeader }
+    : rawOrderData;
   const url = getPrintServerUrl();
   if (isMixedContentBlocked(url)) return { success: false, error: MIXED_CONTENT_MSG };
 

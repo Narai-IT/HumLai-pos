@@ -26,6 +26,8 @@ const STATE_FILE = path.join(HERE, 'print-auto-state.json');
 const DEFAULT_CONFIG = {
   enabled: false,
   gasUrl: '',
+  // หัวใบของสาขานี้ (ชื่อร้าน ที่อยู่ ...) — หน้าตั้งค่าเครื่องพิมพ์ส่งมาให้ ใช้พิมพ์บนใบครัวอัตโนมัติ
+  header: null,
   pollSeconds: 20,
   printers: [],
   // พิมพ์บิลที่ค้างอยู่ก่อนเปิดสวิตช์ด้วยไหม — ปกติไม่ กันพ่นย้อนหลังทีเดียวเป็นสิบใบ
@@ -207,7 +209,7 @@ const printOrder = async (order, menu) => {
       const res = await printTicket({
         ip: printer.ip,
         printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
-        orderData: { ...order, items: ticketItems }
+        orderData: { ...order, items: ticketItems, ...(config.header ? { header: config.header } : {}) }
       });
       results.push({ printer, ...res });
     }
@@ -321,6 +323,7 @@ export const registerAutoPrint = (app) => {
     if (body.apiUrl !== undefined) config.gasUrl = String(body.apiUrl || '');
     if (body.gasUrl !== undefined) config.gasUrl = String(body.gasUrl || '');
     if (body.printers !== undefined) config.printers = Array.isArray(body.printers) ? body.printers : [];
+    if (body.header !== undefined) config.header = body.header && typeof body.header === 'object' ? body.header : null;
     if (body.pollSeconds !== undefined) config.pollSeconds = Math.max(5, Number(body.pollSeconds) || 20);
     if (body.printBacklogOnStart !== undefined) config.printBacklogOnStart = !!body.printBacklogOnStart;
     if (body.enabled !== undefined) config.enabled = !!body.enabled;

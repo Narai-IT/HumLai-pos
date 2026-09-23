@@ -2,7 +2,7 @@
 import { query, withTransaction, insertRows, typed, sql } from './db.js';
 import { toText, toBit, toJson, CATEGORY_SPEC } from './rows.js';
 import { nextIds } from './ids.js';
-import { clearBranchCache, branchForWrite } from './branch.js';
+import { clearBranchCache, branchForWrite, defaultBranchId } from './branch.js';
 import { getBranchTables } from './read.js';
 
 const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
@@ -172,10 +172,23 @@ export const saveBranchTables = async (data) => {
 };
 
 // printMode (รวมใบเดียว/แยกใบ) ต้องเก็บด้วย ไม่งั้นเครื่องที่ sync จะทับค่าที่ตั้งไว้
-export const savePrinters = (data) => replaceAll('Printers',
-  ['id','name','ip','type','printMode'],
-  (data.printers || []).map(p => ([toText(p.id), toText(p.name), toText(p.ip), toText(p.type), p.printMode || 'combined']))
-);
+// เขียนทับเฉพาะปริ้นเตอร์ของสาขาที่ส่งมา — สาขาอื่นไม่ถูกลบ
+// (หน้าเว็บรุ่นเก่าไม่ส่ง branchId → ถือเป็นสาขาหลัก รวมแถวเก่าที่ยังไม่มีสาขา)
+export const savePrinters = async (data) => {
+  const branchId = await branchForWrite(data);
+  const main = await defaultBranchId();
+  const rows = (data.printers || []).map(p => ([
+    toText(p.id), toText(p.name), toText(p.ip), toText(p.type), p.printMode || 'combined', branchId
+  ]));
+  await withTransaction(async (runner) => {
+    await runner(
+      `DELETE FROM dbo.Printers WHERE BranchId = @b OR (BranchId IS NULL AND @b = @main)`,
+      { b: branchId || '', main: main || '' }
+    );
+    await insertRows('Printers', ['id','name','ip','type','printMode','BranchId'], rows, runner);
+  });
+  return { success: true, saved: rows.length, branchId };
+};
 
 export const saveDiscounts = (data) => replaceAll('Discounts',
   ['id','name','type','value','categories'],

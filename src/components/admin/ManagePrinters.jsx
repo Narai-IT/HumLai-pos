@@ -13,7 +13,8 @@ import {
   getAutoPrint,
   saveAutoPrint,
   runAutoPrintNow,
-  supportsAutoPrint
+  supportsAutoPrint,
+  getReceiptHeader
 } from '../../utils/printServer';
 import { API_URL, apiUrlAbsolute } from '../../utils/api';
 
@@ -41,7 +42,16 @@ const HEALTH_POLL_MS = 20000;
 // (Chrome ขออนุญาตเข้าถึงอุปกรณ์ในเครือข่ายก่อน) จึงต้องมีคำแนะนำเพิ่มให้เฉพาะกรณีนี้
 const isHttpsPage = typeof window !== 'undefined' && window.location.protocol === 'https:';
 
-const ManagePrinters = () => {
+// branchId = สาขาที่เครื่องนี้ทำงานอยู่ — ปริ้นเตอร์และ Print Server เป็นของร้านสาขานั้น
+const ManagePrinters = ({ branchId = '', branches = [] }) => {
+  const branchName = (() => {
+    const b = branches.find(x => String(x.id) === String(branchId));
+    return b ? (b.name || b.id) : branchId;
+  })();
+  // Print Server ของสาขานี้ดึงเฉพาะออเดอร์ของสาขานี้ — ใส่ ?branch= ไว้ใน URL เลย
+  // (Print Server รุ่นเก่าต่อ &action= ท้าย URL ที่มี ? อยู่แล้วได้ ไม่ต้องอัปเดตเครื่องพิมพ์ก่อนก็ใช้ได้)
+  const autoPrintApiUrl = branchId ? `${apiUrlAbsolute()}?branch=${encodeURIComponent(branchId)}` : apiUrlAbsolute();
+  const [saveError, setSaveError] = useState('');
   const [printers, setPrinters] = useState([]);
   const [testStatus, setTestStatus] = useState({}); // { [id]: { status, msg } }
   const [saved, setSaved] = useState(false);
@@ -160,7 +170,7 @@ const ManagePrinters = () => {
     setAutoPrintBusy(true);
     setAutoPrintMsg(null);
     // Print Server อยู่คนละเครื่องกับหน้าเว็บ จึงต้องส่ง URL แบบเต็ม ไม่ใช่ path สั้น ๆ
-    const res = await saveAutoPrint({ gasUrl: apiUrlAbsolute(), printers, ...patch });
+    const res = await saveAutoPrint({ gasUrl: autoPrintApiUrl, printers, header: getReceiptHeader(), ...patch });
     setAutoPrintBusy(false);
     if (res && res.success) {
       setAutoPrint(res);
@@ -192,17 +202,24 @@ const ManagePrinters = () => {
   };
 
   // ---------- Printer list ----------
-  const handleSave = () => {
+  const handleSave = async () => {
     localStorage.setItem('printers_config', JSON.stringify(printers));
     window.dispatchEvent(new Event('printers_changed'));
     // เปิดพิมพ์อัตโนมัติไว้ = Print Server ถือรายการเครื่องพิมพ์ชุดของตัวเอง ต้องอัปเดตตามด้วย
     if (autoPrint?.config?.enabled) pushAutoPrint();
-    fetch(API_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'savePrinters', printers })
-    }).catch(console.error);
+    setSaveError('');
+    try {
+      // บันทึกเฉพาะปริ้นเตอร์ของสาขานี้ — ของสาขาอื่นบนเซิร์ฟเวอร์ไม่ถูกแตะ
+      const res = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'savePrinters', branchId, printers })
+      });
+      const json = await res.json().catch(() => null);
+      if (!json || json.success !== true) throw new Error((json && json.error) || 'เซิร์ฟเวอร์ไม่ตอบ success');
+    } catch (e) {
+      setSaveError(`บันทึกลงเครื่องนี้แล้ว แต่ส่งขึ้นระบบไม่สำเร็จ (${e.message || e}) — เครื่องอื่นในสาขาจะยังเห็นรายการเดิม`);
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
@@ -297,6 +314,12 @@ const ManagePrinters = () => {
         <div>
           <h1><Printer size={28} style={{ verticalAlign: 'middle', marginRight: '8px' }} /> ตั้งค่าเครื่องพิมพ์</h1>
           <p>จัดการเครื่องพิมพ์ทั้งหมดในระบบ — เพิ่มได้ไม่จำกัด หรือค้นหาอัตโนมัติในวงแลน (Port 9100)</p>
+          {branchId && (
+            <p style={{ fontWeight: 700, color: 'var(--text-main)', marginTop: '0.35rem' }}>
+              🏠 ปริ้นเตอร์ของสาขา: {branchName} — ตั้งค่าหน้านี้จากเครื่องที่อยู่ในร้านสาขานี้
+            </p>
+          )}
+          {saveError && <p style={{ color: '#b91c1c', marginTop: '0.35rem' }}>⚠️ {saveError}</p>}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           <button
@@ -532,7 +555,7 @@ const ManagePrinters = () => {
               {/* Print Server เก็บที่อยู่ API ไว้เองในเครื่อง ย้ายปลายทางเมื่อไหร่ค่านี้จะค้างของเก่า
                   แล้วใบครัวจะเงียบไปเฉย ๆ โดยไม่มีอะไรฟ้อง — เทียบให้เห็นตรงนี้เลย */}
               {(() => {
-                const want = apiUrlAbsolute();
+                const want = autoPrintApiUrl;
                 const have = String(autoPrint?.config?.gasUrl || '');
                 const norm = (u) => u.replace(/\/+$/, '').toLowerCase();
                 if (!autoPrint || norm(have) === norm(want)) return null;

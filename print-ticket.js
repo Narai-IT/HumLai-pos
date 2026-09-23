@@ -32,14 +32,25 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       return { success: false, error: 'Printer is not connected or reachable at ' + ip };
     }
 
-    // ====== Format Receipt ======
-    printer.alignCenter();
-    printer.println("กะเพรา 10 หน้า");
-    printer.println("--------------------------------");
-
     // ใบแจ้งยอด = ให้ลูกค้าตรวจก่อนจ่าย หน้าตาเหมือนใบเสร็จแต่ยังไม่ใช่ใบเสร็จ
     // และต้องไม่เปิดลิ้นชักเก็บเงิน เพราะยังไม่ได้รับเงิน
     const isPreBill = printerType === 'prebill';
+    const isCustomerCopy = printerType === 'receipt' || isPreBill;
+
+    // หัวใบเสร็จของสาขา (ตั้งที่หลังบ้าน > สาขา) — หน้าเว็บ/ตัวพิมพ์อัตโนมัติส่งมาใน orderData.header
+    // ไม่ได้ส่งมา (หน้าเว็บรุ่นเก่า) ใช้ข้อความเดิม
+    const header = orderData.header && typeof orderData.header === 'object' ? orderData.header : {};
+    const clean = (v) => String(v || '').trim();
+
+    // ====== Format Receipt ======
+    printer.alignCenter();
+    printer.println(clean(header.name) || "กะเพรา 10 หน้า");
+    if (isCustomerCopy) {
+      clean(header.address).split(/\r?\n/).map(clean).filter(Boolean).forEach(line => printer.println(line));
+      if (clean(header.phone)) printer.println(`โทร ${clean(header.phone)}`);
+      if (clean(header.taxId)) printer.println(`เลขผู้เสียภาษี ${clean(header.taxId)}`);
+    }
+    printer.println("--------------------------------");
 
     if (printerType === 'kitchen') {
       printer.setTextDoubleHeight();
@@ -115,7 +126,7 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       printer.println(`TOTAL: B ${orderData.total || 0}`);
       printer.println("--------------------------------");
       printer.alignCenter();
-      printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : "Thank you!");
+      printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "Thank you!"));
     } else {
       printer.alignCenter();
       printer.println("*** END OF TICKET ***");
