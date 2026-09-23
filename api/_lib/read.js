@@ -3,6 +3,7 @@
 import { query } from './db.js';
 import { dayStart, dayEnd } from './time.js';
 import { requestedBranch, branchFilter, defaultBranchId } from './branch.js';
+import { getMenuBranchRows, applyBranchMenu } from './menuBranch.js';
 import {
   mapOrder, mapTableOrder, mapMenu, mapCategory, mapPromotion, mapUser, mapBranch, mapPrinter,
   mapDiscount, mapLiquor, mapWaste, mapApproval, mapOutstanding, mapShift, mapPayment,
@@ -65,8 +66,9 @@ export const getBranchTables = async () => {
 const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() => []);
 
 // ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน
-export async function buildStaticData() {
-  const [categories, menu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch] = await Promise.all([
+// branchId = ส่งเมนูที่ปรับตามสาขานั้นแล้ว ('' = เมนูกลาง ใช้ในหน้าหลังบ้าน)
+export async function buildStaticData(branchId = '') {
+  const [categories, rawMenu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch, menuBranchRows] = await Promise.all([
     allRows('Categories', CATEGORY_COLS, mapCategory),
     allRows('Menu', MENU_COLS, mapMenu),
     allRows('Promotions', PROMO_COLS, mapPromotion),
@@ -76,8 +78,10 @@ export async function buildStaticData() {
     getSettings(),
     getBranches(),
     getBranchTables(),
-    defaultBranchId()
+    defaultBranchId(),
+    getMenuBranchRows(branchId)
   ]);
+  const menu = applyBranchMenu(rawMenu, menuBranchRows, printers, branchId);
   return { categories, menu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch };
 }
 
@@ -112,8 +116,13 @@ export async function handleGet(action, params) {
       return { orders: res.recordset.map(mapOrder) };
     }
 
+    // ?branch= → เมนูที่ปรับตามสาขา (เปิด/ปิดขาย ราคา ปริ้นเตอร์) — ไม่ส่ง = เมนูกลาง
     case 'getStatic':
-      return await buildStaticData();
+      return await buildStaticData(requestedBranch(params));
+
+    // ส่วนที่สาขาหนึ่งปรับจากเมนูกลาง — ใช้ในหน้าหลังบ้าน > เมนูรายสาขา
+    case 'getMenuBranch':
+      return { success: true, rows: await getMenuBranchRows(requestedBranch(params)) };
 
     case 'getAllData': {
       const [data, tableOrders, orders] = await Promise.all([

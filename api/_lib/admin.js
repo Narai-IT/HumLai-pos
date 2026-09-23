@@ -171,6 +171,32 @@ export const saveBranchTables = async (data) => {
   return { success: true, branchId };
 };
 
+// ── เมนูรายสาขา ── เขียนทับเฉพาะของสาขานั้น เก็บเฉพาะเมนูที่ปรับจริง
+export const saveMenuBranch = async (data) => {
+  const branchId = await branchForWrite(data);
+  if (!branchId) return { success: false, error: 'ยังไม่มีสาขาในระบบ — ตั้งค่าสาขาก่อน' };
+  const rows = (Array.isArray(data.rows) ? data.rows : [])
+    .map(r => {
+      const priceMap = {};
+      Object.entries(r && r.priceMap && typeof r.priceMap === 'object' ? r.priceMap : {}).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined && Number.isFinite(Number(v))) priceMap[k] = Number(v);
+      });
+      return {
+        menuId: String(r && r.menuId != null ? r.menuId : '').trim(),
+        isAvailable: r && r.isAvailable === false ? 0 : null,
+        priceMap: Object.keys(priceMap).length ? JSON.stringify(priceMap) : null,
+        printerId: toText(r && r.printerId)
+      };
+    })
+    .filter(r => r.menuId && (r.isAvailable === 0 || r.priceMap || r.printerId));
+  await withTransaction(async (runner) => {
+    await runner(`DELETE FROM dbo.MenuBranch WHERE branchId = @b`, { b: branchId });
+    await insertRows('MenuBranch', ['menuId','branchId','isAvailable','priceMap','printerId'],
+      rows.map(r => [r.menuId, branchId, r.isAvailable, r.priceMap, r.printerId]), runner);
+  });
+  return { success: true, saved: rows.length, branchId };
+};
+
 // printMode (รวมใบเดียว/แยกใบ) ต้องเก็บด้วย ไม่งั้นเครื่องที่ sync จะทับค่าที่ตั้งไว้
 // เขียนทับเฉพาะปริ้นเตอร์ของสาขาที่ส่งมา — สาขาอื่นไม่ถูกลบ
 // (หน้าเว็บรุ่นเก่าไม่ส่ง branchId → ถือเป็นสาขาหลัก รวมแถวเก่าที่ยังไม่มีสาขา)

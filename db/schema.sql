@@ -450,3 +450,21 @@ DECLARE @def NVARCHAR(60) = (SELECT TOP (1) id FROM dbo.Branches WHERE ISNULL(is
 IF @def IS NOT NULL
   UPDATE dbo.Printers SET BranchId = @def WHERE BranchId IS NULL;
 GO
+
+-- ─────────────────────────────────────────
+-- เมนูรายสาขา (เฟส 4) — เมนูกลางชุดเดียว แต่ละสาขาปรับได้เฉพาะที่ต่างจากเมนูกลาง
+--   isAvailable = 0 → สาขานี้ไม่ขายเมนูนี้
+--   priceMap    = {"ชื่อราคา": ราคา} ทับเฉพาะราคาที่ระบุ ("" = ราคาเดี่ยวของเมนูที่ไม่มีหลายราคา)
+--   printerId   = ปริ้นเตอร์ของสาขานี้ที่เมนูนี้ต้องออก (ว่าง = หาจากชื่อปริ้นเตอร์ของเมนูกลาง)
+-- ไม่มีแถว = ใช้ตามเมนูกลางทั้งหมด
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.MenuBranch', 'U') IS NULL
+CREATE TABLE dbo.MenuBranch (
+  menuId      NVARCHAR(60)  NOT NULL,
+  branchId    NVARCHAR(60)  NOT NULL,
+  isAvailable BIT           NULL,
+  priceMap    NVARCHAR(MAX) NULL,
+  printerId   NVARCHAR(60)  NULL,
+  CONSTRAINT PK_MenuBranch PRIMARY KEY (menuId, branchId)
+);
+GO

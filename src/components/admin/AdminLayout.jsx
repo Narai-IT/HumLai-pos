@@ -36,6 +36,11 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
              <NavLink to="/admin/menu" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                 <UtensilsCrossed size={20} /> {lang === 'th' ? 'จัดการเมนู' : 'Manage Menu'}
              </NavLink>
+             {allowAll && (
+               <NavLink to="/admin/branch-menu" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
+                  <Store size={20} /> {lang === 'th' ? 'เมนูรายสาขา' : 'Branch Menu'}
+               </NavLink>
+             )}
              <NavLink to="/admin/categories" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                 <Layers size={20} /> {lang === 'th' ? 'หมวดหมู่' : 'Categories'}
              </NavLink>
