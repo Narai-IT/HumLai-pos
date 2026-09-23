@@ -4,7 +4,7 @@ import './LoginScreen.css';
 import { branchLabel } from '../utils/branches';
 import { apiLogin, setAuthToken } from '../utils/api';
 
-const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [], deviceBranch = '', onChangeBranch }) => {
+const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [], deviceBranch = '', onChangeBranch, setupMode = false, onSetupLogin }) => {
   // เครื่องนี้เลือกสาขาไว้แล้ว → แสดงเฉพาะพนักงานสาขานี้ + พนักงานทุกสาขา (ไม่มีใครเลย = แสดงทั้งหมด)
   const inBranch = deviceBranch
     ? (users || []).filter(u => { const b = String(u.branch || '').trim(); return b === deviceBranch || b === '*'; })
@@ -55,7 +55,9 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [], deviceBranc
     verifyLogin(password);
   };
 
-  const handleDefaultAdmin = () => onLogin({ id: 'admin', username: 'Admin', branch: 'admin', canCheckout: true, isAdmin: true });
+  const handleDefaultAdmin = () => (onSetupLogin
+    ? onSetupLogin()
+    : onLogin({ id: 'admin', username: 'Admin', branch: 'admin', canCheckout: true, isAdmin: true }));
 
   const handleRetry = async () => {
     setRetrying(true);
@@ -140,6 +142,17 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [], deviceBranc
                 )}
               </button>
             ))}
+            {/* ติดตั้งใหม่ ยังไม่มีใครตั้งรหัส → เข้าไปตั้งพนักงานก่อน (มีคนตั้งรหัสแล้วปุ่มนี้หายไปเอง) */}
+            {setupMode && (
+              <div style={{ gridColumn: '1 / -1', textAlign: 'center', marginTop: '0.5rem' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.5rem' }}>
+                  {lang === 'th' ? 'ยังไม่มีพนักงานที่ตั้งรหัสผ่าน' : 'No staff has a password yet'}
+                </p>
+                <button onClick={handleDefaultAdmin} className="default-admin-btn">
+                  {lang === 'th' ? 'เข้าเพื่อตั้งค่าพนักงานครั้งแรก' : 'Enter to set up staff'}
+                </button>
+              </div>
+            )}
           </div>
         ) : (
           /* ── กรอกรหัสผ่าน ── */

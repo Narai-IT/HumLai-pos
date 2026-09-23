@@ -228,10 +228,10 @@ const ManageSettings = ({ users = [] }) => {
       <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
           <div>
-            <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>บังคับล็อกอินทุกเครื่อง</h3>
+            <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>ล็อก API: รับเฉพาะคำขอที่ล็อกอินแล้ว (แนะนำให้เปิด)</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
-              เปิดแล้วพนักงานต้องใส่รหัสก่อนใช้งาน ระบบรู้ว่าเครื่องอยู่สาขาไหนจากพนักงานที่ล็อกอิน
-              (หน้าลูกค้าสแกน QR สั่งเองไม่ต้องล็อกอิน) — ต้องเปิดก่อนมีสาขาที่สอง
+              หน้าพนักงานต้องล็อกอินเสมออยู่แล้ว สวิตช์นี้ทำให้เซิร์ฟเวอร์ปฏิเสธคำขอที่ไม่ได้ล็อกอินและตรวจสิทธิ์ตามบทบาท/สาขาด้วย
+              — ปิดอยู่ = ใครรู้ที่อยู่ API ก็เรียกได้ (หน้าลูกค้าสแกน QR สั่งเองใช้ได้ทั้งสองแบบ)
             </p>
           </div>
           <ToggleBtn
