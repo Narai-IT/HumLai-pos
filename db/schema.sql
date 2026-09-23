@@ -468,3 +468,27 @@ CREATE TABLE dbo.MenuBranch (
   CONSTRAINT PK_MenuBranch PRIMARY KEY (menuId, branchId)
 );
 GO
+
+-- ─────────────────────────────────────────
+-- สต็อกรายสาขา (เฟส 5) — รายการวัตถุดิบและสูตร BOM ใช้ร่วมกัน
+-- ส่วนรับเข้า/ตัดออกแยกตามสาขา → คงเหลือของแต่ละสาขา = รับเข้าของสาขา − ตัดออกของสาขา
+-- ─────────────────────────────────────────
+IF COL_LENGTH('dbo.StockIn', 'BranchId') IS NULL
+  ALTER TABLE dbo.StockIn ADD BranchId NVARCHAR(60) NULL;
+GO
+IF COL_LENGTH('dbo.StockOut', 'BranchId') IS NULL
+  ALTER TABLE dbo.StockOut ADD BranchId NVARCHAR(60) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_StockIn_Branch' AND object_id = OBJECT_ID('dbo.StockIn'))
+  CREATE INDEX IX_StockIn_Branch ON dbo.StockIn (BranchId, ingId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_StockOut_Branch' AND object_id = OBJECT_ID('dbo.StockOut'))
+  CREATE INDEX IX_StockOut_Branch ON dbo.StockOut (BranchId, ingId);
+GO
+DECLARE @def NVARCHAR(60) = (SELECT TOP (1) id FROM dbo.Branches WHERE ISNULL(isActive, 1) = 1 ORDER BY Seq ASC);
+IF @def IS NOT NULL
+BEGIN
+  UPDATE dbo.StockIn  SET BranchId = @def WHERE BranchId IS NULL;
+  UPDATE dbo.StockOut SET BranchId = @def WHERE BranchId IS NULL;
+END
+GO

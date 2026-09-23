@@ -120,7 +120,7 @@ export async function handleKioskPaidOrder(data) {
       const deduct = items
         .filter(item => item.food && item.food.id)
         .map(item => ({ menuId: String(item.food.id), menuName: item.food.name || '', qty: Number(item.quantity) || 1 }));
-      if (deduct.length > 0) await deductStock({ orderNumber: result.orderNumber, tableNo: table, items: deduct });
+      if (deduct.length > 0) await deductStock({ orderNumber: result.orderNumber, tableNo: table, items: deduct, branchId });
     } catch (err) {
       console.error('kioskPaidOrder deductStock:', err);
     }

@@ -160,7 +160,7 @@ export async function authorize(action, token, data, params) {
     // สาขาใน token ที่ไม่มีในหน้าตั้งค่าสาขา (พิมพ์ผิด/สาขาถูกลบ) → ไม่บังคับ ให้ลงสาขาหลักแบบเดิม
     if (!hq && user.branch && user.branch !== ALL_BRANCHES && await isKnownBranch(user.branch)) {
       if (data && typeof data === 'object') data.branchId = user.branch;
-      if (params && typeof params === 'object' && ('branch' in params || action === 'getLive' || action === 'getMenuBranch')) params.branch = user.branch;
+      if (params && typeof params === 'object' && ('branch' in params || action === 'getLive' || action === 'getMenuBranch' || action === 'getStock')) params.branch = user.branch;
     }
   }
 

@@ -1123,7 +1123,7 @@ function App() {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'deductStock', orderNumber: newOrderNumber, tableNo: String(tableNumber), items: deductItems })
+          body: JSON.stringify({ action: 'deductStock', branchId: branchKey, orderNumber: newOrderNumber, tableNo: String(tableNumber), items: deductItems })
         }).catch(error => console.error('Error deducting stock:', error))
       );
     }
@@ -1522,7 +1522,7 @@ function App() {
           <Route path="printers" element={isAdmin ? <ManagePrinters branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
           <Route path="bom" element={isAdmin ? <ManageBOM /> : <Navigate to="/admin" replace />} />
-          <Route path="stock" element={<ManageStock />} />
+          <Route path="stock" element={<ManageStock branchId={tablesBranch} branches={branches} canPickBranch={isAdmin} />} />
           <Route path="reports" element={(isAdmin || isCashier) ? <Reports allMenu={allMenu} isAdmin={isAdmin} branch={branch} users={users} /> : <Navigate to="/admin" replace />} />
         </Route>
 
