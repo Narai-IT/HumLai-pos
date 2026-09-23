@@ -11,8 +11,19 @@ const STATUS_CONFIG = {
 
 const DEFAULT_STOCK_IN = { ingId: '', qty: '', pricePerUnit: '', note: '' };
 
-const ManageStock = () => {
+// ดูรวมทุกสาขา (อ่านอย่างเดียว — รับของเข้าต้องเลือกสาขา)
+const ALL = '__all__';
+
+// branchId = สาขาที่เครื่องนี้ทำงานอยู่ / canPickBranch = แอดมินเลือกดูสาขาอื่นหรือรวมทุกสาขาได้
+const ManageStock = ({ branchId: homeBranch = '', branches = [], canPickBranch = false }) => {
   const { canSeeCost = true } = useOutletContext();
+  const activeBranches = branches.filter(b => b.isActive !== false);
+  const [viewBranch, setViewBranch] = useState(homeBranch);
+  useEffect(() => { if (!viewBranch && homeBranch) setViewBranch(homeBranch); }, [homeBranch, viewBranch]);
+  const viewingAll = viewBranch === ALL;
+  const branchLabel = viewingAll
+    ? 'รวมทุกสาขา'
+    : ((activeBranches.find(b => String(b.id) === String(viewBranch)) || {}).name || viewBranch);
   const [stock, setStock] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -29,7 +40,8 @@ const ManageStock = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`${API_URL}?action=getStock`);
+      const qs = viewingAll || !viewBranch ? '' : `&branch=${encodeURIComponent(viewBranch)}`;
+      const res = await fetch(`${API_URL}?action=getStock${qs}`);
       const data = await res.json();
       if (data.success) {
         setStock(data.stock || []);
@@ -41,7 +53,7 @@ const ManageStock = () => {
       setError('ติดต่อ GAS ไม่ได้ — กรุณาตรวจสอบการเชื่อมต่อ หรือเพิ่ม action=getStock ในไฟล์ GAS');
     }
     setLoading(false);
-  }, []);
+  }, [viewBranch, viewingAll]);
 
   useEffect(() => { fetchStock(); }, [fetchStock]);
 
@@ -79,12 +91,12 @@ const ManageStock = () => {
     setSaving(true);
     setSaveMsg('');
     try {
-      await fetch(API_URL, {
+      const res = await fetch(API_URL, {
         method: 'POST',
-        mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           action: 'stockIn',
+          branchId: viewBranch,
           items: valid.map(r => ({
             ingId: r.ingId,
             qty: Number(r.qty),
@@ -94,11 +106,13 @@ const ManageStock = () => {
           }))
         })
       });
-      setSaveMsg('✅ บันทึกรับวัตถุดิบสำเร็จ');
+      const json = await res.json().catch(() => null);
+      if (!json || json.success !== true) throw new Error((json && json.error) || 'เซิร์ฟเวอร์ไม่ตอบ success');
+      setSaveMsg(`✅ บันทึกรับวัตถุดิบเข้าสาขา ${branchLabel} สำเร็จ`);
       setStockInForm([DEFAULT_STOCK_IN]);
       setTimeout(() => { setShowStockIn(false); setSaveMsg(''); fetchStock(); }, 1800);
     } catch (e) {
-      setSaveMsg('❌ บันทึกไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ GAS');
+      setSaveMsg(`❌ บันทึกไม่สำเร็จ: ${e.message || e}`);
     }
     setSaving(false);
   };
@@ -112,13 +126,20 @@ const ManageStock = () => {
             <Package size={26} color="var(--accent-hover)" /> สต็อกวัตถุดิบ
           </h1>
           <p style={{ margin: 0 }}>
-            ติดตามวัตถุดิบคงเหลือ — ตัดอัตโนมัติเมื่อมีออเดอร์
+            ติดตามวัตถุดิบคงเหลือ — ตัดอัตโนมัติเมื่อมีออเดอร์ · <b>{branchLabel || '—'}</b>
             {lastUpdated && <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginLeft: '0.75rem' }}>
               อัปเดต {lastUpdated.toLocaleTimeString('th-TH')}
             </span>}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {canPickBranch && activeBranches.length > 1 && (
+            <select value={viewBranch} onChange={e => setViewBranch(e.target.value)}
+              style={{ padding: '0.5rem 0.75rem', borderRadius: 8, border: '1px solid rgba(0,0,0,0.15)', fontFamily: 'inherit', fontWeight: 700, background: '#fff' }}>
+              {activeBranches.map(b => <option key={b.id} value={b.id}>🏠 {b.name || b.id}</option>)}
+              <option value={ALL}>🌐 รวมทุกสาขา</option>
+            </select>
+          )}
           <a
             href="https://docs.google.com/spreadsheets/"
             target="_blank" rel="noopener noreferrer"
@@ -131,8 +152,9 @@ const ManageStock = () => {
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem' }}>
             <RefreshCw size={15} className={loading ? 'spin' : ''} /> รีเฟรช
           </button>
-          <button className="admin-btn" onClick={() => setShowStockIn(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <button className="admin-btn" onClick={() => setShowStockIn(true)} disabled={viewingAll}
+            title={viewingAll ? 'เลือกสาขาก่อน — รับของเข้าต้องระบุว่าเข้าสาขาไหน' : ''}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', opacity: viewingAll ? 0.5 : 1 }}>
             <Plus size={18} /> รับวัตถุดิบเข้า
           </button>
         </div>

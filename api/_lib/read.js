@@ -173,7 +173,8 @@ export async function handleGet(action, params) {
     case 'getShifts':
       return { success: true, shifts: await allRows('Shifts', SHIFT_COLS, mapShift) };
 
-    case 'getStock':       return await getStockLevels();
+    // ?branch= → คงเหลือของสาขานั้น / ไม่ระบุ = รวมทุกสาขา
+    case 'getStock':       return await getStockLevels(requestedBranch(params));
     case 'getIngredients': return await getIngredientsList();
 
     case 'getReportData': {
@@ -206,15 +207,16 @@ export async function handleGet(action, params) {
 }
 
 // ── สต็อก: คงเหลือ = รับเข้า − ตัดออก (เดิมคำนวณจาก 3 ชีท) ──
-export async function getStockLevels() {
+export async function getStockLevels(branchId = '') {
+  const where = branchId ? 'WHERE BranchId = @branchId' : '';
   const res = await query(`
     SELECT i.id, i.name, i.nameEn, i.unit, i.minStock, i.costPerUnit, i.purchaseUnit, i.unitsPerPurchase,
            ISNULL(si.totalIn, 0)  AS totalIn,
            ISNULL(so.totalOut, 0) AS totalOut
       FROM dbo.Ingredients i
-      LEFT JOIN (SELECT ingId, SUM(ISNULL(usageQty, 0))  AS totalIn  FROM dbo.StockIn  GROUP BY ingId) si ON si.ingId = i.id
-      LEFT JOIN (SELECT ingId, SUM(ISNULL(deductQty, 0)) AS totalOut FROM dbo.StockOut GROUP BY ingId) so ON so.ingId = i.id
-     ORDER BY i.Seq ASC`);
+      LEFT JOIN (SELECT ingId, SUM(ISNULL(usageQty, 0))  AS totalIn  FROM dbo.StockIn  ${where} GROUP BY ingId) si ON si.ingId = i.id
+      LEFT JOIN (SELECT ingId, SUM(ISNULL(deductQty, 0)) AS totalOut FROM dbo.StockOut ${where} GROUP BY ingId) so ON so.ingId = i.id
+     ORDER BY i.Seq ASC`, { branchId });
 
   const stock = res.recordset.map(r => {
     const current = Number(r.totalIn) - Number(r.totalOut);
@@ -227,7 +229,7 @@ export async function getStockLevels() {
       status: current <= 0 ? 'OUT' : current <= minimum ? 'LOW' : 'OK'
     };
   });
-  return { success: true, stock, lowItems: stock.filter(s => s.status !== 'OK') };
+  return { success: true, branchId, stock, lowItems: stock.filter(s => s.status !== 'OK') };
 }
 
 export async function getIngredientsList() {

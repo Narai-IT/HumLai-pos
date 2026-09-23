@@ -3,9 +3,10 @@
 import { query, withTransaction, insertRows } from './db.js';
 import { toText, toNum } from './rows.js';
 import { toThaiClock } from './time.js';
+import { branchForWrite } from './branch.js';
 
-const STOCK_OUT_COLS = ['ts','orderNumber','tableNo','menuId','menuName','menuQty','ingId','ingName','deductQty','unit','cost'];
-const STOCK_IN_COLS  = ['ts','ingId','ingName','usageQty','usageUnit','costPerUsageUnit','total','staff','note','purchaseQty','purchaseUnit','pricePerPurchase'];
+const STOCK_OUT_COLS = ['ts','orderNumber','tableNo','menuId','menuName','menuQty','ingId','ingName','deductQty','unit','cost','BranchId'];
+const STOCK_IN_COLS  = ['ts','ingId','ingName','usageQty','usageUnit','costPerUsageUnit','total','staff','note','purchaseQty','purchaseUnit','pricePerPurchase','BranchId'];
 const BOM_COLS       = ['menuId','menuName','menuNameEn','ingId','ingName','qty','unit','costPerUnit','note'];
 
 // ตัดสต็อกตามสูตรของเมนูที่ขายไป — ร้านที่ยังไม่ได้ตั้ง BOM จะได้ deducted: 0 ไม่ใช่ error
@@ -32,6 +33,7 @@ export async function deductStock(data) {
   }
 
   const now = toThaiClock(new Date());   // เก็บเป็นเวลาไทยให้ตรงกับเวลาที่บันทึกบิล
+  const branchId = await branchForWrite(data); // ตัดสต็อกของสาขาที่ขาย (ไม่ระบุ = สาขาหลัก)
   const rows = [];
   for (const ordered of items) {
     const lines = byMenu.get(String(ordered.menuId)) || [];
@@ -41,7 +43,7 @@ export async function deductStock(data) {
       const cost = (Number(line.costPerUnit) || 0) * totalAmt;
       rows.push([now, toText(data.orderNumber), toText(data.tableNo), String(ordered.menuId),
         toText(ordered.menuName), orderedQty, toText(line.ingId), toText(line.ingName),
-        totalAmt, toText(line.unit), cost]);
+        totalAmt, toText(line.unit), cost, branchId]);
     }
   }
   if (rows.length > 0) await insertRows('StockOut', STOCK_OUT_COLS, rows);
@@ -63,6 +65,7 @@ export async function recordStockIn(data) {
   const ingMap = new Map(ingRes.recordset.map(r => [String(r.id), r]));
 
   const now = toThaiClock(new Date());
+  const branchId = await branchForWrite(data); // รับของเข้าสาขาไหน (ไม่ระบุ = สาขาหลัก)
   const rows = [];
   const costUpdates = [];
   for (const item of items) {
@@ -77,7 +80,7 @@ export async function recordStockIn(data) {
     const usageCost = factor > 0 ? pricePerPurchase / factor : pricePerPurchase;
     const total     = qtyPurchase * pricePerPurchase;
     rows.push([now, String(ing.id), toText(ing.name), usageQty, toText(ing.unit), usageCost, total,
-      item.staff || 'admin', toText(item.note), qtyPurchase, toText(ing.purchaseUnit), pricePerPurchase]);
+      item.staff || 'admin', toText(item.note), qtyPurchase, toText(ing.purchaseUnit), pricePerPurchase, branchId]);
     costUpdates.push({ id: String(ing.id), cost: Math.round(usageCost * 10000) / 10000 });
   }
 
