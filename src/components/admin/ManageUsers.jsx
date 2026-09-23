@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Users, Eye, EyeOff, ShieldCheck, ShieldOff, CheckCircle } from 'lucide-react';
 import { API_URL } from '../../utils/api';
+import { ALL_BRANCHES, branchLabel } from '../../utils/branches';
 
 const AVATAR_COLORS = ['#7c3aed','#ea580c','#0891b2','#16a34a','#dc2626','#d97706','#7c3aed','#db2777'];
 
@@ -20,7 +21,7 @@ const userRole = (u) => isTrue(u.isAdmin) ? 'admin' : (isTrue(u.isCashier) ? 'ca
 const ROLE_OPTIONS = [
   { key: 'admin',   label: '👑 แอดมิน',     color: '#f97316', bg: 'rgba(249,115,22,0.18)', bd: 'rgba(249,115,22,0.6)' },
   { key: 'cashier', label: '💳 แคชเชียร์',   color: '#38bdf8', bg: 'rgba(56,189,248,0.18)', bd: 'rgba(56,189,248,0.6)' },
-  { key: 'staff',   label: 'พนักงานทั่วไป', color: 'var(--text-muted)', bg: 'rgba(0,0,0,0.03)', bd: 'rgba(0,0,0,0.1)' },
+  { key: 'staff',   label: 'พนักงานทั่วไป', color: '#475569', bg: 'rgba(100,116,139,0.16)', bd: 'rgba(100,116,139,0.55)' },
 ];
 
 // ช่องสาขา: ถ้าตั้งสาขาไว้ในหน้าตั้งค่าสาขาแล้ว ให้เลือกจากรายการ (กันพิมพ์รหัสผิดแล้วบิลไม่เข้าสาขา)
@@ -34,7 +35,8 @@ function BranchField({ branches, value, onChange, autoFocus }) {
   return (
     <select style={inp} value={current} onChange={e => onChange(e.target.value)} autoFocus={autoFocus}>
       <option value="">— เลือกสาขา —</option>
-      {current && !known && <option value={current}>{current} (ไม่มีในรายการสาขา)</option>}
+      <option value={ALL_BRANCHES}>🌐 ทุกสาขา (เลือกสาขาตอนล็อกอิน)</option>
+      {current && !known && current !== ALL_BRANCHES && <option value={current}>{current} (ไม่มีในรายการสาขา)</option>}
       {branches.filter(b => b.isActive !== false || String(b.id) === current).map(b => (
         <option key={b.id} value={b.id}>{b.name && b.name !== b.id ? `${b.name} (${b.id})` : b.id}</option>
       ))}
@@ -231,7 +233,7 @@ export default function ManageUsers() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 800, fontSize: '1rem', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                         {user.username || <span style={{ color: 'var(--text-muted)' }}>ไม่มีชื่อ</span>}
-                        {(user.branch || user.id) && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-main)', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 6, padding: '0.1rem 0.45rem' }}>🏠 {user.branch || user.id}</span>}
+                        {(user.branch || user.id) && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-main)', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 6, padding: '0.1rem 0.45rem' }}>🏠 {branchLabel(user.branch || user.id, branches)}</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                         {/* PIN mask */}

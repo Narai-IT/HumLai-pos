@@ -16,7 +16,8 @@ const EMPTY_BRANCH = { id: '', name: '', billPrefix: '', phone: '', address: '',
 const cleanCode = (v) => String(v || '').trim().replace(/\s+/g, '').replace(/[^0-9A-Za-zก-๙_-]/g, '');
 // ตัวนำหน้าเลขบิล ใช้กฎเดียวกับหน้าขาย (ตัวพิมพ์ใหญ่ ตัวเลข ตัวไทย)
 const cleanPrefix = (v) => String(v || '').trim().toUpperCase().replace(/\s+/g, '').replace(/[^0-9A-Zก-๙]/g, '');
-const branchOfUser = (u) => String(u?.branch || '').trim();
+// '*' = พนักงานทุกสาขา ไม่นับเป็นสาขาใดสาขาหนึ่ง
+const branchOfUser = (u) => { const b = String(u?.branch || '').trim(); return b === '*' ? '' : b; };
 
 export default function ManageBranches() {
   const [branches, setBranches] = useState([]);

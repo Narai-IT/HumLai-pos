@@ -103,7 +103,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   const inBranch = (r) => !branchFilter || String(r.RecordedBy || '').trim() === branchFilter;
   const branchOptions = (() => {
     const set = new Set();
-    (users || []).forEach(u => { const b = branchOf(u); if (b) set.add(b); });
+    (users || []).forEach(u => { const b = branchOf(u); if (b && b !== '*') set.add(b); }); // '*' = พนักงานทุกสาขา ไม่ใช่สาขา
     (data?.orders || []).forEach(r => { const b = String(r.RecordedBy || '').trim(); if (b) set.add(b); });
     return Array.from(set).sort();
   })();
