@@ -12,7 +12,10 @@
 
 ### 1. ติดตั้ง Git
 
-เปิด PowerShell แล้วรัน:
+มี Git อยู่แล้ว (รัน `git --version` แล้วขึ้นเลขรุ่น) → ข้ามข้อนี้ได้เลย
+ถึงจะมีบัญชี GitHub ของคนอื่นผูกอยู่ก็ไม่เป็นไร ขั้นที่ 3 แยกรหัสของ repo นี้ออกมาต่างหาก ไม่ทับของเดิม
+
+ยังไม่มี Git → เปิด PowerShell แล้วรัน:
 
 ```
 winget install --id Git.Git -e --source winget
@@ -49,11 +52,16 @@ cd D:\humlai-pos
 git config --global --add safe.directory D:/humlai-pos
 git init -b main
 git remote add origin https://github.com/Narai-IT/HumLai-pos.git
+git config credential.useHttpPath true
 git fetch origin main
 ```
 
+`credential.useHttpPath` ทำให้ Windows จำรหัสของ repo นี้แยกจากบัญชี GitHub ที่เครื่องใช้อยู่เดิม
+(ใช้เฉพาะโฟลเดอร์นี้ โปรเจกต์อื่นในเครื่องยังใช้บัญชีเดิมตามปกติ)
+
 ตอน `git fetch` จะมีหน้าต่างให้ล็อกอิน → เลือก **Token** แล้ววาง token จากข้อ 2
 (Windows จะจำไว้ ครั้งต่อไปไม่ถามอีก)
+ถ้าไม่มีหน้าต่างขึ้นแต่ดึงได้เลย แปลว่า Git หยิบบัญชีเดิมมาใช้ — รันบรรทัด `git config credential.useHttpPath true` ตกหล่น ให้รันแล้วลองใหม่
 
 แล้วรันต่อ:
 
@@ -81,7 +89,7 @@ git branch --set-upstream-to=origin/main main
 |---|---|
 | `git` ไม่รู้จักคำสั่ง | ปิดแล้วเปิด PowerShell ใหม่หลังติดตั้ง Git |
 | `detected dubious ownership` | รัน `git config --global --add safe.directory D:/humlai-pos` ในหน้าต่าง Run as administrator |
-| เข้า GitHub ไม่ได้ / `Authentication failed` / `Repository not found` | token หมดอายุหรือผิด → แผงควบคุม → **Credential Manager → Windows Credentials** ลบรายการ `git:https://github.com` แล้วรัน `update-api.bat` ใหม่ วาง token ใหม่ |
+| เข้า GitHub ไม่ได้ / `Authentication failed` / `Repository not found` | token หมดอายุหรือผิด → แผงควบคุม → **Credential Manager → Windows Credentials** ลบรายการ `git:https://github.com/Narai-IT/HumLai-pos.git` เท่านั้น (**อย่าลบ** `git:https://github.com` เฉย ๆ — เป็นบัญชีที่โปรเจกต์อื่นในเครื่องใช้) แล้วรัน `update-api.bat` ใหม่ วาง token ใหม่ |
 | ไฟล์ในเครื่องถูกแก้ (`Your local changes would be overwritten`) | มีคนแก้ไฟล์โค้ดในโฟลเดอร์นี้เอง ดูว่าไฟล์ไหนด้วย `git status` ถ้าไม่ต้องเก็บ รัน `git reset --hard origin/main` แล้วอัปเดตใหม่ (`.env` ไม่ถูกแตะ) |
 | ขั้น 4 ขึ้นว่า API ยังไม่ตอบ | ดู `D:\humlai-pos\logs\api-server.log` บรรทัดท้าย ๆ |
 | ไม่พบ Scheduled Task | คลิกขวา `install-api-autostart.bat` → Run as administrator หนึ่งครั้ง |
