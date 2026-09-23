@@ -2,6 +2,8 @@
 import { query, withTransaction, insertRows, typed, sql } from './db.js';
 import { toText, toBit, toJson, CATEGORY_SPEC } from './rows.js';
 import { nextIds } from './ids.js';
+import { clearBranchCache, branchForWrite } from './branch.js';
+import { getBranchTables } from './read.js';
 
 const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
 const CATEGORY_COLS = Object.keys(CATEGORY_SPEC);
@@ -143,6 +145,7 @@ export const saveBranches = async (data) => {
     if (seen.has(id.toLowerCase())) return { success: false, error: `รหัสสาขา "${id}" ซ้ำกัน` };
     seen.add(id.toLowerCase());
   }
+  clearBranchCache(); // สาขาหลัก (ตัวแรกในรายการ) อาจเปลี่ยน
   return replaceAll('Branches',
     ['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive'],
     list.map(b => ([
@@ -151,6 +154,21 @@ export const saveBranches = async (data) => {
       b.isActive === false ? 0 : 1
     ]))
   );
+};
+
+// ผังโต๊ะของสาขาหนึ่ง — เขียนทับเฉพาะของสาขานั้น สาขาอื่นไม่ถูกแตะ
+export const saveBranchTables = async (data) => {
+  if (!Array.isArray(data.tables)) return { success: false, error: 'ไม่มีรายการโต๊ะ' };
+  const branchId = await branchForWrite(data);
+  if (!branchId) return { success: false, error: 'ยังไม่มีสาขาในระบบ — ตั้งค่าสาขาก่อน' };
+  const all = await getBranchTables();
+  all[branchId] = data.tables;
+  const value = JSON.stringify(all);
+  const res = await query(`UPDATE dbo.Settings SET [value] = @value WHERE [key] = 'branch_tables'`, { value });
+  if (res.rowsAffected[0] === 0) {
+    await query(`INSERT INTO dbo.Settings ([key], [value]) VALUES ('branch_tables', @value)`, { value });
+  }
+  return { success: true, branchId };
 };
 
 // printMode (รวมใบเดียว/แยกใบ) ต้องเก็บด้วย ไม่งั้นเครื่องที่ sync จะทับค่าที่ตั้งไว้

@@ -44,9 +44,12 @@ const branchPrefix = (b) => {
   return p || 'POS';
 };
 
-// ⚠️ ปิดหน้าล็อกอินชั่วคราว — เข้าเป็นแอดมินอัตโนมัติ ไม่ต้องกรอกรหัส
-// เมื่อตั้ง user/รหัสในชีท Users เรียบร้อยแล้ว เปลี่ยนเป็น false เพื่อเปิดหน้าล็อกอินกลับ
-const SKIP_LOGIN = true;
+// บังคับล็อกอิน — เปิด/ปิดได้ที่หลังบ้าน > ตั้งค่าร้าน (pos_settings.requireLogin)
+// ปิดอยู่ = เข้าเป็นแอดมินอัตโนมัติแบบเดิม (ร้านเดียวยังไม่ได้แจกรหัสพนักงาน)
+// เปิดแล้ว = ทุกเครื่องต้องล็อกอิน สาขาของเครื่องมาจากพนักงานที่ล็อกอิน
+const loginRequired = () => {
+  try { return JSON.parse(localStorage.getItem('pos_settings') || '{}').requireLogin === true; } catch { return false; }
+};
 const DEFAULT_ADMIN = { id: 'admin', username: 'admin', branch: 'admin', canCheckout: true, isAdmin: true };
 
 
@@ -115,8 +118,8 @@ function App() {
     try { return JSON.parse(localStorage.getItem('cached_users') || '[]'); } catch { return []; }
   });
   // ให้ล็อกอินใหม่ทุกครั้งที่เปิดโปรแกรม — ไม่กู้สถานะล็อกอินเดิมจาก localStorage
-  // (SKIP_LOGIN = true → ข้ามหน้าล็อกอิน เข้าเป็นแอดมินทันที)
-  const [currentUser, setCurrentUser] = useState(SKIP_LOGIN ? DEFAULT_ADMIN : null);
+  // (ยังไม่เปิดบังคับล็อกอิน → ข้ามหน้าล็อกอิน เข้าเป็นแอดมินทันที)
+  const [currentUser, setCurrentUser] = useState(() => (loginRequired() ? null : DEFAULT_ADMIN));
   // ล้าง key เก่าที่เคยจำล็อกอินไว้ (เผื่อเครื่องที่อัปเดตมาจากเวอร์ชันก่อน)
   React.useEffect(() => {
     try { localStorage.removeItem('current_user'); } catch {}
@@ -128,6 +131,10 @@ function App() {
   const isCashier = !isAdmin && !!(currentUser && (currentUser.isCashier === true || currentUser.isCashier === 'TRUE'));
   // สาขาของผู้ใช้ปัจจุบัน = คอลัม A ของชีต Users (branch) — ใช้บันทึกลง Orders.RecordedBy และกรองรายงาน
   const branch = String(currentUser?.branch || currentUser?.id || currentUser?.username || '').trim();
+  // สาขาที่หน้าจอนี้ทำงานอยู่ — หน้าลูกค้าสั่งเอง (QR โต๊ะ) ใช้ ?b= จากลิงก์ ส่วนหน้าร้านใช้สาขาของผู้ใช้ที่ล็อกอิน
+  const isKioskPath = location.pathname.includes('/kiosk') || location.pathname.includes('/self-order');
+  const kioskBranchParam = isKioskPath ? (new URLSearchParams(location.search).get('b') || '').trim() : '';
+  const activeBranch = kioskBranchParam || branch;
 
   // แจ้งเตือนเมื่อบันทึกบิล/การชำระเงินขึ้น Google Sheet ไม่สำเร็จ (เน็ตหลุด/แบ็กเอนด์ error)
   // — กันเคส payment หายเงียบ ๆ แบบช่วงบิล #233–#296 ที่ผ่านมา
@@ -147,8 +154,8 @@ function App() {
   };
 
   const handleLogout = () => {
-    // ระหว่างปิดหน้าล็อกอิน (SKIP_LOGIN) การออกจากระบบแค่รีเซ็ตกลับเป็นแอดมิน ไม่เด้งไปหน้าล็อกอิน
-    setCurrentUser(SKIP_LOGIN ? DEFAULT_ADMIN : null);
+    // ระหว่างยังไม่บังคับล็อกอิน การออกจากระบบแค่รีเซ็ตกลับเป็นแอดมิน ไม่เด้งไปหน้าล็อกอิน
+    setCurrentUser(loginRequired() ? null : DEFAULT_ADMIN);
     loginAtRef.current = null;
     try { localStorage.removeItem('current_user'); } catch {}
     setTableNumber('');
@@ -242,6 +249,23 @@ function App() {
     const info = branches.find(b => String(b.id || '').trim().toLowerCase() === key);
     return branchPrefix(info && info.billPrefix ? info.billPrefix : branch);
   }, [branches, branch]);
+  // รหัสสาขาที่ส่งไปกับคำขอ — ต้องตรงกับรายการในหน้าตั้งค่าสาขา
+  // ไม่ตรง/ยังโหลดรายการสาขาไม่ได้ → '' ให้เซิร์ฟเวอร์ลงสาขาหลัก และอ่านได้ทุกโต๊ะเหมือนเดิม
+  const branchKey = React.useMemo(() => {
+    const key = activeBranch.toLowerCase();
+    const info = branches.find(b => String(b.id || '').trim().toLowerCase() === key);
+    return info ? String(info.id).trim() : '';
+  }, [branches, activeBranch]);
+  // สาขาหลักจากเซิร์ฟเวอร์ (สาขาแรกที่เปิดใช้งาน) + ผังโต๊ะของทุกสาขา
+  const [defaultBranch, setDefaultBranch] = useState(() => {
+    try { return String(JSON.parse(localStorage.getItem('gas_all_data') || '{}').defaultBranch || ''); } catch { return ''; }
+  });
+  const [branchTables, setBranchTables] = useState(null);
+  // สาขาที่ใช้เลือกผังโต๊ะและลิงก์ QR — ผู้ใช้ไม่ได้อยู่สาขาที่มีในรายการ ให้ถือเป็นสาขาหลัก
+  const tablesBranch = branchKey || defaultBranch;
+  // ตัวดึงข้อมูลถูกเรียกจาก setInterval ที่ผูกไว้ตั้งแต่เปิดแอป — ต้องอ่านสาขาปัจจุบันผ่าน ref
+  const branchKeyRef = React.useRef(branchKey);
+  branchKeyRef.current = branchKey;
   const [liveMenu, setLiveMenu] = useState([...MENU_ITEMS]);
   const [categories, setCategories] = useState([
     { slug: 'food', name: 'อาหาร', nameEn: 'Food', icon: '🍲' },
@@ -263,11 +287,40 @@ function App() {
     return () => window.removeEventListener('pos_settings_changed', handler);
   }, []);
 
+  // เปิด/ปิดบังคับล็อกอินจากหลังบ้าน (ดึงตั้งค่าใหม่ทุกนาที) → มีผลกับเครื่องที่เปิดค้างไว้ด้วย
+  // เปิด: เครื่องที่เข้าเป็นแอดมินอัตโนมัติอยู่ถูกส่งกลับหน้าล็อกอิน  ปิด: หน้าล็อกอินหายไป
+  React.useEffect(() => {
+    const required = posSettings?.requireLogin === true;
+    if (required && currentUser === DEFAULT_ADMIN) setCurrentUser(null);
+    if (!required && !currentUser) setCurrentUser(DEFAULT_ADMIN);
+  }, [posSettings, currentUser]);
+
+  // เปลี่ยนสาขา (ล็อกอินคนละสาขา / เพิ่งโหลดรายการสาขาเสร็จ) → ดึงโต๊ะของสาขาใหม่ทันที ไม่รอรอบ 20 วิ
+  const branchFetchReadyRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!branchFetchReadyRef.current) { branchFetchReadyRef.current = true; return; }
+    lastRawRef.current = null;
+    fetchOrdersFromSheet();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchKey]);
+
+  // ผังโต๊ะของสาขานี้จากเซิร์ฟเวอร์ → เขียนลงที่เดิม (pos_tables_config) ที่หน้าขายอ่านอยู่แล้ว
+  // สาขาที่ยังไม่เคยบันทึกผังขึ้นระบบ → ใช้ผังเดิมในเครื่องไปก่อน
+  React.useEffect(() => {
+    if (!branchTables || !tablesBranch) return;
+    const list = branchTables[tablesBranch];
+    if (!Array.isArray(list) || list.length === 0) return;
+    const json = JSON.stringify(list);
+    try {
+      if (localStorage.getItem('pos_tables_config') !== json) localStorage.setItem('pos_tables_config', json);
+    } catch {}
+  }, [branchTables, tablesBranch]);
+
   // settings ที่ใช้จริงตอนเช็คบิล = ค่ากลาง + ทับด้วย QR เฉพาะสาขาที่ล็อกอินอยู่ (ถ้ามีตั้งไว้)
   // เก็บใน posSettings.branchQR[ชื่อสาขา] — ไม่มีของสาขานั้น จะ fallback ใช้ QR กลาง
   const checkoutSettings = React.useMemo(() => {
     const map = posSettings?.branchQR;
-    const bq = map && typeof map === 'object' ? map[branch] : null;
+    const bq = map && typeof map === 'object' ? map[activeBranch] : null;
     if (!bq) return posSettings;
     const override = {};
     ['qrType', 'kshopRawPayload', 'promptPayId', 'staticQrUrl'].forEach(k => {
@@ -275,10 +328,10 @@ function App() {
     });
     // ชื่อร้าน/บัญชีของสาขานี้ — ถ้าสาขาไม่ได้กรอกชื่อร้าน ให้โชว์ชื่อสาขาแทน
     // (กันไม่ให้ fallback ไปโชว์ชื่อร้านกลางที่เป็นของอีกสาขา)
-    override.qrShopName = bq.qrShopName || branch;
+    override.qrShopName = bq.qrShopName || activeBranch;
     if (bq.qrAccountName) override.qrAccountName = bq.qrAccountName;
     return { ...posSettings, ...override };
-  }, [posSettings, branch]);
+  }, [posSettings, activeBranch]);
 
   // POS Discounts
   const [posDiscounts, setPosDiscounts] = useState(() => {
@@ -383,6 +436,10 @@ function App() {
     if (data.branches && Array.isArray(data.branches) && changed('branches', data.branches)) {
       setBranches(data.branches);
     }
+    if (typeof data.defaultBranch === 'string') setDefaultBranch(data.defaultBranch);
+    if (data.branchTables && typeof data.branchTables === 'object' && changed('branchTables', data.branchTables)) {
+      setBranchTables(data.branchTables);
+    }
     if (data.users && Array.isArray(data.users) && changed('users', data.users)) {
       localStorage.setItem('cached_users', JSON.stringify(data.users));
       setUsers(data.users);
@@ -418,7 +475,9 @@ function App() {
   // → จำไว้แล้วถอยไปใช้ getAllData ตลอดทั้ง session
   const fetchAction = async (action, signal) => {
     if (legacyGasRef.current) return await (await fetch(API_URL + '?action=getAllData', { signal })).text();
-    const text = await (await fetch(API_URL + '?action=' + action, { signal })).text();
+    // getLive ของแต่ละสาขา = โต๊ะและบิลของร้านตัวเองเท่านั้น
+    const branchQs = action === 'getLive' && branchKeyRef.current ? '&branch=' + encodeURIComponent(branchKeyRef.current) : '';
+    const text = await (await fetch(API_URL + '?action=' + action + branchQs, { signal })).text();
     if (text.indexOf('Unknown GET action') !== -1) {
       legacyGasRef.current = true;
       console.warn(`API ยังไม่รองรับ ?action=${action} — ใช้ getAllData แทน (ต้องอัปเดต API เป็นเวอร์ชันใหม่)`);
@@ -814,6 +873,7 @@ function App() {
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           action: 'addTableOrder',
+          branchId: branchKey,
           tableNumber: String(tableNumber),
           sessionId,
           items: cartForServer,
@@ -841,7 +901,7 @@ function App() {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'clearTableOrders', tableNumber: tbl, includePaid: true })
+        body: JSON.stringify({ action: 'clearTableOrders', branchId: branchKey, tableNumber: tbl, includePaid: true })
       });
       setTimeout(() => fetchOrdersFromSheet(), 1500);
     } catch (e) {
@@ -961,6 +1021,7 @@ function App() {
     // ใช้ fetch แบบอ่าน response ได้ (ไม่ใช้ no-cors) เพื่อ "ตรวจจับ" ว่าบันทึกสำเร็จจริงหรือไม่
     const orderPayload = {
       action: 'insertOrder',
+      branchId: branchKey,
       rows: rowsToSend,
       payment: {
         orderNumber: newOrderNumber,
@@ -1000,7 +1061,7 @@ function App() {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'clearTableOrders', tableNumber: String(tableNumber), includePaid: true })
+        body: JSON.stringify({ action: 'clearTableOrders', branchId: branchKey, tableNumber: String(tableNumber), includePaid: true })
       }).catch(error => console.error('Error clearing table orders:', error))
     ];
 
@@ -1064,9 +1125,10 @@ function App() {
 
     try {
       const body = moveAll
-        ? { action: 'moveTable', fromTable: String(fromTable), toTable: String(toTable) }
+        ? { action: 'moveTable', branchId: branchKey, fromTable: String(fromTable), toTable: String(toTable) }
         : {
             action: 'moveTableItems',
+            branchId: branchKey,
             fromTable: String(fromTable),
             toTable: String(toTable),
             keys: items.map(it => ({
@@ -1112,6 +1174,7 @@ function App() {
         headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
           action: 'deleteTableOrderItem',
+          branchId: branchKey,
           tableNumber: String(item.TableNumber),
           sessionId: String(item.SessionId),
           itemName: String(item.ItemName)
@@ -1172,6 +1235,7 @@ function App() {
 
     const payload = {
       action: 'kioskPaidOrder',
+      branchId: branchKey,
       tableNumber: String(targetTableNo),
       sessionId,
       items: cartForServer,
@@ -1215,6 +1279,7 @@ function App() {
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify({
             action: 'addTableOrder',
+            branchId: branchKey,
             tableNumber: String(targetTableNo),
             sessionId,
             items: marked,
@@ -1232,8 +1297,6 @@ function App() {
     console.error('Error saving kiosk order:', lastError);
     return { success: false, error: lastError };
   };
-
-  const isKioskPath = location.pathname.includes('/kiosk') || location.pathname.includes('/self-order');
 
   if (!currentUser && !isKioskPath) {
     return (
@@ -1386,7 +1449,7 @@ function App() {
           <Route index element={<Dashboard />} />
           <Route path="menu" element={<ManageMenu />} />
           <Route path="categories" element={<ManageCategories />} />
-          <Route path="tables" element={<ManageTables />} />
+          <Route path="tables" element={<ManageTables branchId={tablesBranch} branches={branches} />} />
           <Route path="users" element={isAdmin ? <ManageUsers /> : <Navigate to="/admin" replace />} />
           <Route path="branches" element={isAdmin ? <ManageBranches /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />

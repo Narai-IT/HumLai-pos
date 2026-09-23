@@ -82,9 +82,13 @@ const ManageSettings = ({ users = [] }) => {
     }
   }, []);
 
-  // รายชื่อสาขาจากชีต Users (ไม่ซ้ำ)
+  // รายชื่อสาขา = สาขาในหน้าตั้งค่าสาขา + สาขาที่พนักงานใช้อยู่ (ไม่ซ้ำ)
   const branchList = React.useMemo(() => {
     const set = new Set();
+    try {
+      const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}');
+      (Array.isArray(d.branches) ? d.branches : []).forEach(b => { const id = String(b.id || '').trim(); if (id) set.add(id); });
+    } catch {}
     (users || []).forEach(u => { const b = branchOf(u); if (b) set.add(b); });
     return Array.from(set).sort();
   }, [users]);
@@ -131,6 +135,11 @@ const ManageSettings = ({ users = [] }) => {
       (msg) => setBranchUploadError(msg)
     );
   };
+
+  // เปิดบังคับล็อกอินได้เมื่อมีแอดมินที่ล็อกอินได้จริงอย่างน้อย 1 คน กันล็อกตัวเองออกจากระบบ
+  const canRequireLogin = (users || []).some(u =>
+    (u.isAdmin === true || u.isAdmin === 'TRUE') && String(u.pin || '').trim() !== ''
+  );
 
   const handleSave = () => {
     localStorage.setItem('pos_settings', JSON.stringify(settings));
@@ -214,6 +223,35 @@ const ManageSettings = ({ users = [] }) => {
       <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.9rem' }}>
         เซอร์วิชชาร์จและ VAT จะแสดงในหน้าตะกร้าและหน้าชำระเงินโดยอัตโนมัติ
       </p>
+
+      {/* บังคับล็อกอิน */}
+      <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+          <div>
+            <h3 style={{ color: 'var(--text-main)', margin: '0 0 0.3rem', fontSize: '1.05rem' }}>บังคับล็อกอินทุกเครื่อง</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>
+              เปิดแล้วพนักงานต้องใส่รหัสก่อนใช้งาน ระบบรู้ว่าเครื่องอยู่สาขาไหนจากพนักงานที่ล็อกอิน
+              (หน้าลูกค้าสแกน QR สั่งเองไม่ต้องล็อกอิน) — ต้องเปิดก่อนมีสาขาที่สอง
+            </p>
+          </div>
+          <ToggleBtn
+            checked={settings.requireLogin === true}
+            onChange={(v) => {
+              if (v && !canRequireLogin) {
+                alert('ยังเปิดไม่ได้ — ต้องมีพนักงานสิทธิ์แอดมินที่ตั้งรหัสไว้อย่างน้อย 1 คนก่อน ไม่งั้นจะไม่มีใครเข้าหลังบ้านได้');
+                return;
+              }
+              setSettings(prev => ({ ...prev, requireLogin: v }));
+              setSaved(false);
+            }}
+          />
+        </div>
+        {!canRequireLogin && (
+          <p style={{ color: '#b45309', fontSize: '0.82rem', margin: '0.75rem 0 0' }}>
+            ⚠️ ยังไม่มีพนักงานสิทธิ์แอดมินที่ตั้งรหัสไว้ — เพิ่มที่หน้า "พนักงาน" ก่อน
+          </p>
+        )}
+      </div>
 
       {/* Service Charge Card */}
       <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: '16px', padding: '1.5rem', marginBottom: '1.25rem' }}>

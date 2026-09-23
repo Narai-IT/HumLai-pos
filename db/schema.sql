@@ -404,5 +404,38 @@ FROM (
   SELECT LTRIM(RTRIM(branch)) AS b FROM dbo.Users WHERE NULLIF(LTRIM(RTRIM(branch)), '') IS NOT NULL
   UNION
   SELECT LTRIM(RTRIM(RecordedBy)) FROM dbo.Orders WHERE NULLIF(LTRIM(RTRIM(RecordedBy)), '') IS NOT NULL
-) s;
+) s
+WHERE b <> 'Self-Order';  -- ช่องทางลูกค้าสั่งเอง ไม่ใช่สาขา
+GO
+
+-- ─────────────────────────────────────────
+-- แยกข้อมูลขายตามสาขา (เฟส 2)
+-- BranchId = Branches.id ของร้านที่เกิดรายการ — แยกจาก RecordedBy ที่ยังเป็น "ใครบันทึก" แบบเดิม
+-- (ออเดอร์ลูกค้าสั่งเองมี RecordedBy = 'Self-Order' แต่ BranchId = สาขาของโต๊ะนั้น)
+-- ─────────────────────────────────────────
+IF COL_LENGTH('dbo.TableOrders', 'BranchId') IS NULL
+  ALTER TABLE dbo.TableOrders ADD BranchId NVARCHAR(60) NULL;
+GO
+IF COL_LENGTH('dbo.Orders', 'BranchId') IS NULL
+  ALTER TABLE dbo.Orders ADD BranchId NVARCHAR(60) NULL;
+GO
+IF COL_LENGTH('dbo.PaymentSummary', 'BranchId') IS NULL
+  ALTER TABLE dbo.PaymentSummary ADD BranchId NVARCHAR(60) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TableOrders_Branch' AND object_id = OBJECT_ID('dbo.TableOrders'))
+  CREATE INDEX IX_TableOrders_Branch ON dbo.TableOrders (BranchId, TableNumber);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_Orders_Branch' AND object_id = OBJECT_ID('dbo.Orders'))
+  CREATE INDEX IX_Orders_Branch ON dbo.Orders (BranchId, RowId);
+GO
+
+-- รายการเก่าที่ยังไม่มีสาขา → สาขาหลัก (สาขาแรกที่เปิดใช้งานในหน้าตั้งค่าสาขา)
+-- รันซ้ำได้: แตะเฉพาะแถวที่ BranchId ยังว่าง
+DECLARE @def NVARCHAR(60) = (SELECT TOP (1) id FROM dbo.Branches WHERE ISNULL(isActive, 1) = 1 ORDER BY Seq ASC);
+IF @def IS NOT NULL
+BEGIN
+  UPDATE dbo.TableOrders    SET BranchId = @def WHERE BranchId IS NULL;
+  UPDATE dbo.Orders         SET BranchId = @def WHERE BranchId IS NULL;
+  UPDATE dbo.PaymentSummary SET BranchId = @def WHERE BranchId IS NULL;
+END
 GO
