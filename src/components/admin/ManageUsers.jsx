@@ -23,6 +23,25 @@ const ROLE_OPTIONS = [
   { key: 'staff',   label: 'พนักงานทั่วไป', color: 'var(--text-muted)', bg: 'rgba(0,0,0,0.03)', bd: 'rgba(0,0,0,0.1)' },
 ];
 
+// ช่องสาขา: ถ้าตั้งสาขาไว้ในหน้าตั้งค่าสาขาแล้ว ให้เลือกจากรายการ (กันพิมพ์รหัสผิดแล้วบิลไม่เข้าสาขา)
+// ยังไม่มีสาขาในระบบ → พิมพ์เองได้แบบเดิม
+function BranchField({ branches, value, onChange, autoFocus }) {
+  if (branches.length === 0) {
+    return <input style={inp} value={value || ''} onChange={e => onChange(e.target.value)} placeholder="เช่น xum, xcm" autoFocus={autoFocus} />;
+  }
+  const current = String(value || '').trim();
+  const known = branches.some(b => String(b.id) === current);
+  return (
+    <select style={inp} value={current} onChange={e => onChange(e.target.value)} autoFocus={autoFocus}>
+      <option value="">— เลือกสาขา —</option>
+      {current && !known && <option value={current}>{current} (ไม่มีในรายการสาขา)</option>}
+      {branches.filter(b => b.isActive !== false || String(b.id) === current).map(b => (
+        <option key={b.id} value={b.id}>{b.name && b.name !== b.id ? `${b.name} (${b.id})` : b.id}</option>
+      ))}
+    </select>
+  );
+}
+
 export default function ManageUsers() {
   const [users,     setUsers]     = useState([]);
   const [loading,   setLoading]   = useState(true);
@@ -33,11 +52,16 @@ export default function ManageUsers() {
   const [form,      setForm]      = useState(EMPTY_USER);
   const [showPin,   setShowPin]   = useState({});     // { [id]: bool }
   const [dirty,     setDirty]     = useState(false);
+  const [branches,  setBranches]  = useState([]);
 
   useEffect(() => {
     const raw = localStorage.getItem('gas_all_data');
     if (raw) {
-      try { const d = JSON.parse(raw); if (d.users) setUsers(d.users); }
+      try {
+        const d = JSON.parse(raw);
+        if (d.users) setUsers(d.users);
+        if (Array.isArray(d.branches)) setBranches(d.branches);
+      }
       catch (e) {}
     }
     setLoading(false);
@@ -148,7 +172,7 @@ export default function ManageUsers() {
                     </div>
                     <div>
                       <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 5 }}>ชื่อสาขา (Branch)</label>
-                      <input style={inp} value={user.branch || ''} onChange={e => handleChange(user.id, 'branch', e.target.value)} placeholder="เช่น xum, xcm" />
+                      <BranchField branches={branches} value={user.branch} onChange={v => handleChange(user.id, 'branch', v)} />
                     </div>
                     <div>
                       <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 5 }}>ชื่อผู้ใช้</label>
@@ -274,7 +298,7 @@ export default function ManageUsers() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 5 }}>ชื่อสาขา (Branch) *</label>
-                <input style={inp} placeholder="เช่น xum, xcm" value={form.branch} onChange={e => setForm(f => ({ ...f, branch: e.target.value }))} autoFocus />
+                <BranchField branches={branches} value={form.branch} onChange={v => setForm(f => ({ ...f, branch: v }))} autoFocus />
               </div>
               <div>
                 <label style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 5 }}>ชื่อผู้ใช้ *</label>

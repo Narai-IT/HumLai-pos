@@ -19,6 +19,7 @@ const ManageCategories = lazy(() => import('./components/admin/ManageCategories'
 const ManageTables = lazy(() => import('./components/admin/ManageTables'));
 const ManagePrinters = lazy(() => import('./components/admin/ManagePrinters'));
 const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
+const ManageBranches = lazy(() => import('./components/admin/ManageBranches'));
 const ManageSettings = lazy(() => import('./components/admin/ManageSettings'));
 const ManageStock = lazy(() => import('./components/admin/ManageStock'));
 const ManageBOM = lazy(() => import('./components/admin/ManageBOM'));
@@ -230,6 +231,17 @@ function App() {
   const [orders, setOrders] = useState([]);
   // เลขบิลล่าสุดแยกตามสาขา (RecordedBy) — { [สาขา]: เลขสูงสุด } เพื่อให้แต่ละสาขานับต่อของตัวเอง
   const [branchMaxMap, setBranchMaxMap] = useState({});
+  // ข้อมูลสาขาจากหลังบ้าน (ตาราง Branches) — อ่านจาก cache ก่อน เพื่อให้เลขบิลใช้ตัวนำหน้าที่ถูกตั้งแต่เปิดแอป
+  const [branches, setBranches] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}'); return Array.isArray(d.branches) ? d.branches : []; } catch { return []; }
+  });
+  // ตัวนำหน้าเลขบิลของสาขานี้ — ตั้งไว้ในหน้าตั้งค่าสาขา ถ้าไม่ได้ตั้งใช้รหัสสาขาแบบเดิม
+  // (เลขที่นับต่อยังแยกตาม RecordedBy เหมือนเดิม เปลี่ยนตัวนำหน้าแล้วเลขไม่เริ่มใหม่)
+  const billPrefix = React.useMemo(() => {
+    const key = branch.toLowerCase();
+    const info = branches.find(b => String(b.id || '').trim().toLowerCase() === key);
+    return branchPrefix(info && info.billPrefix ? info.billPrefix : branch);
+  }, [branches, branch]);
   const [liveMenu, setLiveMenu] = useState([...MENU_ITEMS]);
   const [categories, setCategories] = useState([
     { slug: 'food', name: 'อาหาร', nameEn: 'Food', icon: '🍲' },
@@ -367,6 +379,9 @@ function App() {
     if (data.tableOrders && Array.isArray(data.tableOrders)) {
       // โต๊ะเป็นข้อมูลที่เปลี่ยนบ่อยและต้องตรงเสมอ → อัปเดตทุกครั้งที่ payload เปลี่ยน
       setTableOrders(data.tableOrders);
+    }
+    if (data.branches && Array.isArray(data.branches) && changed('branches', data.branches)) {
+      setBranches(data.branches);
     }
     if (data.users && Array.isArray(data.users) && changed('users', data.users)) {
       localStorage.setItem('cached_users', JSON.stringify(data.users));
@@ -882,7 +897,7 @@ function App() {
 
     const nextNum = (branchMaxMap[branch] || 0) + 1;
     setBranchMaxMap(prev => ({ ...prev, [branch]: nextNum }));
-    const newOrderNumber = `${branchPrefix(branch)}-#${String(nextNum).padStart(3, '0')}`;
+    const newOrderNumber = `${billPrefix}-#${String(nextNum).padStart(3, '0')}`;
     const timestamp = getThaiTimeISO();
 
     const count = localStorage.getItem('customer_count_' + tableNumber) || '';
@@ -1373,6 +1388,7 @@ function App() {
           <Route path="categories" element={<ManageCategories />} />
           <Route path="tables" element={<ManageTables />} />
           <Route path="users" element={isAdmin ? <ManageUsers /> : <Navigate to="/admin" replace />} />
+          <Route path="branches" element={isAdmin ? <ManageBranches /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
           <Route path="printers" element={isAdmin ? <ManagePrinters /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
@@ -1423,7 +1439,7 @@ function App() {
             tableOrderItems={checkoutItems}
             total={checkoutTotal}
             lang={lang}
-            orderNumber={`${branchPrefix(branch)}-#${String((branchMaxMap[branch] || 0) + 1).padStart(3, '0')}`}
+            orderNumber={`${billPrefix}-#${String((branchMaxMap[branch] || 0) + 1).padStart(3, '0')}`}
             onClose={() => setIsCheckoutOpen(false)}
             onComplete={handleCheckoutComplete}
             settings={checkoutSettings}

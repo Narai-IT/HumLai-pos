@@ -132,6 +132,27 @@ export const saveUsers = (data) => replaceAll('Users',
   ]))
 );
 
+// ── สาขา ──
+// id ต้องไม่ซ้ำและไม่ว่าง — เป็นตัวผูกกับผู้ใช้/บิล/ของเสีย ถ้าหลุดจะหาข้อมูลเก่าของสาขาไม่เจอ
+export const saveBranches = async (data) => {
+  const list = Array.isArray(data.branches) ? data.branches : [];
+  const seen = new Set();
+  for (const b of list) {
+    const id = String(b.id || '').trim();
+    if (!id) return { success: false, error: 'มีสาขาที่ยังไม่ได้ใส่รหัส' };
+    if (seen.has(id.toLowerCase())) return { success: false, error: `รหัสสาขา "${id}" ซ้ำกัน` };
+    seen.add(id.toLowerCase());
+  }
+  return replaceAll('Branches',
+    ['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive'],
+    list.map(b => ([
+      String(b.id).trim(), toText(b.name), toText(String(b.billPrefix || '').trim().toUpperCase()),
+      toText(b.phone), toText(b.address), toText(b.taxId), toText(b.receiptFooter),
+      b.isActive === false ? 0 : 1
+    ]))
+  );
+};
+
 // printMode (รวมใบเดียว/แยกใบ) ต้องเก็บด้วย ไม่งั้นเครื่องที่ sync จะทับค่าที่ตั้งไว้
 export const savePrinters = (data) => replaceAll('Printers',
   ['id','name','ip','type','printMode'],
