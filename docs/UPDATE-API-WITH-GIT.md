@@ -45,6 +45,9 @@ repo เป็นแบบส่วนตัว เครื่องนี้�
 
 ### 3. เชื่อมโฟลเดอร์เดิมกับ GitHub
 
+มีโฟลเดอร์ `.git` อยู่แล้ว (เคย clone มาก่อน) → ข้ามข้อนี้ แค่รัน `git status --short` ดูก่อน
+แล้วใช้ `git pull --ff-only origin main` แทน **ห้าม `git reset --hard`** — จะลบไฟล์ที่มีคนแก้ไว้ในเครื่อง (เช่น `scripts/renumber-ids.mjs`) ทิ้ง
+
 เปิด **PowerShell แบบ Run as administrator** แล้วรันทีละบรรทัด:
 
 ```
@@ -70,7 +73,7 @@ git reset --hard origin/main
 git branch --set-upstream-to=origin/main main
 ```
 
-`git reset --hard` ทำให้ไฟล์โค้ดตรงกับ GitHub ทุกไฟล์ ส่วน `.env` และไฟล์อื่นที่ไม่ได้อยู่ใน GitHub ยังอยู่ครบ
+`git reset --hard` ทำให้ไฟล์โค้ดตรงกับ GitHub ทุกไฟล์ (ใช้ได้เฉพาะโฟลเดอร์ที่เพิ่ง `git init` — ไฟล์ที่เคยแก้ในเครื่องจะหาย) ส่วน `.env` และไฟล์อื่นที่ไม่ได้อยู่ใน GitHub ยังอยู่ครบ
 
 ### 4. อัปเดตครั้งแรก
 
