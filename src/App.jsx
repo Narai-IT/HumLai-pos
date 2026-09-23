@@ -7,6 +7,7 @@ import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import TableOrderView from './components/TableOrderView';
 import LoginScreen from './components/LoginScreen';
 import BranchPicker from './components/BranchPicker';
+import BranchLanding from './components/BranchLanding';
 import { isAllBranches } from './utils/branches';
 // โหลดแบบ lazy: 2 โมดอลนี้ลากไลบรารีหนัก (html2canvas, qrcode) เปิดตอนกดเท่านั้น → bundle หน้าแรกเล็กลง
 const SalesSummaryModal = lazy(() => import('./components/SalesSummaryModal'));
@@ -132,8 +133,19 @@ function App() {
   const isAdmin = !!(currentUser && (currentUser.isAdmin === true || currentUser.isAdmin === 'TRUE' || String(currentUser.username || '').toLowerCase() === 'admin'));
   // สิทธิ์แคชเชียร์: เข้าหลังบ้านได้บางหน้า (ไม่เห็นราคาต้นทุน)
   const isCashier = !isAdmin && !!(currentUser && (currentUser.isCashier === true || currentUser.isCashier === 'TRUE'));
+  // สาขาของเครื่องนี้ — เลือกที่หน้าแรก (เลือกสาขา → หน้าพนักงาน/หน้าลูกค้า) เครื่องจำไว้
+  const [deviceBranch, setDeviceBranchState] = useState(() => {
+    try { return localStorage.getItem('device_branch') || ''; } catch { return ''; }
+  });
+  const setDeviceBranch = (id) => {
+    setDeviceBranchState(id || '');
+    try { if (id) localStorage.setItem('device_branch', id); else localStorage.removeItem('device_branch'); } catch {}
+  };
   // สาขาของผู้ใช้ปัจจุบัน = คอลัม A ของชีต Users (branch) — ใช้บันทึกลง Orders.RecordedBy และกรองรายงาน
-  const branch = String(currentUser?.branch || currentUser?.id || currentUser?.username || '').trim();
+  // ยังไม่บังคับล็อกอิน (เข้าเป็นแอดมินอัตโนมัติ) → ใช้สาขาที่เลือกไว้ที่หน้าแรกของเครื่องนี้
+  const userBranch = String(currentUser?.branch || currentUser?.id || currentUser?.username || '').trim();
+  const branch = currentUser === DEFAULT_ADMIN && deviceBranch ? deviceBranch : userBranch;
+  const isLandingPath = location.pathname === '/';
   // สาขาที่หน้าจอนี้ทำงานอยู่ — หน้าลูกค้าสั่งเอง (QR โต๊ะ) ใช้ ?b= จากลิงก์ ส่วนหน้าร้านใช้สาขาของผู้ใช้ที่ล็อกอิน
   const isKioskPath = location.pathname.includes('/kiosk') || location.pathname.includes('/self-order');
   const kioskBranchParam = isKioskPath ? (new URLSearchParams(location.search).get('b') || '').trim() : '';
@@ -319,8 +331,17 @@ function App() {
   React.useEffect(() => {
     if (!currentUser || !isAllBranches(currentUser.branch)) return;
     const active = branches.filter(b => b.isActive !== false);
-    if (active.length === 1) setCurrentUser(u => ({ ...u, branch: String(active[0].id), allBranches: true }));
-  }, [currentUser, branches]);
+    // หรือเลือกสาขาของเครื่องนี้ไว้แล้วที่หน้าแรก → ใช้สาขานั้นเลย
+    const pick = active.length === 1 ? active[0] : active.find(b => String(b.id) === String(deviceBranch));
+    if (pick) setCurrentUser(u => ({ ...u, branch: String(pick.id), allBranches: true }));
+  }, [currentUser, branches, deviceBranch]);
+
+  // โหลดรายการสาขาจากเซิร์ฟเวอร์ครั้งแรกเสร็จหรือยัง (หน้าแรกรอก่อนแสดง) — เซิร์ฟเวอร์ไม่ตอบ 8 วิ ก็ไปต่อ
+  const [staticLoaded, setStaticLoaded] = useState(false);
+  React.useEffect(() => {
+    const t = setTimeout(() => setStaticLoaded(true), 8000);
+    return () => clearTimeout(t);
+  }, []);
 
   // เปลี่ยนสาขา (ล็อกอินคนละสาขา / เพิ่งโหลดรายการสาขาเสร็จ) → ดึงโต๊ะของสาขาใหม่ทันที ไม่รอรอบ 20 วิ
   const branchFetchReadyRef = React.useRef(false);
@@ -485,6 +506,7 @@ function App() {
       // โต๊ะเป็นข้อมูลที่เปลี่ยนบ่อยและต้องตรงเสมอ → อัปเดตทุกครั้งที่ payload เปลี่ยน
       setTableOrders(data.tableOrders);
     }
+    if (Array.isArray(data.branches)) setStaticLoaded(true);
     if (data.branches && Array.isArray(data.branches) && changed('branches', data.branches)) {
       setBranches(data.branches);
     }
@@ -1349,7 +1371,14 @@ function App() {
     return { success: false, error: lastError };
   };
 
-  if (!currentUser && !isKioskPath) {
+  // มีหลายสาขาแต่เครื่องนี้ยังไม่ได้เลือกสาขา → กลับไปหน้าแรกให้เลือกก่อน
+  const activeBranchList = branches.filter(b => b.isActive !== false);
+  if (!isKioskPath && !isLandingPath && activeBranchList.length > 1 &&
+      !activeBranchList.some(b => String(b.id) === String(deviceBranch))) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (!currentUser && !isKioskPath && !isLandingPath) {
     return (
       <LoginScreen
         users={users}
@@ -1358,12 +1387,14 @@ function App() {
         isOfflineMode={users.length === 0}
         onRetry={fetchStaticFromSheet}
         branches={branches}
+        deviceBranch={deviceBranch}
+        onChangeBranch={() => navigate('/')}
       />
     );
   }
 
   // พนักงาน "ทุกสาขา" ต้องเลือกก่อนว่าจะทำงานที่สาขาไหน — หน้าขายต้องรู้ว่าบิลเป็นของสาขาใด
-  if (currentUser && isAllBranches(currentUser.branch) && !isKioskPath) {
+  if (currentUser && isAllBranches(currentUser.branch) && !isKioskPath && !isLandingPath) {
     return (
       <BranchPicker
         user={currentUser}
@@ -1398,7 +1429,20 @@ function App() {
       <ChunkErrorBoundary lang={lang} key={location.pathname}>
       <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>{lang === 'th' ? 'กำลังโหลด...' : 'Loading...'}</div>}>
       <Routes>
-        <Route path="/" element={<Navigate to="/index" replace />} />
+        <Route path="/" element={
+          <BranchLanding
+            branches={branches}
+            branchTables={branchTables}
+            deviceBranch={deviceBranch}
+            loaded={staticLoaded}
+            lang={lang}
+            onStaff={(id) => { setDeviceBranch(id); navigate('/index'); }}
+            onCustomer={(id, table) => {
+              setDeviceBranch(id);
+              navigate(`/kiosk?b=${encodeURIComponent(id)}&table=${encodeURIComponent(table)}`);
+            }}
+          />
+        } />
         <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} />} />
         <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} />} />
 
