@@ -69,6 +69,34 @@ const buildKitchenOrder = (rows, tableNo, id, timestamp) => ({
   timestamp
 });
 
+// ส่งบิลขึ้นระบบ — ถ้าไม่สำเร็จจะโยน Error ที่ message เป็นสาเหตุภาษาคนอ่านรู้เรื่อง
+// (ใช้ทั้งตอนชำระเงินและตอนส่งบิลค้างซ้ำ เพื่อให้แถบแจ้งเตือนบอกได้ว่าพังที่เน็ตหรือที่ฐานข้อมูล)
+async function postOrderPayload(payload) {
+  let res;
+  try {
+    res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
+  } catch {
+    throw new Error('ส่งไม่ถึงเซิร์ฟเวอร์ — เน็ตหลุด หรือ API ไม่ทำงาน');
+  }
+  const json = await res.json().catch(() => null);
+  if (json && json.success === true) return json;
+  if (!json) throw new Error(`เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (HTTP ${res.status})`);
+  const raw = String(json.error || 'เซิร์ฟเวอร์ไม่ตอบ success');
+  if (/ต่อ SQL Server|Failed to connect|ETIMEOUT|ESOCKET|ECONNREFUSED/i.test(raw)) {
+    throw new Error('เซิร์ฟเวอร์ต่อฐานข้อมูล SQL Server ไม่ได้');
+  }
+  // ข้อความจากเซิร์ฟเวอร์อาจยาวหลายบรรทัด (มีวิธีแก้ต่อท้าย) — เอาแค่บรรทัดแรกพอ
+  const firstLine = raw.split('\n')[0];
+  throw new Error(firstLine.length > 120 ? firstLine.slice(0, 120) + '…' : firstLine);
+}
+
+// ส่งบิลค้างซ้ำเองทุก ๆ เท่านี้ — กรณีเน็ตเครื่องปกติแต่ API/ฐานข้อมูลล่ม จะไม่มี event 'online' มาปลุก
+const PENDING_RETRY_MS = 90 * 1000;
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,20 +188,22 @@ function App() {
 
     flushingRef.current = true;
     const stillPending = [];
+    let lastReason = '';
     for (const entry of pending) {
       try {
-        const res = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(entry.payload)
-        });
-        const json = await res.json().catch(() => null);
-        if (!json || json.success !== true) throw new Error('retry failed');
-      } catch {
-        stillPending.push(entry); // ยังส่งไม่ได้ เก็บไว้รอบหน้า
+        await postOrderPayload(entry.payload);
+      } catch (err) {
+        lastReason = err.message;
+        stillPending.push({ ...entry, error: err.message }); // ยังส่งไม่ได้ เก็บไว้รอบหน้า
       }
     }
-    localStorage.setItem('pending_orders', JSON.stringify(stillPending));
+    // ระหว่างส่งอาจมีบิลใหม่ที่พังเพิ่มเข้ามา — อ่านซ้ำแล้วเก็บตัวที่ไม่ได้อยู่ในรอบนี้ไว้ด้วย
+    let added = [];
+    try {
+      const latest = JSON.parse(localStorage.getItem('pending_orders') || '[]');
+      if (Array.isArray(latest)) added = latest.slice(pending.length);
+    } catch {}
+    localStorage.setItem('pending_orders', JSON.stringify([...stillPending, ...added]));
     flushingRef.current = false;
 
     const sent = pending.length - stillPending.length;
@@ -182,15 +212,19 @@ function App() {
         setSaveAlert({ type: 'success', msg: `✅ ส่งบิลที่ค้าง ${sent} รายการขึ้นระบบสำเร็จแล้ว` });
         setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 5000);
       } else {
-        setSaveAlert({ type: 'error', msg: `⚠️ ส่งบิลค้างได้ ${sent} รายการ เหลืออีก ${stillPending.length} รายการที่ยังส่งไม่ได้ — กรุณาเช็กอินเทอร์เน็ต` });
+        setSaveAlert({ type: 'error', msg: `⚠️ ส่งบิลค้างได้ ${sent} รายการ เหลืออีก ${stillPending.length} รายการที่ยังส่งไม่ได้ — สาเหตุ: ${lastReason}` });
       }
     }
-  }, [API_URL]);
+  }, []);
 
   React.useEffect(() => {
     flushPendingOrders();
     window.addEventListener('online', flushPendingOrders);
-    return () => window.removeEventListener('online', flushPendingOrders);
+    const timer = setInterval(flushPendingOrders, PENDING_RETRY_MS);
+    return () => {
+      window.removeEventListener('online', flushPendingOrders);
+      clearInterval(timer);
+    };
   }, [flushPendingOrders]);
 
   const [orders, setOrders] = useState([]);
@@ -924,15 +958,7 @@ function App() {
       }
     };
     try {
-      const res = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(orderPayload)
-      });
-      const json = await res.json().catch(() => null);
-      if (!json || json.success !== true) {
-        throw new Error(json && json.error ? json.error : 'backend ไม่ตอบ success');
-      }
+      await postOrderPayload(orderPayload);
     } catch (error) {
       console.error('Error saving order:', error);
       // เก็บบิลที่บันทึกไม่สำเร็จไว้ในเครื่อง เพื่อไม่ให้ข้อมูลหาย + ให้ retry/ตรวจสอบภายหลังได้
@@ -941,7 +967,7 @@ function App() {
         pending.push({ payload: orderPayload, at: new Date().toISOString(), error: String(error.message || error) });
         localStorage.setItem('pending_orders', JSON.stringify(pending));
       } catch {}
-      setSaveAlert({ type: 'error', msg: `⚠️ บันทึกบิล ${newOrderNumber} (${paymentMethod}) ขึ้นระบบไม่สำเร็จ! ข้อมูลถูกสำรองไว้ในเครื่องแล้ว — จะลองส่งซ้ำอัตโนมัติเมื่อเน็ตกลับมา` });
+      setSaveAlert({ type: 'error', msg: `⚠️ บันทึกบิล ${newOrderNumber} (${paymentMethod}) ขึ้นระบบไม่สำเร็จ! สาเหตุ: ${error.message} — ข้อมูลถูกสำรองไว้ในเครื่องแล้ว ระบบจะลองส่งซ้ำเองทุก ${PENDING_RETRY_MS / 60000} นาที` });
     }
 
     // ล้างโต๊ะกับตัดสต็อกไม่ขึ้นต่อกัน ยิงพร้อมกันได้ ไม่ต้องรอทีละรอบ
