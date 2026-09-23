@@ -4,7 +4,13 @@ import './LoginScreen.css';
 import { branchLabel } from '../utils/branches';
 import { apiLogin, setAuthToken } from '../utils/api';
 
-const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
+const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [], deviceBranch = '', onChangeBranch }) => {
+  // เครื่องนี้เลือกสาขาไว้แล้ว → แสดงเฉพาะพนักงานสาขานี้ + พนักงานทุกสาขา (ไม่มีใครเลย = แสดงทั้งหมด)
+  const inBranch = deviceBranch
+    ? (users || []).filter(u => { const b = String(u.branch || '').trim(); return b === deviceBranch || b === '*'; })
+    : [];
+  const shownUsers = inBranch.length > 0 ? inBranch : (users || []);
+  const deviceBranchName = deviceBranch ? branchLabel(deviceBranch, branches) : '';
   // เดิมหนึ่งบัญชีต่อหนึ่งสาขา ปุ่มจึงโชว์แค่ชื่อสาขา — ตอนนี้มีหลายคนต่อสาขาได้ ให้โชว์ชื่อคน + สาขา
   const branchName = (u) => branchLabel(u?.branch || u?.id || '', branches);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -64,7 +70,17 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
     <div className="login-container">
       <div className="login-box">
         <h1 className="login-title">{lang === 'th' ? 'เข้าสู่ระบบ' : 'Login'}</h1>
-        <p className="login-subtitle">{lang === 'th' ? 'เลือกสาขาของคุณ' : 'Select your branch'}</p>
+        <p className="login-subtitle">
+          {deviceBranchName
+            ? (lang === 'th' ? `สาขา ${deviceBranchName} — เลือกชื่อของคุณ` : `${deviceBranchName} — select your name`)
+            : (lang === 'th' ? 'เลือกชื่อของคุณ' : 'Select your name')}
+          {onChangeBranch && (
+            <button type="button" onClick={onChangeBranch}
+              style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--accent-hover)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', textDecoration: 'underline' }}>
+              {lang === 'th' ? 'เปลี่ยนสาขา/โหมด' : 'Change'}
+            </button>
+          )}
+        </p>
 
         {(!users || users.length === 0) ? (
           /* ── ไม่มี users ── */
@@ -115,7 +131,7 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
         ) : !selectedUser ? (
           /* ── มี users — เลือกสาขา ── */
           <div className="user-grid">
-            {users.map(user => (
+            {shownUsers.map(user => (
               <button key={user.id} className="user-select-btn" onClick={() => handleUserSelect(user)}>
                 <div className="user-avatar"><User size={28} /></div>
                 <span>{user.username || branchName(user)}</span>
