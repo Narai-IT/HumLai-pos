@@ -405,7 +405,7 @@ FROM (
   UNION
   SELECT LTRIM(RTRIM(RecordedBy)) FROM dbo.Orders WHERE NULLIF(LTRIM(RTRIM(RecordedBy)), '') IS NOT NULL
 ) s
-WHERE b <> 'Self-Order';  -- ช่องทางลูกค้าสั่งเอง ไม่ใช่สาขา
+WHERE b NOT IN ('Self-Order', '*');  -- ช่องทางลูกค้าสั่งเอง / พนักงานทุกสาขา ไม่ใช่สาขา
 GO
 
 -- ─────────────────────────────────────────

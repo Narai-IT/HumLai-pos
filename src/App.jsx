@@ -6,6 +6,8 @@ import PaymentApprovalListener from './components/PaymentApprovalListener';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
 import TableOrderView from './components/TableOrderView';
 import LoginScreen from './components/LoginScreen';
+import BranchPicker from './components/BranchPicker';
+import { isAllBranches } from './utils/branches';
 // โหลดแบบ lazy: 2 โมดอลนี้ลากไลบรารีหนัก (html2canvas, qrcode) เปิดตอนกดเท่านั้น → bundle หน้าแรกเล็กลง
 const SalesSummaryModal = lazy(() => import('./components/SalesSummaryModal'));
 const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
@@ -294,6 +296,13 @@ function App() {
     if (required && currentUser === DEFAULT_ADMIN) setCurrentUser(null);
     if (!required && !currentUser) setCurrentUser(DEFAULT_ADMIN);
   }, [posSettings, currentUser]);
+
+  // พนักงานทุกสาขา + มีสาขาที่เปิดใช้งานอยู่สาขาเดียว → เลือกให้เลย ไม่ต้องกด
+  React.useEffect(() => {
+    if (!currentUser || !isAllBranches(currentUser.branch)) return;
+    const active = branches.filter(b => b.isActive !== false);
+    if (active.length === 1) setCurrentUser(u => ({ ...u, branch: String(active[0].id), allBranches: true }));
+  }, [currentUser, branches]);
 
   // เปลี่ยนสาขา (ล็อกอินคนละสาขา / เพิ่งโหลดรายการสาขาเสร็จ) → ดึงโต๊ะของสาขาใหม่ทันที ไม่รอรอบ 20 วิ
   const branchFetchReadyRef = React.useRef(false);
@@ -1306,6 +1315,20 @@ function App() {
         lang={lang}
         isOfflineMode={users.length === 0}
         onRetry={fetchStaticFromSheet}
+        branches={branches}
+      />
+    );
+  }
+
+  // พนักงาน "ทุกสาขา" ต้องเลือกก่อนว่าจะทำงานที่สาขาไหน — หน้าขายต้องรู้ว่าบิลเป็นของสาขาใด
+  if (currentUser && isAllBranches(currentUser.branch) && !isKioskPath) {
+    return (
+      <BranchPicker
+        user={currentUser}
+        branches={branches}
+        lang={lang}
+        onPick={(id) => setCurrentUser(u => ({ ...u, branch: id, allBranches: true }))}
+        onLogout={handleLogout}
       />
     );
   }

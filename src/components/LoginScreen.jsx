@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, ArrowRight, RefreshCw, WifiOff } from 'lucide-react';
 import './LoginScreen.css';
+import { branchLabel } from '../utils/branches';
 
-// ชื่อสาขา = คอลัม A ของชีต Users (branch) — เผื่อข้อมูลเก่าที่ยังไม่มี branch ให้ใช้ id/username แทน
-const branchName = (u) => String(u?.branch || u?.id || u?.username || '').trim();
-
-const LoginScreen = ({ users, onLogin, lang, onRetry }) => {
+const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
+  // เดิมหนึ่งบัญชีต่อหนึ่งสาขา ปุ่มจึงโชว์แค่ชื่อสาขา — ตอนนี้มีหลายคนต่อสาขาได้ ให้โชว์ชื่อคน + สาขา
+  const branchName = (u) => branchLabel(u?.branch || u?.id || '', branches);
   const [selectedUser, setSelectedUser] = useState(null);
   const [password, setPassword]         = useState('');
   const [error, setError]               = useState('');
@@ -105,7 +105,10 @@ const LoginScreen = ({ users, onLogin, lang, onRetry }) => {
             {users.map(user => (
               <button key={user.id} className="user-select-btn" onClick={() => handleUserSelect(user)}>
                 <div className="user-avatar"><User size={28} /></div>
-                <span>{branchName(user) || user.username}</span>
+                <span>{user.username || branchName(user)}</span>
+                {user.username && branchName(user) && (
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '-0.75rem' }}>🏠 {branchName(user)}</small>
+                )}
               </button>
             ))}
           </div>
@@ -118,7 +121,7 @@ const LoginScreen = ({ users, onLogin, lang, onRetry }) => {
               </button>
               <div className="current-user-info">
                 <User size={20} />
-                <span>{branchName(selectedUser) || selectedUser.username}</span>
+                <span>{selectedUser.username || branchName(selectedUser)}</span>
               </div>
             </div>
             <p style={{ textAlign: 'center', color: 'var(--text-muted)', marginBottom: '1rem' }}>

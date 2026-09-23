@@ -144,7 +144,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
   // รายชื่อสาขาสำหรับฟิลเตอร์ (admin) — รวมจากชีต Users + ค่า RecordedBy ที่พบจริง
   const branchOptions = useMemo(() => {
     const set = new Set();
-    (users || []).forEach(u => { const b = branchOf(u); if (b) set.add(b); });
+    (users || []).forEach(u => { const b = branchOf(u); if (b && b !== '*') set.add(b); }); // '*' = พนักงานทุกสาขา ไม่ใช่สาขา
     (data?.orders || []).forEach(r => { const b = String(r.RecordedBy || '').trim(); if (b) set.add(b); });
     return Array.from(set).sort();
   }, [users, data]);

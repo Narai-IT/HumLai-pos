@@ -89,7 +89,7 @@ const ManageSettings = ({ users = [] }) => {
       const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}');
       (Array.isArray(d.branches) ? d.branches : []).forEach(b => { const id = String(b.id || '').trim(); if (id) set.add(id); });
     } catch {}
-    (users || []).forEach(u => { const b = branchOf(u); if (b) set.add(b); });
+    (users || []).forEach(u => { const b = branchOf(u); if (b && b !== '*') set.add(b); }); // '*' = พนักงานทุกสาขา ไม่ใช่สาขา
     return Array.from(set).sort();
   }, [users]);
 
