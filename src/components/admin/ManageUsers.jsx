@@ -55,18 +55,31 @@ export default function ManageUsers() {
   const [showPin,   setShowPin]   = useState({});     // { [id]: bool }
   const [dirty,     setDirty]     = useState(false);
   const [branches,  setBranches]  = useState([]);
+  const [loadError, setLoadError] = useState('');
 
+  // รายชื่อพร้อมรหัสดึงจากเซิร์ฟเวอร์ (getUsers — เฉพาะแอดมินสำนักงานใหญ่)
+  // รายชื่อที่หน้าร้านเก็บไว้ไม่มีรหัสแล้ว ห้ามเอามาบันทึกทับ ไม่งั้นรหัสทุกคนหาย
   useEffect(() => {
-    const raw = localStorage.getItem('gas_all_data');
-    if (raw) {
+    (async () => {
+      let cached = {};
+      try { cached = JSON.parse(localStorage.getItem('gas_all_data') || '{}') || {}; } catch {}
+      if (Array.isArray(cached.branches)) setBranches(cached.branches);
       try {
-        const d = JSON.parse(raw);
-        if (d.users) setUsers(d.users);
-        if (Array.isArray(d.branches)) setBranches(d.branches);
+        const res = await fetch(`${API_URL}?action=getUsers`);
+        const json = await res.json();
+        if (json && json.success === true && Array.isArray(json.users)) {
+          setUsers(json.users);
+        } else if (json && json.error === 'Unknown GET action') {
+          // API รุ่นเก่ายังส่งรหัสมากับรายชื่อ ใช้ของในเครื่องได้
+          if (Array.isArray(cached.users)) setUsers(cached.users);
+        } else {
+          setLoadError((json && json.error) || 'โหลดรายชื่อพนักงานไม่สำเร็จ');
+        }
+      } catch (e) {
+        setLoadError(`โหลดรายชื่อพนักงานไม่สำเร็จ: ${e.message || e}`);
       }
-      catch (e) {}
-    }
-    setLoading(false);
+      setLoading(false);
+    })();
   }, []);
 
   const markDirty = () => setDirty(true);
@@ -102,20 +115,29 @@ export default function ManageUsers() {
   };
 
   const handleSave = async () => {
+    // กันพลาด: คนที่มีรหัสอยู่แล้วแต่รายการนี้ไม่มีรหัสมาด้วย = โหลดมาไม่ครบ บันทึกไปรหัสจะหาย
+    if (users.some(u => u.hasPin === true && (u.pin === undefined || u.pin === ''))) {
+      setSaveMsg('❌ รายชื่อโหลดมาไม่ครบ (ไม่มีรหัส) — รีเฟรชหน้าแล้วลองใหม่');
+      return;
+    }
     setSaving(true); setSaveMsg('');
     try {
-      const clean = users.map(({ isNew, ...u }) => u);
-      await fetch(API_URL, {
-        method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+      const clean = users.map(({ isNew, hasPin, ...u }) => u);
+      const res = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ action: 'saveUsers', users: clean }),
       });
+      const json = await res.json().catch(() => null);
+      if (!json || json.success !== true) throw new Error((json && json.error) || 'เซิร์ฟเวอร์ไม่ตอบ success');
+      // หน้าร้านเก็บรายชื่อไว้ใช้โชว์ปุ่มล็อกอิน — ไม่เก็บรหัสไว้ในเครื่อง
+      const publicList = clean.map(({ pin, ...u }) => ({ ...u, hasPin: String(pin ?? '') !== '' }));
       const raw = localStorage.getItem('gas_all_data');
-      if (raw) { const d = JSON.parse(raw); d.users = clean; localStorage.setItem('gas_all_data', JSON.stringify(d)); }
-      localStorage.setItem('cached_users', JSON.stringify(clean));
+      if (raw) { const d = JSON.parse(raw); d.users = publicList; localStorage.setItem('gas_all_data', JSON.stringify(d)); }
+      localStorage.setItem('cached_users', JSON.stringify(publicList));
       setEditId(null); setSaveMsg('✅ บันทึกสำเร็จ'); setDirty(false);
       setTimeout(() => setSaveMsg(''), 3000);
     } catch (e) {
-      setSaveMsg('❌ บันทึกไม่สำเร็จ');
+      setSaveMsg(`❌ บันทึกไม่สำเร็จ: ${e.message || e}`);
     }
     setSaving(false);
   };
@@ -150,6 +172,12 @@ export default function ManageUsers() {
           </button>
         </div>
       </div>
+
+      {loadError && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 10, padding: '0.7rem 0.9rem', marginBottom: '1rem', fontSize: '0.88rem' }}>
+          ⚠️ {loadError}
+        </div>
+      )}
 
       {/* User cards grid */}
       {users.length === 0 ? (

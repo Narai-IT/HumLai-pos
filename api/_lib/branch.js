@@ -20,8 +20,24 @@ export async function defaultBranchId() {
   return id;
 }
 
+// รหัสสาขาทั้งหมดที่มีในหน้าตั้งค่าสาขา (cache เดียวกับสาขาหลัก)
+let knownCache = { ids: null, at: 0 };
+export async function isKnownBranch(id) {
+  const key = String(id || '').trim().toLowerCase();
+  if (!key) return false;
+  if (!knownCache.ids || Date.now() - knownCache.at >= TTL_MS) {
+    try {
+      const res = await query(`SELECT id FROM dbo.Branches`);
+      knownCache = { ids: new Set(res.recordset.map(r => String(r.id).trim().toLowerCase())), at: Date.now() };
+    } catch {
+      knownCache = { ids: new Set(), at: Date.now() };
+    }
+  }
+  return knownCache.ids.has(key);
+}
+
 // เรียกหลังแก้รายการสาขา ให้สาขาหลักตัวใหม่มีผลทันที
-export const clearBranchCache = () => { cached = { id: null, at: 0 }; };
+export const clearBranchCache = () => { cached = { id: null, at: 0 }; knownCache = { ids: null, at: 0 }; };
 
 // สาขาที่คำขอระบุมาเอง ('' = ไม่ได้ระบุ)
 export const requestedBranch = (data) => String((data && (data.branchId ?? data.branch)) || '').trim();

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, ArrowRight, RefreshCw, WifiOff } from 'lucide-react';
 import './LoginScreen.css';
 import { branchLabel } from '../utils/branches';
+import { apiLogin, setAuthToken } from '../utils/api';
 
 const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
   // เดิมหนึ่งบัญชีต่อหนึ่งสาขา ปุ่มจึงโชว์แค่ชื่อสาขา — ตอนนี้มีหลายคนต่อสาขาได้ ให้โชว์ชื่อคน + สาขา
@@ -21,18 +22,30 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
 
   const handleUserSelect = (user) => { setSelectedUser(user); setPassword(''); setError(''); };
 
-  const verifyLogin = (entered) => {
-    if (String(selectedUser.pin) === String(entered)) {
-      onLogin(selectedUser);
-    } else {
-      setError(lang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Invalid password');
-      setPassword('');
+  const [checking, setChecking] = useState(false);
+
+  // เช็กรหัสที่เซิร์ฟเวอร์ (ได้ token ไว้แนบกับทุกคำขอ) — เบราว์เซอร์ไม่เห็นรหัสของใครอีกแล้ว
+  // API รุ่นเก่าที่ยังไม่มีคำสั่ง login → เช็กกับรหัสที่ส่งมากับรายชื่อพนักงานแบบเดิม
+  const verifyLogin = async (entered) => {
+    setChecking(true);
+    const res = await apiLogin(selectedUser.id, entered);
+    setChecking(false);
+    if (res.success) {
+      setAuthToken(res.token);
+      onLogin({ ...selectedUser, ...res.user });
+      return;
     }
+    if (res.legacy && selectedUser.pin !== undefined && String(selectedUser.pin) === String(entered)) {
+      onLogin(selectedUser);
+      return;
+    }
+    setError(res.error || (lang === 'th' ? 'รหัสผ่านไม่ถูกต้อง' : 'Invalid password'));
+    setPassword('');
   };
 
   const handleSubmit = (e) => {
     if (e) e.preventDefault();
-    if (!password) return;
+    if (!password || checking) return;
     verifyLogin(password);
   };
 
@@ -144,7 +157,7 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
             {error && <div className="pin-error" style={{ marginTop: '0.75rem' }}>{error}</div>}
             <button
               type="submit"
-              disabled={!password}
+              disabled={!password || checking}
               style={{
                 marginTop: '1.1rem', width: '100%', padding: '0.85rem',
                 background: password ? 'var(--accent)' : 'rgba(0,0,0,0.05)',
@@ -153,7 +166,7 @@ const LoginScreen = ({ users, onLogin, lang, onRetry, branches = [] }) => {
                 fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
               }}
             >
-              {lang === 'th' ? 'เข้าสู่ระบบ' : 'Login'} <ArrowRight size={18} />
+              {checking ? (lang === 'th' ? 'กำลังตรวจรหัส...' : 'Checking...') : (lang === 'th' ? 'เข้าสู่ระบบ' : 'Login')} <ArrowRight size={18} />
             </button>
           </form>
         )}
