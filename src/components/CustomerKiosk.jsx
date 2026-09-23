@@ -4,13 +4,61 @@ import { ShoppingBag, ArrowLeft, CheckCircle, Smartphone, Globe, Plus, Minus, X,
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
-import { resolveNoteConfig } from '../utils/popupConfig';
+import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
+import { priceForSaleType } from '../utils/salePricing';
 
-const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOrder, lang: initialLang = 'th' }) => {
+const TAKEAWAY_DINING = { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' };
+const DINE_IN_DINING = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
+// ยังไม่มีผังโต๊ะของสาขา → โต๊ะ 1–16
+const FALLBACK_TABLES = Array.from({ length: 16 }, (_, i) => ({ id: `dine_${i + 1}`, name: `${i + 1}`, zone: 'DineIn', active: true }));
+
+// tables = ผังโต๊ะของสาขานี้ (ใช้ตอนเข้าหน้าลูกค้าจากหน้าแรกของเว็บ ที่ไม่มีเลขโต๊ะติดมากับลิงก์)
+const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onSendOrder, lang: initialLang = 'th', tables = [] }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const tableParam = searchParams.get('table') || searchParams.get('t') || '1';
+  // QR โต๊ะมีเลขโต๊ะในลิงก์ / เข้าจากหน้าแรกของเว็บ = ยังไม่รู้โต๊ะ ให้ลูกค้าเลือกเอง
+  const tableParam = searchParams.get('table') || searchParams.get('t') || '';
   const [tableNo, setTableNo] = useState(tableParam);
+
+  // ทานที่ร้าน / ห่อกลับบ้าน — เลือกที่จอแรก ราคาทุกเมนูแสดงตามนี้
+  const [orderType, setOrderType] = useState('');
+  const dineTables = (Array.isArray(tables) && tables.length ? tables : FALLBACK_TABLES)
+    .filter(tb => tb.active !== false && (tb.zone || 'DineIn') === 'DineIn');
+  // ห่อกลับบ้านโดยไม่มีเลขโต๊ะ → ลงโต๊ะโซน Takehome ตัวแรกของร้าน (ไม่มีก็ใช้ชื่อ Takehome)
+  const takeawayTable = (() => {
+    const t = (Array.isArray(tables) ? tables : []).find(tb => tb.active !== false && tb.zone === 'Takehome');
+    return t ? String(t.name) : 'Takehome';
+  })();
+  const needTablePick = orderType === 'dine_in' && !tableNo;
+
+  const chooseOrderType = (type) => {
+    setOrderType(type);
+    if (!tableParam) setTableNo(type === 'takeaway' ? takeawayTable : '');
+  };
+
+  // เมนูพร้อมราคาตามที่เลือก: ห่อกลับบ้าน = ราคา Takehome ถ้าเมนูตั้งไว้ (ไม่ตั้ง = ราคาปกติ)
+  // เมนูที่มีแต่ราคาช่องทางอื่น (เช่นเฉพาะ Delivery) ไม่แสดง เหมือนหน้าขาย
+  const liveMenu = useMemo(() => {
+    if (!orderType) return rawMenu;
+    const out = [];
+    rawMenu.forEach(food => {
+      const opts = getPriceOptions(food);
+      const takehome = orderType === 'takeaway' ? priceForSaleType(opts, 'Takehome') : null;
+      const chosen = takehome || priceForSaleType(opts, '');
+      if (!chosen) return;
+      out.push({ ...food, price: Number(chosen.price) || 0, ...(takehome ? { priceName: takehome.name } : {}) });
+    });
+    return out;
+  }, [rawMenu, orderType]);
+
+  const changeOrderType = () => {
+    if (cart.length > 0 && !window.confirm(lang === 'th'
+      ? 'เปลี่ยนเป็นทานที่ร้าน/ห่อกลับบ้าน ราคาจะเปลี่ยน — ล้างรายการในตะกร้าแล้วเลือกใหม่?'
+      : 'Changing will clear your cart. Continue?')) return;
+    setCart([]);
+    setOrderType('');
+    if (!tableParam) setTableNo('');
+  };
 
   const [lang, setLang] = useState(initialLang);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.slug || 'food');
@@ -99,7 +147,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     const ids = Array.isArray(food.bundledItems) ? food.bundledItems : [];
     const rows = [];
     ids.forEach((bundledId, idx) => {
-      const bundledFood = liveMenu.find(m => String(m.id) === String(bundledId));
+      const bundledFood = rawMenu.find(m => String(m.id) === String(bundledId));
       if (!bundledFood) return;
       rows.push({
         cartId: Date.now() + Math.random() + idx,
@@ -128,7 +176,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   };
 
   const handleAddToCartDirect = (food) => {
-    const dining = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
+    const dining = orderType === 'takeaway' ? TAKEAWAY_DINING : DINE_IN_DINING;
     const rows = [
       { cartId: Date.now() + Math.random(), food, quantity: 1, allPopups: [], dining },
       ...bundledRowsFor(food, dining)
@@ -151,7 +199,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
   const handleConfirmWizardOrder = (rawFood, orderDetails) => {
     const chosenPrice = orderDetails?.selectedPrice;
     const baseFood = chosenPrice ? { ...rawFood, price: Number(chosenPrice.price) || 0, priceName: chosenPrice.name } : rawFood;
-    const dining = orderDetails.dining || { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
+    const dining = orderType === 'takeaway' ? TAKEAWAY_DINING : (orderDetails.dining || DINE_IN_DINING);
 
     const rows = [{
       cartId: Date.now() + Math.random(),
@@ -573,6 +621,77 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
     );
   };
 
+
+  // ── จอแรก: ทานที่ร้าน / ห่อกลับบ้าน (+ เลือกโต๊ะ ถ้าเข้ามาโดยไม่มีเลขโต๊ะจาก QR) ──
+  if (!orderType || needTablePick) {
+    const bigBtn = (active) => ({
+      display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', textAlign: 'left',
+      padding: '1.25rem', borderRadius: 18, border: `2px solid ${active ? '#ea580c' : '#e2e8f0'}`,
+      background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', color: '#0f172a',
+      boxShadow: '0 6px 20px rgba(0,0,0,0.05)'
+    });
+    const priceTag = (text, color, bg) => (
+      <span style={{ display: 'inline-block', marginTop: 6, padding: '0.2rem 0.65rem', borderRadius: 999, fontSize: '0.8rem', fontWeight: 800, color, background: bg }}>{text}</span>
+    );
+    return (
+      <div style={{ minHeight: '100dvh', background: '#f8fafc', width: '100%', maxWidth: 480, margin: '0 auto', padding: '1.5rem 1rem', boxSizing: 'border-box', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#0f172a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <img src="/logo.png" alt="Logo" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover' }} />
+            <div>
+              <div style={{ fontWeight: 800, fontSize: '1.1rem' }}>{lang === 'th' ? 'ข้าวมันไก่หำไหล' : 'Hamlai Chicken Rice'}</div>
+              {tableParam && <div style={{ color: '#c2410c', fontWeight: 700, fontSize: '0.85rem' }}>🪑 {lang === 'th' ? `โต๊ะ ${tableParam}` : `Table ${tableParam}`}</div>}
+            </div>
+          </div>
+          <button onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
+            style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 20, padding: '0.35rem 0.6rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Globe size={13} /> {lang === 'th' ? 'TH' : 'EN'}
+          </button>
+        </div>
+
+        {!needTablePick ? (
+          <>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 900, margin: '0 0 0.3rem' }}>{lang === 'th' ? 'ทานที่ร้าน หรือ ห่อกลับบ้าน?' : 'Dine in or take away?'}</h2>
+            <p style={{ color: '#64748b', margin: '0 0 1.25rem' }}>{lang === 'th' ? 'ราคาในเมนูจะแสดงตามที่เลือก' : 'Menu prices follow your choice'}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
+              <button style={bigBtn(false)} onClick={() => chooseOrderType('dine_in')}>
+                <span style={{ fontSize: '2.4rem' }}>🍽️</span>
+                <span>
+                  <b style={{ fontSize: '1.25rem' }}>{lang === 'th' ? 'ทานที่ร้าน' : 'Dine in'}</b><br />
+                  {priceTag(lang === 'th' ? 'ราคาปกติ' : 'Regular price', '#15803d', '#dcfce7')}
+                </span>
+              </button>
+              <button style={bigBtn(false)} onClick={() => chooseOrderType('takeaway')}>
+                <span style={{ fontSize: '2.4rem' }}>🛍️</span>
+                <span>
+                  <b style={{ fontSize: '1.25rem' }}>{lang === 'th' ? 'ห่อกลับบ้าน' : 'Take away'}</b><br />
+                  {priceTag(lang === 'th' ? 'ราคา Takehome' : 'Takehome price', '#c2410c', '#ffedd5')}
+                </span>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 900, margin: '0 0 0.3rem' }}>{lang === 'th' ? 'นั่งโต๊ะไหน?' : 'Which table?'}</h2>
+            <p style={{ color: '#64748b', margin: '0 0 1.25rem' }}>{lang === 'th' ? 'ดูเลขโต๊ะที่ติดอยู่บนโต๊ะ' : 'See the number on your table'}</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(76px, 1fr))', gap: '0.6rem' }}>
+              {dineTables.map(tb => (
+                <button key={tb.id || tb.name} onClick={() => setTableNo(String(tb.name))}
+                  style={{ padding: '1rem 0.4rem', borderRadius: 14, border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 800, fontSize: '1.1rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {tb.name}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setOrderType('')}
+              style={{ marginTop: '1.25rem', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <ArrowLeft size={16} /> {lang === 'th' ? 'ย้อนกลับ' : 'Back'}
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{
       // 100dvh = ความสูงจอ "จริง" ตอนนั้น — 100vh บนมือถือจะนับรวมแถบที่อยู่เว็บที่ยุบ ๆ ยืด ๆ
@@ -627,8 +746,14 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
             color: '#c2410c', fontWeight: '800', fontSize: 'clamp(0.72rem, 3vw, 0.85rem)',
             padding: '0.35rem 0.6rem', borderRadius: '20px', whiteSpace: 'nowrap'
           }}>
-            🪑 {lang === 'th' ? `โต๊ะ ${tableNo}` : `Table ${tableNo}`}
+            {orderType === 'takeaway'
+              ? `🛍️ ${lang === 'th' ? 'ห่อกลับบ้าน' : 'Take away'}`
+              : `🪑 ${lang === 'th' ? `โต๊ะ ${tableNo}` : `Table ${tableNo}`}`}
           </div>
+          <button onClick={changeOrderType} title={lang === 'th' ? 'เปลี่ยนทานที่ร้าน/ห่อกลับบ้าน' : 'Change'}
+            style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: '20px', padding: '0.35rem 0.55rem', color: '#0f172a', fontWeight: '700', fontSize: 'clamp(0.66rem, 2.8vw, 0.76rem)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0, fontFamily: 'inherit' }}>
+            {orderType === 'takeaway' ? (lang === 'th' ? 'ราคา Takehome' : 'Takehome') : (lang === 'th' ? 'ราคาปกติ' : 'Regular')} ⇄
+          </button>
           <button
             onClick={() => setLang(lang === 'th' ? 'en' : 'th')}
             style={{
@@ -794,6 +919,7 @@ const CustomerKiosk = ({ liveMenu = [], categories = [], settings = {}, onSendOr
           liveMenu={liveMenu}
           categories={categories}
           basePrice={Number(selectedFood.price) || 0}
+          askDining={false}
           noteOptions={kioskNoteConfig.options}
           allowCustomNote={kioskNoteConfig.allowCustom}
           onClose={() => setSelectedFood(null)}
