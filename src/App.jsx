@@ -22,6 +22,7 @@ const ManageTables = lazy(() => import('./components/admin/ManageTables'));
 const ManagePrinters = lazy(() => import('./components/admin/ManagePrinters'));
 const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
 const ManageBranches = lazy(() => import('./components/admin/ManageBranches'));
+const ManageBranchMenu = lazy(() => import('./components/admin/ManageBranchMenu'));
 const ManageSettings = lazy(() => import('./components/admin/ManageSettings'));
 const ManageStock = lazy(() => import('./components/admin/ManageStock'));
 const ManageBOM = lazy(() => import('./components/admin/ManageBOM'));
@@ -312,6 +313,7 @@ function App() {
     if (!branchFetchReadyRef.current) { branchFetchReadyRef.current = true; return; }
     lastRawRef.current = null;
     fetchOrdersFromSheet();
+    fetchStaticFromSheet(); // เมนู/ราคาของสาขาใหม่
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [branchKey]);
 
@@ -507,8 +509,9 @@ function App() {
   // → จำไว้แล้วถอยไปใช้ getAllData ตลอดทั้ง session
   const fetchAction = async (action, signal) => {
     if (legacyGasRef.current) return await (await fetch(API_URL + '?action=getAllData', { signal })).text();
-    // getLive ของแต่ละสาขา = โต๊ะและบิลของร้านตัวเองเท่านั้น
-    const branchQs = action === 'getLive' && branchKeyRef.current ? '&branch=' + encodeURIComponent(branchKeyRef.current) : '';
+    // getLive ของแต่ละสาขา = โต๊ะและบิลของร้านตัวเองเท่านั้น / getStatic = เมนูที่ปรับตามสาขาแล้ว
+    const branchQs = (action === 'getLive' || action === 'getStatic') && branchKeyRef.current
+      ? '&branch=' + encodeURIComponent(branchKeyRef.current) : '';
     const text = await (await fetch(API_URL + '?action=' + action + branchQs, { signal })).text();
     if (text.indexOf('Unknown GET action') !== -1) {
       legacyGasRef.current = true;
@@ -1498,6 +1501,7 @@ function App() {
           <Route path="tables" element={<ManageTables branchId={tablesBranch} branches={branches} />} />
           <Route path="users" element={isAdmin ? <ManageUsers /> : <Navigate to="/admin" replace />} />
           <Route path="branches" element={isAdmin ? <ManageBranches /> : <Navigate to="/admin" replace />} />
+          <Route path="branch-menu" element={isAdmin ? <ManageBranchMenu branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
           <Route path="printers" element={isAdmin ? <ManagePrinters branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
