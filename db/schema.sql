@@ -506,3 +506,38 @@ GO
 IF COL_LENGTH('dbo.Menu', 'sortOrder') IS NULL
   ALTER TABLE dbo.Menu ADD sortOrder INT NULL;
 GO
+
+-- ─────────────────────────────────────────
+-- ใบกำกับภาษีเต็มรูป (หลังบ้าน > รายงาน > รายงานยอดขาย > ออกใบกำกับภาษี)
+-- เลขที่ = <billPrefix>-TX<ปีเดือน>-0001 เดินต่อเนื่องรายเดือน · ยกเลิกแล้วไม่ลบ (cancelled = 1)
+-- sellerJson = ข้อมูลร้าน ณ วันที่ออก — แก้ข้อมูลสาขาทีหลัง ใบเก่าพิมพ์ซ้ำก็ยังเหมือนเดิม
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.TaxInvoices', 'U') IS NULL
+CREATE TABLE dbo.TaxInvoices (
+  RowId        INT IDENTITY(1,1) PRIMARY KEY,
+  invoiceNo    NVARCHAR(60)   NOT NULL,
+  orderNumber  NVARCHAR(60)   NOT NULL,
+  branchId     NVARCHAR(60)   NULL,
+  issuedAt     NVARCHAR(40)   NULL,
+  buyerName    NVARCHAR(300)  NULL,
+  buyerTaxId   NVARCHAR(40)   NULL,
+  buyerAddress NVARCHAR(1000) NULL,
+  buyerBranch  NVARCHAR(100)  NULL,
+  itemsJson    NVARCHAR(MAX)  NULL,
+  subtotal     DECIMAL(18,2)  NULL,
+  vatRate      DECIMAL(9,2)   NULL,
+  vatAmount    DECIMAL(18,2)  NULL,
+  total        DECIMAL(18,2)  NULL,
+  sellerJson   NVARCHAR(MAX)  NULL,
+  issuedBy     NVARCHAR(120)  NULL,
+  cancelled    BIT            NULL,
+  cancelledAt  NVARCHAR(40)   NULL,
+  cancelReason NVARCHAR(500)  NULL
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_TaxInvoices_No' AND object_id = OBJECT_ID('dbo.TaxInvoices'))
+  CREATE UNIQUE INDEX UX_TaxInvoices_No ON dbo.TaxInvoices (invoiceNo);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TaxInvoices_Order' AND object_id = OBJECT_ID('dbo.TaxInvoices'))
+  CREATE INDEX IX_TaxInvoices_Order ON dbo.TaxInvoices (orderNumber);
+GO

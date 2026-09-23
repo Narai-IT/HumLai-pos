@@ -133,10 +133,10 @@ const HQ_ONLY = new Set([
 ]);
 
 // แอดมิน (รวมผู้จัดการสาขา) — ตั้งค่าของสาขาตัวเอง
-const ADMIN = new Set(['savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
+const ADMIN = new Set(['cancelTaxInvoice', 'savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
 
 // แคชเชียร์ขึ้นไป — หน้าหลังบ้านที่แคชเชียร์เข้าได้
-const BACKOFFICE = new Set(['saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);
+const BACKOFFICE = new Set(['getTaxInvoices', 'issueTaxInvoice', 'saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);
 
 const RANK = { staff: 1, cashier: 2, admin: 3 };
 const need = (action) => {
