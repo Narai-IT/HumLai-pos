@@ -52,6 +52,25 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
   // (Print Server รุ่นเก่าต่อ &action= ท้าย URL ที่มี ? อยู่แล้วได้ ไม่ต้องอัปเดตเครื่องพิมพ์ก่อนก็ใช้ได้)
   const autoPrintApiUrl = branchId ? `${apiUrlAbsolute()}?branch=${encodeURIComponent(branchId)}` : apiUrlAbsolute();
   const [saveError, setSaveError] = useState('');
+  // หมวดอาหารสำหรับเลือกว่าเครื่องครัว/บาร์เครื่องไหนพิมพ์หมวดอะไร
+  const [menuCategories, setMenuCategories] = useState(() => {
+    try {
+      const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}');
+      return Array.isArray(d.categories) ? d.categories.filter(c => c && c.slug) : [];
+    } catch { return []; }
+  });
+  useEffect(() => {
+    if (menuCategories.length > 0) return;
+    fetch(`${API_URL}?action=getStatic`).then(r => r.json()).then(d => {
+      if (d && Array.isArray(d.categories)) setMenuCategories(d.categories.filter(c => c && c.slug));
+    }).catch(() => {});
+  }, [menuCategories.length]);
+
+  const togglePrinterCategory = (printer, slug) => {
+    const current = Array.isArray(printer.categories) ? printer.categories.map(String) : [];
+    const next = current.includes(slug) ? current.filter(s => s !== slug) : [...current, slug];
+    updatePrinter(printer.id, 'categories', next);
+  };
   const [printers, setPrinters] = useState([]);
   const [testStatus, setTestStatus] = useState({}); // { [id]: { status, msg } }
   const [saved, setSaved] = useState(false);
@@ -861,6 +880,44 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                       </div>
                     </div>
                   )}
+
+                  {CAN_CHOOSE_PRINT_MODE.includes(printer.type) && (() => {
+                    const chosen = Array.isArray(printer.categories) ? printer.categories.map(String) : [];
+                    return (
+                      <div className="admin-form-group" style={{ margin: '0 0 0.75rem 0' }}>
+                        <label style={{ fontSize: '0.8rem', color: '#334155', fontWeight: 600 }}>
+                          หมวดอาหารที่เครื่องนี้พิมพ์ {chosen.length === 0 && <span style={{ color: '#16a34a' }}>— ทุกหมวด</span>}
+                        </label>
+                        {menuCategories.length === 0 ? (
+                          <div style={{ fontSize: '0.8rem', color: '#64748b' }}>ยังไม่มีหมวดหมู่ — สร้างที่หน้า "หมวดหมู่" ก่อน</div>
+                        ) : (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.25rem' }}>
+                            {menuCategories.map(c => {
+                              const on = chosen.includes(String(c.slug));
+                              return (
+                                <button key={c.slug} type="button" onClick={() => togglePrinterCategory(printer, String(c.slug))}
+                                  style={{ padding: '0.3rem 0.7rem', borderRadius: 999, border: '1.5px solid', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.8rem', fontWeight: 600,
+                                    background: on ? '#fff7ed' : '#ffffff', borderColor: on ? '#ea580c' : '#e2e8f0', color: on ? '#c2410c' : '#475569' }}>
+                                  {on ? '✓ ' : ''}{c.icon ? `${c.icon} ` : ''}{c.name || c.slug}
+                                </button>
+                              );
+                            })}
+                            {chosen.length > 0 && (
+                              <button type="button" onClick={() => updatePrinter(printer.id, 'categories', [])}
+                                style={{ padding: '0.3rem 0.7rem', borderRadius: 999, border: '1px dashed #cbd5e1', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.78rem', color: '#64748b' }}>
+                                ล้าง (พิมพ์ทุกหมวด)
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '0.3rem', lineHeight: 1.45 }}>
+                          {chosen.length === 0
+                            ? 'ไม่เลือก = เครื่องหลักของครัว รับทุกเมนูที่ไม่มีเครื่องไหนเลือกหมวดไว้'
+                            : 'พิมพ์เฉพาะเมนูในหมวดที่เลือก (ดูจากหมวดหลักของเมนู) — ถ้าเมนูตั้งเครื่องพิมพ์ไว้เองในหน้าจัดการเมนู จะออกเครื่องนั้นแทน'}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <button

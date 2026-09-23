@@ -492,3 +492,10 @@ BEGIN
   UPDATE dbo.StockOut SET BranchId = @def WHERE BranchId IS NULL;
 END
 GO
+
+-- ─────────────────────────────────────────
+-- ปริ้นเตอร์ครัว/บาร์เลือกหมวดอาหารที่จะพิมพ์ได้ — JSON array ของ slug หมวด ([] / NULL = ทุกหมวด)
+-- ─────────────────────────────────────────
+IF COL_LENGTH('dbo.Printers', 'categories') IS NULL
+  ALTER TABLE dbo.Printers ADD categories NVARCHAR(MAX) NULL;
+GO
