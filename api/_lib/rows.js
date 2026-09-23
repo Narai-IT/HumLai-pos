@@ -81,6 +81,10 @@ export const mapPromotion = rowMapper({ id: 'i', name: 's', nameEn: 's', price: 
 
 export const mapUser = rowMapper({ id: 'i', username: 's', pin: 's', canCheckout: 'b', isAdmin: 'b', isCashier: 'b', branch: 's' });
 
+export const mapBranch = rowMapper({
+  id: 's', name: 's', billPrefix: 's', phone: 's', address: 's', taxId: 's', receiptFooter: 's', isActive: 'b'
+});
+
 export const mapPrinter = rowMapper({ id: 's', name: 's', ip: 's', type: 's', printMode: 's' });
 
 export const mapDiscount = rowMapper({ id: 's', name: 's', type: 's', value: 'n', categories: 'j' });

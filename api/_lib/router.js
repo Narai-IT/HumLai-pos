@@ -42,6 +42,7 @@ const POST_ACTIONS = {
   deletePromotion:         admin.deletePromotion,
   savePromotions:          admin.savePromotions,
   saveUsers:               admin.saveUsers,
+  saveBranches:            admin.saveBranches,
   savePrinters:            admin.savePrinters,
   saveDiscounts:           admin.saveDiscounts,
   saveSettings:            admin.saveSettings,

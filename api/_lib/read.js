@@ -3,7 +3,7 @@
 import { query } from './db.js';
 import { dayStart, dayEnd } from './time.js';
 import {
-  mapOrder, mapTableOrder, mapMenu, mapCategory, mapPromotion, mapUser, mapPrinter,
+  mapOrder, mapTableOrder, mapMenu, mapCategory, mapPromotion, mapUser, mapBranch, mapPrinter,
   mapDiscount, mapLiquor, mapWaste, mapApproval, mapOutstanding, mapShift, mapPayment,
   CATEGORY_SPEC
 } from './rows.js';
@@ -16,6 +16,7 @@ const MENU_COLS    = cols(['id','category','name','nameEn','description','descri
 const CATEGORY_COLS= cols(Object.keys(CATEGORY_SPEC));
 const PROMO_COLS   = cols(['id','name','nameEn','price','origPrice']);
 const USER_COLS    = cols(['id','username','pin','canCheckout','isAdmin','isCashier','branch']);
+const BRANCH_COLS  = cols(['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive']);
 const PRINTER_COLS = cols(['id','name','ip','type','printMode']);
 const DISCOUNT_COLS= cols(['id','name','type','value','categories']);
 const LIQUOR_COLS  = cols(['timestamp','type','customerName','phone','productName','qty','note','staff','category','unit']);
@@ -45,18 +46,23 @@ export const getSettings = async () => {
   try { return JSON.parse(res.recordset[0].value); } catch { return null; }
 };
 
+// ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
+// ต้องไม่ทำให้ getStatic ทั้งก้อนพัง ไม่งั้นหน้าร้านโหลดเมนูไม่ขึ้น
+const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() => []);
+
 // ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน
 export async function buildStaticData() {
-  const [categories, menu, promotions, users, printers, discounts, settings] = await Promise.all([
+  const [categories, menu, promotions, users, printers, discounts, settings, branches] = await Promise.all([
     allRows('Categories', CATEGORY_COLS, mapCategory),
     allRows('Menu', MENU_COLS, mapMenu),
     allRows('Promotions', PROMO_COLS, mapPromotion),
     allRows('Users', USER_COLS, mapUser),
     allRows('Printers', PRINTER_COLS, mapPrinter),
     allRows('Discounts', DISCOUNT_COLS, mapDiscount),
-    getSettings()
+    getSettings(),
+    getBranches()
   ]);
-  return { categories, menu, promotions, users, printers, discounts, settings };
+  return { categories, menu, promotions, users, printers, discounts, settings, branches };
 }
 
 const getTableOrders = () => lastRows('TableOrders', TABLE_COLS, mapTableOrder);

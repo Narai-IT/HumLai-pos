@@ -376,3 +376,33 @@ CREATE TABLE dbo.Images (
   createdAt DATETIME2(3)   NULL
 );
 GO
+
+-- ─────────────────────────────────────────
+-- สาขา — id คือรหัสสาขาที่ใช้ผูกทุกอย่าง (Users.branch, Orders.RecordedBy, Waste.branch, branchQR)
+-- ห้ามเปลี่ยน id หลังใช้งานแล้ว ชื่อที่แสดงแก้ได้ที่ name
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.Branches', 'U') IS NULL
+CREATE TABLE dbo.Branches (
+  Seq           INT IDENTITY(1,1),
+  id            NVARCHAR(60)  NOT NULL PRIMARY KEY,
+  name          NVARCHAR(200) NULL,
+  billPrefix    NVARCHAR(20)  NULL,   -- ตัวนำหน้าเลขบิล เช่น XUM → XUM-#001
+  phone         NVARCHAR(60)  NULL,
+  [address]     NVARCHAR(500) NULL,
+  taxId         NVARCHAR(40)  NULL,
+  receiptFooter NVARCHAR(500) NULL,
+  isActive      BIT           NULL
+);
+GO
+
+-- ครั้งแรกที่สร้างตาราง: ดึงรหัสสาขาที่มีใช้อยู่แล้วจากผู้ใช้และบิลเก่ามาตั้งต้นให้
+-- (ข้อมูลเดิมจึงผูกกับสาขาได้ทันทีโดยไม่ต้องแก้แถวไหนเลย)
+IF NOT EXISTS (SELECT 1 FROM dbo.Branches)
+INSERT INTO dbo.Branches (id, name, billPrefix, isActive)
+SELECT b, b, UPPER(REPLACE(b, ' ', '')), 1
+FROM (
+  SELECT LTRIM(RTRIM(branch)) AS b FROM dbo.Users WHERE NULLIF(LTRIM(RTRIM(branch)), '') IS NOT NULL
+  UNION
+  SELECT LTRIM(RTRIM(RecordedBy)) FROM dbo.Orders WHERE NULLIF(LTRIM(RTRIM(RecordedBy)), '') IS NOT NULL
+) s;
+GO

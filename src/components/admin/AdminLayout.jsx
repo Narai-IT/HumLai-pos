@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package, FlaskConical, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package, FlaskConical, BarChart2, Building2 } from 'lucide-react';
 import './Admin.css';
 
 const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
@@ -42,6 +42,11 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
              <NavLink to="/admin/tables" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                 <LayoutDashboard size={20} /> {lang === 'th' ? 'จัดการโต๊ะ & ราคา' : 'Manage Tables'}
              </NavLink>
+             {allowAll && (
+               <NavLink to="/admin/branches" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
+                  <Building2 size={20} /> {lang === 'th' ? 'สาขา' : 'Branches'}
+               </NavLink>
+             )}
              {allowAll && (
                <NavLink to="/admin/users" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                   <Users size={20} /> {lang === 'th' ? 'พนักงาน' : 'Users'}
