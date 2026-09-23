@@ -10,28 +10,43 @@ import pkg from 'node-thermal-printer';
 
 const { printer: ThermalPrinter, types: PrinterTypes } = pkg;
 
-// ── หัวใบครัว: ประเภท (ทานที่ร้าน/ห่อกลับบ้าน/เดลิเวอรี) + เบอร์โต๊ะ ──
-// ประเภทมาจากรายการอาหาร (dining) เบอร์โต๊ะมาจากชื่อลูกค้า/ที่อยู่ที่ขึ้นต้นด้วย "โต๊ะ ..."
+// ── หัวใบครัว: ประเภท (ทานที่ร้าน/ห่อกลับบ้าน/Delivery) + โต๊ะ ──
+// ลำดับ: ประเภทที่หน้าเว็บส่งมา (อ่านจากโซนโต๊ะ) → ชื่อโต๊ะที่บอกประเภทชัด ๆ (Takehome / Grab ...)
+//        → การรับประทานของรายการอาหาร → ทานที่ร้าน
+// เบอร์โต๊ะมาจากชื่อลูกค้า/ที่อยู่ที่ขึ้นต้นด้วย "โต๊ะ ..."
+const DINE_IN = 'ทานที่ร้าน';
+const TAKEAWAY = 'ห่อกลับบ้าน';
+const rawTableOf = (orderData) => {
+  const c = orderData.customerDetails || {};
+  for (const text of [c.address, c.name]) {
+    const m = String(text || '').match(/^โต๊ะ\s*(.+?)(?:\s*\(.*\))?\s*$/);
+    if (m) return m[1].trim();
+  }
+  return '';
+};
+const diningFromTableName = (table) => {
+  if (/take\s*-?\s*(home|away)|กลับบ้าน/i.test(table)) return TAKEAWAY;
+  if (/deli|grab|line\s*man|shopee|robinhood|foodpanda|panda/i.test(table)) return 'Delivery';
+  return '';
+};
 const diningOf = (orderData) => {
+  if (String(orderData.dining || '').trim()) return String(orderData.dining).trim();
+  const fromTable = diningFromTableName(rawTableOf(orderData));
+  if (fromTable) return fromTable;
   const items = Array.isArray(orderData.items) ? orderData.items : [];
   for (const item of items) {
     const d = item && item.dining;
     const name = typeof d === 'string' ? d : (d && d.name);
     if (name && String(name).trim()) return String(name).trim();
   }
-  return String(orderData.dining || '').trim();
+  return DINE_IN;
 };
-const tableOf = (orderData, dining) => {
-  const c = orderData.customerDetails || {};
-  for (const text of [c.address, c.name]) {
-    const m = String(text || '').match(/^โต๊ะ\s*(.+?)(?:\s*\(.*\))?\s*$/);
-    if (!m) continue;
-    const table = m[1].trim();
-    // หน้าลูกค้าสั่งเองแบบไม่มีเลขโต๊ะ ลงชื่อ "ทานที่ร้าน" / "Takehome" ไว้ — ไม่ใช่เบอร์โต๊ะจริง
-    if (!table || table === dining || /^(takehome|ทานที่ร้าน|ห่อกลับบ้าน)$/i.test(table)) return '';
-    return table;
-  }
-  return '';
+// บรรทัดที่สองของหัวใบ: ทานที่ร้าน = "โต๊ะ 5" / ห่อกลับบ้าน-เดลิเวอรี = ชื่อช่อง เช่น "Takehome 1", "Grab"
+const tableLineOf = (orderData, dining) => {
+  const table = rawTableOf(orderData);
+  // หน้าลูกค้าสั่งเองแบบไม่มีเลขโต๊ะ ลงชื่อ "ทานที่ร้าน" / "Takehome" ไว้ — ไม่ใช่โต๊ะจริง
+  if (!table || table === dining || /^(takehome|ทานที่ร้าน|ห่อกลับบ้าน)$/i.test(table)) return '';
+  return dining === DINE_IN ? `โต๊ะ ${table}` : table;
 };
 
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
@@ -78,13 +93,14 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     printer.println("--------------------------------");
 
     const isKitchen = printerType === 'kitchen';
-    const kitchenTable = isKitchen ? tableOf(orderData, diningOf(orderData)) : '';
     if (isKitchen) {
-      // ตัวใหญ่ให้ครัวเห็นทันทีว่าทำให้ใคร: ประเภท + เบอร์โต๊ะ
+      // ตัวใหญ่ให้ครัวเห็นทันทีว่าทำให้ใคร: ประเภท + โต๊ะ
+      const dining = diningOf(orderData);
+      const tableLine = tableLineOf(orderData, dining);
       printer.setTextDoubleHeight();
       printer.setTextDoubleWidth();
-      printer.println(diningOf(orderData) || 'ทานที่ร้าน');
-      if (kitchenTable) printer.println(`โต๊ะ ${kitchenTable}`);
+      printer.println(dining);
+      if (tableLine) printer.println(tableLine);
       printer.setTextNormal();
     } else if (isPreBill) {
       printer.println("ใบแจ้งยอด (CHECK BILL)");
