@@ -9,7 +9,7 @@ import { deductStock, recordStockIn, saveBOM, upsertIngredient, deleteIngredient
 import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 
-export const BUILD = '2026-09-11-sqlserver';
+export const BUILD = '2026-09-23-branches';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
