@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useOutletContext } from 'react-router-dom';
 import { Plus, Edit2, Trash2, QrCode, CheckCircle, RefreshCw, Printer, Download, Sparkles, LayoutGrid, X } from 'lucide-react';
 import QRCode from 'qrcode';
+import { API_URL } from '../../utils/api';
 import './Admin.css';
 
 export const DEFAULT_TABLES = [
@@ -14,8 +15,23 @@ export const DEFAULT_TABLES = [
   { id: 'deli_3', name: 'Shopee', zone: 'Delivery', priceTier: 'deli', seats: 0, active: true }
 ];
 
-const ManageTables = () => {
+// ผังโต๊ะของสาขาที่เก็บไว้บนเซิร์ฟเวอร์ (ก้อน cache ที่หน้าร้านดึงมาแล้ว)
+const serverTablesFor = (branchId) => {
+  try {
+    const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}');
+    const list = d.branchTables && d.branchTables[branchId];
+    return Array.isArray(list) && list.length > 0 ? list : null;
+  } catch { return null; }
+};
+
+// branchId = สาขาที่กำลังจัดผังโต๊ะ (สาขาของผู้ใช้ที่ล็อกอิน หรือสาขาหลัก)
+const ManageTables = ({ branchId = '', branches = [] }) => {
   const { lang } = useOutletContext();
+  const [syncMsg, setSyncMsg] = useState('');
+  const branchName = (() => {
+    const b = branches.find(x => String(x.id) === String(branchId));
+    return b ? (b.name || b.id) : branchId;
+  })();
   const [tables, setTables] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
@@ -30,23 +46,48 @@ const ManageTables = () => {
   const [qrModalTable, setQrModalTable] = useState(null);
   const [qrUrl, setQrUrl] = useState('');
 
-  useEffect(() => {
-    const saved = localStorage.getItem('pos_tables_config');
-    if (saved) {
+  // บันทึกผังโต๊ะขึ้นเซิร์ฟเวอร์ — ทุกเครื่องของสาขาเดียวกันจะได้ผังเดียวกัน
+  const pushTables = async (list) => {
+    if (!branchId) return;
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'saveBranchTables', branchId, tables: list })
+      });
+      const json = await res.json().catch(() => null);
+      if (!json || json.success !== true) throw new Error((json && json.error) || 'เซิร์ฟเวอร์ไม่ตอบ success');
       try {
-        setTables(JSON.parse(saved));
-      } catch (e) {
-        setTables(DEFAULT_TABLES);
-      }
-    } else {
-      setTables(DEFAULT_TABLES);
-      localStorage.setItem('pos_tables_config', JSON.stringify(DEFAULT_TABLES));
+        const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}');
+        d.branchTables = { ...(d.branchTables || {}), [branchId]: list };
+        localStorage.setItem('gas_all_data', JSON.stringify(d));
+      } catch {}
+      setSyncMsg('');
+    } catch (e) {
+      setSyncMsg(`⚠️ บันทึกผังโต๊ะขึ้นระบบไม่สำเร็จ (${e.message || e}) — เครื่องอื่นจะยังเห็นผังเดิม`);
     }
-  }, []);
+  };
+
+  useEffect(() => {
+    const fromServer = serverTablesFor(branchId);
+    if (fromServer) {
+      setTables(fromServer);
+      localStorage.setItem('pos_tables_config', JSON.stringify(fromServer));
+      return;
+    }
+    let local = null;
+    try { local = JSON.parse(localStorage.getItem('pos_tables_config') || 'null'); } catch { local = null; }
+    const initial = Array.isArray(local) && local.length > 0 ? local : DEFAULT_TABLES;
+    setTables(initial);
+    localStorage.setItem('pos_tables_config', JSON.stringify(initial));
+    // สาขานี้ยังไม่เคยมีผังบนระบบ → ส่งผังที่ใช้อยู่ในเครื่องนี้ขึ้นไปเป็นผังตั้งต้น
+    pushTables(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId]);
 
   const saveTablesToStorage = (updatedTables) => {
     setTables(updatedTables);
     localStorage.setItem('pos_tables_config', JSON.stringify(updatedTables));
+    pushTables(updatedTables);
   };
 
   const handleOpenAddModal = () => {
@@ -109,7 +150,9 @@ const ManageTables = () => {
     setQrModalTable(table);
     const host = window.location.host;
     const protocol = window.location.protocol;
-    const kioskLink = `${protocol}//${host}/kiosk?table=${encodeURIComponent(table.name)}`;
+    // ?b= = สาขาของโต๊ะนี้ ออเดอร์ที่ลูกค้าสั่งเองจะเข้าโต๊ะของสาขานี้ (QR เก่าที่ไม่มี b ยังใช้ได้ — ลงสาขาหลัก)
+    const branchQs = branchId ? `&b=${encodeURIComponent(branchId)}` : '';
+    const kioskLink = `${protocol}//${host}/kiosk?table=${encodeURIComponent(table.name)}${branchQs}`;
 
     QRCode.toDataURL(kioskLink, { width: 300, margin: 2, errorCorrectionLevel: 'H' })
       .then(url => setQrUrl(url))
@@ -145,6 +188,14 @@ const ManageTables = () => {
           <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
             {lang === 'th' ? 'เพิ่ม/แก้ไขหมายเลขโต๊ะ กำหนดประเภทราคาขายประจำโต๊ะ และสร้าง QR Code สำหรับสั่งอาหารด้วยตนเอง' : 'Configure table numbers, default display price tiers, and generate self-ordering QR stickers.'}
           </p>
+          {branchId && (
+            <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-main)' }}>
+              🏠 {lang === 'th' ? `ผังโต๊ะของสาขา: ${branchName}` : `Branch: ${branchName}`}
+            </p>
+          )}
+          {syncMsg && (
+            <p style={{ margin: '0.35rem 0 0 0', fontSize: '0.82rem', color: '#b91c1c' }}>{syncMsg}</p>
+          )}
         </div>
 
         <button

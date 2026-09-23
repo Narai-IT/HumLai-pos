@@ -62,6 +62,16 @@ export default function ManageBranches() {
     setDirty(true);
   };
 
+  // สาขาหลัก = สาขาแรกที่เปิดใช้งานในรายการ — ข้อมูลเก่า เครื่องที่ยังไม่ผูกสาขา และ QR โต๊ะแบบเก่าจะลงที่นี่
+  const mainId = (branches.find(b => b.isActive !== false) || {}).id;
+  const makeMain = (id) => {
+    setBranches(prev => {
+      const target = prev.find(b => String(b.id) === String(id));
+      return target ? [target, ...prev.filter(b => String(b.id) !== String(id))] : prev;
+    });
+    setDirty(true);
+  };
+
   const removeBranch = (b) => {
     const n = userCount(b.id);
     if (n > 0) { alert(`ลบไม่ได้ — ยังมีพนักงาน ${n} คนอยู่ในสาขานี้ ย้ายพนักงานออกก่อน หรือกด "ปิดใช้งาน" แทน`); return; }
@@ -114,6 +124,9 @@ export default function ManageBranches() {
           <p style={{ margin: '0.3rem 0 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
             {branches.length} สาขา &nbsp;•&nbsp; ชื่อ เลขบิล และข้อมูลหัวใบเสร็จของแต่ละสาขา
           </p>
+          <p style={{ margin: '0.2rem 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+            ⭐ สาขาหลัก = ที่ลงของเครื่องที่ยังไม่ได้ผูกสาขา และลิงก์ QR โต๊ะแบบเก่า
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           {saveMsg && (
@@ -163,6 +176,15 @@ export default function ManageBranches() {
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
                       รหัส <code>{b.id}</code> · <Users size={12} /> {userCount(b.id)} คน
                     </div>
+                    {String(b.id) === String(mainId) ? (
+                      <div style={{ marginTop: 6, fontSize: '0.72rem', fontWeight: 800, color: '#b45309', background: 'rgba(234,179,8,0.15)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 6, padding: '0.15rem 0.5rem', display: 'inline-block' }}>
+                        ⭐ สาขาหลัก
+                      </div>
+                    ) : active && (
+                      <button onClick={() => makeMain(b.id)} style={{ marginTop: 6, fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', background: 'transparent', border: '1px dashed rgba(0,0,0,0.2)', borderRadius: 6, padding: '0.15rem 0.5rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                        ตั้งเป็นสาขาหลัก
+                      </button>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
                     <button onClick={() => update(b.id, 'isActive', !active)} style={{ padding: '0.35rem 0.7rem', borderRadius: 8, border: '1px solid', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700, fontSize: '0.75rem', background: active ? 'rgba(34,197,94,0.12)' : 'rgba(0,0,0,0.04)', borderColor: active ? 'rgba(34,197,94,0.35)' : 'rgba(0,0,0,0.15)', color: active ? '#16a34a' : 'var(--text-muted)' }}>

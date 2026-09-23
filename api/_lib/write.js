@@ -3,10 +3,11 @@ import { query, withTransaction, insertRows } from './db.js';
 import { toThaiClock, thaiTimeISO } from './time.js';
 import { toText, toNum } from './rows.js';
 import { deductStock } from './stock.js';
+import { branchForWrite, requestedBranch, branchFilter } from './branch.js';
 
-const ORDER_INSERT_COLS = ['Timestamp','OrderNumber','CustomerName','Address','ItemDetail','DiningOption','Price','TotalAmount','Status','OrderStartTime','CompletionTime','RecordedBy','Quantity','TsLocal'];
-const PAYMENT_COLS = ['timestamp','orderNumber','tableNo','paymentMethod','grandTotal','staff','shiftId','splitDetail'];
-const TABLE_COLS   = ['TableNumber','SessionId','ItemName','ItemNameEn','ItemPrice','Quantity','Options','Timestamp','Status','RecordedBy'];
+const ORDER_INSERT_COLS = ['Timestamp','OrderNumber','CustomerName','Address','ItemDetail','DiningOption','Price','TotalAmount','Status','OrderStartTime','CompletionTime','RecordedBy','Quantity','TsLocal','BranchId'];
+const PAYMENT_COLS = ['timestamp','orderNumber','tableNo','paymentMethod','grandTotal','staff','shiftId','splitDetail','BranchId'];
+const TABLE_COLS   = ['TableNumber','SessionId','ItemName','ItemNameEn','ItemPrice','Quantity','Options','Timestamp','Status','RecordedBy','BranchId'];
 
 // รวมตัวเลือกของรายการอาหารเป็นข้อความบรรทัดเดียว (เหมือน itemOptionText เดิม)
 // ใช้ทั้งออเดอร์จากเครื่องขายและออเดอร์ที่ลูกค้าสั่งเองจากคีออส ให้ได้รูปแบบเดียวกัน
@@ -70,6 +71,8 @@ export async function handleKioskPaidOrder(data) {
   const by      = 'Self-Order';
   const session = String(data.sessionId || Date.now());
   if (items.length === 0) return { success: false, error: 'ไม่มีรายการอาหารในออเดอร์' };
+  // สาขามาจากลิงก์ QR ของโต๊ะ (?b=) — ลิงก์แบบเก่าไม่มี ใช้สาขาหลัก
+  const branchId = await branchForWrite(data);
 
   const result = await withTransaction(async (runner) => {
     // ยิงซ้ำเพราะเน็ตมือถือหลุดกลางทางเป็นเรื่องปกติ — sessionId เดิมต้องได้เลขบิลเดิมกลับไป
@@ -87,15 +90,15 @@ export async function handleKioskPaidOrder(data) {
       const qty    = Number(item.quantity) || 1;
       const unit   = Number(item.food && item.food.price) || 0;
       const dining = (item.dining && item.dining.name) ? item.dining.name : 'ทานที่ร้าน';
-      orderRows.push([time, orderNo, name, addr, (item.food && item.food.name) || '', dining, unit * qty, total, 'Pending', time, null, by, qty, tsLocal]);
+      orderRows.push([time, orderNo, name, addr, (item.food && item.food.name) || '', dining, unit * qty, total, 'Pending', time, null, by, qty, tsLocal, branchId]);
       const opt = itemOptionText(item);
-      if (opt) orderRows.push([time, orderNo, name, addr, '↳ ' + opt, dining, 0, total, 'Pending', time, null, by, null, tsLocal]);
+      if (opt) orderRows.push([time, orderNo, name, addr, '↳ ' + opt, dining, 0, total, 'Pending', time, null, by, null, tsLocal, branchId]);
     }
     await insertRows('Orders', ORDER_INSERT_COLS, orderRows, runner);
 
     // 2) ยอดชำระ — ผูกกับกะที่เปิดอยู่ ให้สรุปกะและรายงานนับยอดจากคีออสด้วย
     const shiftId = await openShiftId(runner);
-    await insertRows('PaymentSummary', PAYMENT_COLS, [[time, orderNo, table, method, total, by, shiftId, null]], runner);
+    await insertRows('PaymentSummary', PAYMENT_COLS, [[time, orderNo, table, method, total, by, shiftId, null, branchId]], runner);
 
     // 3) รายการรายโต๊ะ สถานะ paid — โต๊ะยังโชว์ว่ามีลูกค้า แต่ระบบไม่เก็บเงินซ้ำ
     const tableRows = items.map(item => {
@@ -103,7 +106,7 @@ export async function handleKioskPaidOrder(data) {
       const paidNote = '💳 ชำระแล้ว ' + orderNo;
       return [table, session, (item.food && item.food.name) || '', (item.food && item.food.nameEn) || '',
         Number(item.food && item.food.price) || 0, Number(item.quantity) || 1,
-        opt ? `${opt} | ${paidNote}` : paidNote, time, 'paid', by];
+        opt ? `${opt} | ${paidNote}` : paidNote, time, 'paid', by, branchId];
     });
     await insertRows('TableOrders', TABLE_COLS, tableRows, runner);
 
@@ -132,18 +135,21 @@ export async function addTableOrder(data) {
   const items       = data.items       || [];
   const timestamp   = data.timestamp   || thaiTimeISO();
   const recordedBy  = data.recordedBy  || '';
+  const branchId    = await branchForWrite(data);
   const rows = items.map(item => [
     tableNumber, sessionId, (item.food && item.food.name) || '', (item.food && item.food.nameEn) || '',
     Number(item.food && item.food.price) || 0, Number(item.quantity) || 1,
-    itemOptionText(item), timestamp, 'pending', recordedBy
+    itemOptionText(item), timestamp, 'pending', recordedBy, branchId
   ]);
   await insertRows('TableOrders', TABLE_COLS, rows);
   return { success: true, sessionId };
 }
 
-export async function clearAllTableOrders() {
+export async function clearAllTableOrders(data = {}) {
   // ล้างทุกแถวรวมรายการที่ลูกค้าจ่ายมาแล้วจากคีออส — ของพวกนั้นถูกบันทึกเป็นบิลตั้งแต่ตอนจ่ายแล้ว
-  await query('DELETE FROM dbo.TableOrders');
+  // ระบุสาขามา = ล้างเฉพาะโต๊ะของสาขานั้น ไม่ไปล้างโต๊ะของสาขาอื่น
+  const branchId = requestedBranch(data);
+  await query(`DELETE FROM dbo.TableOrders WHERE 1 = 1${branchFilter(branchId)}`, { branchId });
   return { success: true };
 }
 
@@ -151,10 +157,12 @@ export async function clearTableOrders(data) {
   const tableNumber = String(data.tableNumber || '');
   // includePaid = ปิดโต๊ะจบจริง ๆ → ล้างรายการที่จ่ายแล้วด้วย
   const includePaid = data.includePaid === true;
+  // โต๊ะ 1 ของแต่ละสาขาคือคนละโต๊ะ — ต้องล้างเฉพาะของสาขาที่ขอ
+  const branchId = requestedBranch(data);
   await query(
-    `DELETE FROM dbo.TableOrders WHERE TableNumber = @t
+    `DELETE FROM dbo.TableOrders WHERE TableNumber = @t${branchFilter(branchId)}
        ${includePaid ? '' : `AND ISNULL([Status], '') <> 'paid'`}`,
-    { t: tableNumber }
+    { t: tableNumber, branchId }
   );
   return { success: true };
 }
@@ -165,9 +173,9 @@ export async function deleteTableOrderItem(data) {
       WHERE RowId = (SELECT TOP (1) RowId FROM dbo.TableOrders
                       WHERE TableNumber = @t
                         AND SessionId = @s
-                        AND ISNULL(ItemName, '') = @n
+                        AND ISNULL(ItemName, '') = @n${branchFilter(requestedBranch(data))}
                       ORDER BY RowId DESC)`,
-    { t: String(data.tableNumber || ''), s: String(data.sessionId || ''), n: String(data.itemName || '') }
+    { t: String(data.tableNumber || ''), s: String(data.sessionId || ''), n: String(data.itemName || ''), branchId: requestedBranch(data) }
   );
   return { success: res.rowsAffected[0] > 0 };
 }
@@ -175,8 +183,8 @@ export async function deleteTableOrderItem(data) {
 export async function moveTable(data) {
   // ย้ายทั้งโต๊ะ = ลูกค้าย้ายที่นั่งจริง จึงยกรายการที่จ่ายมาแล้วจากคีออสไปด้วย
   const res = await query(
-    `UPDATE dbo.TableOrders SET TableNumber = @to WHERE TableNumber = @from`,
-    { to: String(data.toTable || ''), from: String(data.fromTable || '') }
+    `UPDATE dbo.TableOrders SET TableNumber = @to WHERE TableNumber = @from${branchFilter(requestedBranch(data))}`,
+    { to: String(data.toTable || ''), from: String(data.fromTable || ''), branchId: requestedBranch(data) }
   );
   return { success: res.rowsAffected[0] > 0 };
 }
@@ -193,9 +201,9 @@ export async function moveTableItems(data) {
 
   const res = await query(
     `SELECT RowId, SessionId, ItemName, [Options], ItemPrice FROM dbo.TableOrders
-      WHERE TableNumber = @from AND ISNULL([Status], '') <> 'paid'
+      WHERE TableNumber = @from AND ISNULL([Status], '') <> 'paid'${branchFilter(requestedBranch(data))}
       ORDER BY RowId ASC`,
-    { from: fromTable }
+    { from: fromTable, branchId: requestedBranch(data) }
   );
 
   const moving = [];
@@ -215,6 +223,8 @@ export async function moveTableItems(data) {
 // rows = อาเรย์ 13 ช่องเรียงตามหัวตารางเดิม (หน้าบ้านส่งมาแบบนี้ตั้งแต่ยุคชีท)
 export async function insertOrder(data) {
   const rows = Array.isArray(data.rows) ? data.rows : [];
+  // บิลค้างในเครื่องที่ส่งซ้ำจากหน้าเว็บรุ่นเก่าไม่มี branchId → ลงสาขาหลัก
+  const branchId = await branchForWrite(data);
   await withTransaction(async (runner) => {
     if (rows.length > 0) {
       const values = rows.map(r => {
@@ -224,7 +234,7 @@ export async function insertOrder(data) {
         return [
           toText(cells[0]), toText(cells[1]), toText(cells[2]), toText(cells[3]), toText(cells[4]),
           toText(cells[5]), toNum(cells[6]), toNum(cells[7]), toText(cells[8]), toText(cells[9]),
-          toText(cells[10]), toText(cells[11]), toNum(cells[12]), toThaiClock(cells[0])
+          toText(cells[10]), toText(cells[11]), toNum(cells[12]), toThaiClock(cells[0]), branchId
         ];
       });
       await insertRows('Orders', ORDER_INSERT_COLS, values, runner);
@@ -234,7 +244,7 @@ export async function insertOrder(data) {
       const p = data.payment;
       await insertRows('PaymentSummary', PAYMENT_COLS, [[
         thaiTimeISO(), toText(p.orderNumber), toText(p.tableNo), toText(p.paymentMethod),
-        Number(p.grandTotal) || 0, toText(p.staff), toText(p.shiftId), toText(p.splitDetail)
+        Number(p.grandTotal) || 0, toText(p.staff), toText(p.shiftId), toText(p.splitDetail), branchId
       ]], runner);
     }
   });
@@ -327,7 +337,8 @@ export async function savePaymentRecord(data) {
   const ts = data.timestamp ? String(data.timestamp) : thaiTimeISO();
   await insertRows('PaymentSummary', PAYMENT_COLS, [[
     ts, toText(data.orderNumber), toText(data.tableNo), toText(data.paymentMethod),
-    Number(data.grandTotal) || 0, toText(data.staff), toText(data.shiftId), toText(data.splitDetail)
+    Number(data.grandTotal) || 0, toText(data.staff), toText(data.shiftId), toText(data.splitDetail),
+    await branchForWrite(data)
   ]]);
   return { success: true };
 }

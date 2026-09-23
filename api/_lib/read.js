@@ -2,6 +2,7 @@
 // รูปแบบคำตอบของทุก action เหมือนของเดิมทุกตัวอักษร หน้าบ้านจึงใช้ต่อได้ทันที
 import { query } from './db.js';
 import { dayStart, dayEnd } from './time.js';
+import { requestedBranch, branchFilter, defaultBranchId } from './branch.js';
 import {
   mapOrder, mapTableOrder, mapMenu, mapCategory, mapPromotion, mapUser, mapBranch, mapPrinter,
   mapDiscount, mapLiquor, mapWaste, mapApproval, mapOutstanding, mapShift, mapPayment,
@@ -27,11 +28,13 @@ const SHIFT_COLS   = cols(['id','openTime','closeTime','openStaff','closeStaff',
 const PAYMENT_COLS = cols(['timestamp','orderNumber','tableNo','paymentMethod','grandTotal','staff','shiftId','splitDetail']);
 
 // N แถวล่าสุดของตารางที่โตเรื่อย ๆ แต่ยังส่งกลับเรียงเก่า→ใหม่เหมือนลำดับแถวในชีท
-async function lastRows(table, colList, mapper, limit) {
+// branchId = กรองเฉพาะแถวของสาขานั้น ('' = ทุกสาขา เหมือนเดิม)
+async function lastRows(table, colList, mapper, limit, branchId = '') {
+  const where = `WHERE 1 = 1${branchFilter(branchId)}`;
   const sqlText = limit
-    ? `SELECT ${colList} FROM (SELECT TOP (@limit) RowId, ${colList} FROM dbo.${table} ORDER BY RowId DESC) t ORDER BY RowId ASC`
-    : `SELECT ${colList} FROM dbo.${table} ORDER BY RowId ASC`;
-  const res = await query(sqlText, limit ? { limit } : {});
+    ? `SELECT ${colList} FROM (SELECT TOP (@limit) RowId, ${colList} FROM dbo.${table} ${where} ORDER BY RowId DESC) t ORDER BY RowId ASC`
+    : `SELECT ${colList} FROM dbo.${table} ${where} ORDER BY RowId ASC`;
+  const res = await query(sqlText, { ...(limit ? { limit } : {}), branchId });
   return res.recordset.map(mapper);
 }
 
@@ -46,13 +49,23 @@ export const getSettings = async () => {
   try { return JSON.parse(res.recordset[0].value); } catch { return null; }
 };
 
+// ผังโต๊ะของแต่ละสาขา — { [branchId]: [โต๊ะ...] } เก็บในแถว Settings 'branch_tables'
+export const getBranchTables = async () => {
+  const res = await query(`SELECT [value] FROM dbo.Settings WHERE [key] = 'branch_tables'`);
+  if (!res.recordset.length) return {};
+  try {
+    const v = JSON.parse(res.recordset[0].value);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+  } catch { return {}; }
+};
+
 // ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
 // ต้องไม่ทำให้ getStatic ทั้งก้อนพัง ไม่งั้นหน้าร้านโหลดเมนูไม่ขึ้น
 const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() => []);
 
 // ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน
 export async function buildStaticData() {
-  const [categories, menu, promotions, users, printers, discounts, settings, branches] = await Promise.all([
+  const [categories, menu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch] = await Promise.all([
     allRows('Categories', CATEGORY_COLS, mapCategory),
     allRows('Menu', MENU_COLS, mapMenu),
     allRows('Promotions', PROMO_COLS, mapPromotion),
@@ -60,33 +73,40 @@ export async function buildStaticData() {
     allRows('Printers', PRINTER_COLS, mapPrinter),
     allRows('Discounts', DISCOUNT_COLS, mapDiscount),
     getSettings(),
-    getBranches()
+    getBranches(),
+    getBranchTables(),
+    defaultBranchId()
   ]);
-  return { categories, menu, promotions, users, printers, discounts, settings, branches };
+  return { categories, menu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch };
 }
 
-const getTableOrders = () => lastRows('TableOrders', TABLE_COLS, mapTableOrder);
+const getTableOrders = (branchId = '') => lastRows('TableOrders', TABLE_COLS, mapTableOrder, 0, branchId);
 
 export async function handleGet(action, params) {
   switch (action) {
     // ── ข้อมูลร้อน: หน้าบ้าน poll ทุก 20 วิ ──
+    // ?branch= → เฉพาะโต๊ะ/บิลของสาขานั้น (หน้าร้านแต่ละสาขาเห็นแค่ของตัวเอง)
     case 'getLive': {
+      const branchId = requestedBranch(params);
       const [tableOrders, orders, payments] = await Promise.all([
-        getTableOrders(),
-        lastRows('Orders', ORDER_COLS, mapOrder, 300),
-        lastRows('PaymentSummary', PAYMENT_COLS, mapPayment, 300)
+        getTableOrders(branchId),
+        lastRows('Orders', ORDER_COLS, mapOrder, 300, branchId),
+        lastRows('PaymentSummary', PAYMENT_COLS, mapPayment, 300, branchId)
       ]);
       return { tableOrders, orders, payments };
     }
 
     // ── คิวใบครัวสำหรับ Print Server: เฉพาะบิลที่ยังไม่เสร็จ ──
+    // ?branch= → Print Server ของแต่ละสาขาพิมพ์เฉพาะใบครัวของร้านตัวเอง
     case 'getKitchenQueue': {
+      const branchId = requestedBranch(params);
       const res = await query(
         `SELECT ${ORDER_COLS} FROM (
-           SELECT TOP (200) RowId, ${ORDER_COLS} FROM dbo.Orders ORDER BY RowId DESC
+           SELECT TOP (200) RowId, ${ORDER_COLS} FROM dbo.Orders WHERE 1 = 1${branchFilter(branchId)} ORDER BY RowId DESC
          ) t
-         WHERE OrderNumber IN (SELECT OrderNumber FROM (SELECT TOP (200) OrderNumber, [Status] FROM dbo.Orders ORDER BY RowId DESC) p WHERE LOWER(p.[Status]) = 'pending' AND p.OrderNumber IS NOT NULL)
-         ORDER BY RowId ASC`
+         WHERE OrderNumber IN (SELECT OrderNumber FROM (SELECT TOP (200) OrderNumber, [Status] FROM dbo.Orders WHERE 1 = 1${branchFilter(branchId)} ORDER BY RowId DESC) p WHERE LOWER(p.[Status]) = 'pending' AND p.OrderNumber IS NOT NULL)
+         ORDER BY RowId ASC`,
+        { branchId }
       );
       return { orders: res.recordset.map(mapOrder) };
     }
@@ -106,9 +126,9 @@ export async function handleGet(action, params) {
     case 'getTableOrders': {
       const res = await query(
         `SELECT ${TABLE_COLS} FROM dbo.TableOrders
-          WHERE TableNumber = @tableNumber AND ISNULL([Status], '') <> 'paid'
+          WHERE TableNumber = @tableNumber AND ISNULL([Status], '') <> 'paid'${branchFilter(requestedBranch(params))}
           ORDER BY RowId ASC`,
-        { tableNumber: String(params.tableNumber || '') }
+        { tableNumber: String(params.tableNumber || ''), branchId: requestedBranch(params) }
       );
       return { success: true, orders: res.recordset.map(mapTableOrder) };
     }
