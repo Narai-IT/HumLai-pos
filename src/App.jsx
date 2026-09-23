@@ -48,12 +48,10 @@ const branchPrefix = (b) => {
   return p || 'POS';
 };
 
-// บังคับล็อกอิน — เปิด/ปิดได้ที่หลังบ้าน > ตั้งค่าร้าน (pos_settings.requireLogin)
-// ปิดอยู่ = เข้าเป็นแอดมินอัตโนมัติแบบเดิม (ร้านเดียวยังไม่ได้แจกรหัสพนักงาน)
-// เปิดแล้ว = ทุกเครื่องต้องล็อกอิน สาขาของเครื่องมาจากพนักงานที่ล็อกอิน
-const loginRequired = () => {
-  try { return JSON.parse(localStorage.getItem('pos_settings') || '{}').requireLogin === true; } catch { return false; }
-};
+// หน้าพนักงานต้องล็อกอินเสมอ — ยกเว้นระบบที่ยังไม่มีพนักงานคนไหนตั้งรหัสเลย (ติดตั้งใหม่)
+// ซึ่งหน้าล็อกอินจะมีปุ่มเข้าแบบตั้งค่าครั้งแรกเป็น DEFAULT_ADMIN ให้ไปสร้างพนักงานก่อน
+// (สวิตช์ requireLogin ในตั้งค่าร้านยังมีผลที่ฝั่ง API: ให้เซิร์ฟเวอร์ปฏิเสธคำขอที่ไม่ได้ล็อกอิน)
+const hasPin = (u) => u && (u.hasPin === true || String(u.pin ?? '').trim() !== '');
 const DEFAULT_ADMIN = { id: 'admin', username: 'admin', branch: 'admin', canCheckout: true, isAdmin: true };
 
 
@@ -123,7 +121,7 @@ function App() {
   });
   // ให้ล็อกอินใหม่ทุกครั้งที่เปิดโปรแกรม — ไม่กู้สถานะล็อกอินเดิมจาก localStorage
   // (ยังไม่เปิดบังคับล็อกอิน → ข้ามหน้าล็อกอิน เข้าเป็นแอดมินทันที)
-  const [currentUser, setCurrentUser] = useState(() => (loginRequired() ? null : DEFAULT_ADMIN));
+  const [currentUser, setCurrentUser] = useState(null);
   // ล้าง key เก่าที่เคยจำล็อกอินไว้ (เผื่อเครื่องที่อัปเดตมาจากเวอร์ชันก่อน)
   React.useEffect(() => {
     try { localStorage.removeItem('current_user'); } catch {}
@@ -170,8 +168,7 @@ function App() {
 
   const handleLogout = () => {
     setAuthToken('');
-    // ระหว่างยังไม่บังคับล็อกอิน การออกจากระบบแค่รีเซ็ตกลับเป็นแอดมิน ไม่เด้งไปหน้าล็อกอิน
-    setCurrentUser(loginRequired() ? null : DEFAULT_ADMIN);
+    setCurrentUser(null);
     loginAtRef.current = null;
     try { localStorage.removeItem('current_user'); } catch {}
     setTableNumber('');
@@ -307,18 +304,10 @@ function App() {
     return () => window.removeEventListener('pos_settings_changed', handler);
   }, []);
 
-  // เปิด/ปิดบังคับล็อกอินจากหลังบ้าน (ดึงตั้งค่าใหม่ทุกนาที) → มีผลกับเครื่องที่เปิดค้างไว้ด้วย
-  // เปิด: เครื่องที่เข้าเป็นแอดมินอัตโนมัติอยู่ถูกส่งกลับหน้าล็อกอิน  ปิด: หน้าล็อกอินหายไป
-  React.useEffect(() => {
-    const required = posSettings?.requireLogin === true;
-    if (required && currentUser === DEFAULT_ADMIN) setCurrentUser(null);
-    if (!required && !currentUser) setCurrentUser(DEFAULT_ADMIN);
-  }, [posSettings, currentUser]);
-
   // เซิร์ฟเวอร์ตอบว่า token หมดอายุ/ไม่มี (เปิดบังคับล็อกอินอยู่) → กลับหน้าล็อกอิน
   React.useEffect(() => {
     const onAuthRequired = () => {
-      if (kioskPathRef.current || !loginRequired()) return;
+      if (kioskPathRef.current) return;
       setAuthToken('');
       setCurrentUser(null);
       setSaveAlert({ type: 'error', msg: '🔒 หมดเวลาใช้งาน หรือยังไม่ได้ล็อกอิน — กรุณาล็อกอินใหม่' });
@@ -1389,6 +1378,8 @@ function App() {
         branches={branches}
         deviceBranch={deviceBranch}
         onChangeBranch={() => navigate('/')}
+        setupMode={users.length > 0 && !users.some(hasPin)}
+        onSetupLogin={() => handleLogin(DEFAULT_ADMIN)}
       />
     );
   }
