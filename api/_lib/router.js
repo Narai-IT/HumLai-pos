@@ -9,7 +9,7 @@ import { deductStock, recordStockIn, saveBOM, upsertIngredient, deleteIngredient
 import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
-import { issueTaxInvoice, cancelTaxInvoice, listTaxInvoices } from './taxInvoice.js';
+import { issueTaxInvoice, cancelTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
 export const BUILD = '2026-09-23-tax-invoice';
 
@@ -18,6 +18,8 @@ const POST_ACTIONS = {
   kioskPaidOrder:          write.handleKioskPaidOrder,
   issueTaxInvoice,
   cancelTaxInvoice,
+  saveTaxCustomer,
+  deleteTaxCustomer,
   addTableOrder:           write.addTableOrder,
   clearAllTableOrders:     write.clearAllTableOrders,
   clearTableOrders:        write.clearTableOrders,
@@ -75,6 +77,7 @@ async function handleExtraGet(action, params = {}) {
     case 'nextId':            return { success: true, ids: await nextIds(query, Math.min(50, Math.max(1, Number(params.count) || 1))) };
     case 'getSalesReport':    return await generateSalesReport();
     case 'getTaxInvoices':    return { success: true, invoices: await listTaxInvoices() };
+    case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };
     case 'getStock':          return await getStockLevels(String(params.branch || '').trim());
     case 'getIngredients':    return await getIngredientsList();
     case 'resetAllSheetData': return await admin.resetAllSheetData();

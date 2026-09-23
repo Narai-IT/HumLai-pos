@@ -1,4 +1,4 @@
-// ── ใบกำกับภาษีเต็มรูป (ออกจากหน้าหลังบ้าน > รายงาน > รายงานยอดขาย) ──
+// ── ใบกำกับภาษีเต็มรูป (ออกจากหน้าหลังบ้าน > รายงาน > รายงานยอดขาย · พิมพ์ออกเครื่องใบเสร็จ) ──
 //
 // ยอดเงิน/รายการคำนวณที่เซิร์ฟเวอร์จากบิลจริงในตาราง Orders — ไม่เชื่อตัวเลขที่หน้าเว็บส่งมา
 // ราคาขายของร้านรวม VAT แล้ว (ตั้ง VAT ในหน้าตั้งค่าร้าน = บวกเพิ่มตอนคิดเงิน ยอดบิลก็รวม VAT แล้วเหมือนกัน)
@@ -161,7 +161,60 @@ export async function issueTaxInvoice(data) {
     );
     const saved = await runner(`SELECT ${INVOICE_COLS} FROM dbo.TaxInvoices WHERE invoiceNo = @invoiceNo`, { invoiceNo });
     return { success: true, invoice: mapInvoice(saved.recordset[0]) };
+  }).then(async (result) => {
+    // จำลูกค้าไว้ใช้ครั้งหน้า — บันทึกไม่ได้ก็ไม่ทำให้การออกใบล้ม
+    if (result.success && !result.existing) {
+      await upsertCustomer({ taxId: buyerTaxId, branch: buyerBranch, name: buyerName, address: buyerAddress, phone: text(buyer.phone, 60) }, true)
+        .catch(err => console.error('saveTaxCustomer:', err));
+    }
+    return result;
   });
+}
+
+// ── ลูกค้าใบกำกับภาษี ──
+const mapCustomer = (r) => ({
+  taxId: r.taxId, branch: r.buyerBranch || 'สำนักงานใหญ่', name: r.name || '', address: r.address || '',
+  phone: r.phone || '', useCount: Number(r.useCount) || 0, lastUsedAt: r.lastUsedAt || ''
+});
+
+async function upsertCustomer(c, used) {
+  const taxId = text(c.taxId, 20).replace(/[\s-]/g, '');
+  const branch = text(c.branch, 100) || 'สำนักงานใหญ่';
+  if (!/^\d{13}$/.test(taxId)) throw new Error('เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก');
+  const params = { taxId, branch, name: text(c.name, 300), address: text(c.address, 1000), phone: text(c.phone, 60), at: thaiTimeISO(), inc: used ? 1 : 0 };
+  const res = await query(
+    `UPDATE dbo.TaxCustomers SET name = @name, [address] = @address, phone = @phone,
+        useCount = ISNULL(useCount, 0) + @inc, lastUsedAt = CASE WHEN @inc = 1 THEN @at ELSE lastUsedAt END
+      WHERE taxId = @taxId AND buyerBranch = @branch`, params);
+  if (!res.rowsAffected || !res.rowsAffected[0]) {
+    await query(
+      `INSERT INTO dbo.TaxCustomers (taxId, buyerBranch, name, [address], phone, useCount, lastUsedAt)
+       VALUES (@taxId, @branch, @name, @address, @phone, @inc, @at)`, params);
+  }
+}
+
+// ตารางยังไม่ถูกสร้าง (ยังไม่รัน sql:init) = ว่าง
+export async function listTaxCustomers() {
+  try {
+    const res = await query(`SELECT TOP (3000) taxId, buyerBranch, name, [address], phone, useCount, lastUsedAt
+                               FROM dbo.TaxCustomers ORDER BY lastUsedAt DESC, name ASC`);
+    return res.recordset.map(mapCustomer);
+  } catch {
+    return [];
+  }
+}
+
+export async function saveTaxCustomer(data) {
+  const c = data.customer || {};
+  if (!text(c.name, 300) || !text(c.address, 1000)) return { success: false, error: 'กรุณากรอกชื่อและที่อยู่' };
+  try { await upsertCustomer(c, false); } catch (err) { return { success: false, error: err.message }; }
+  return { success: true };
+}
+
+export async function deleteTaxCustomer(data) {
+  await query(`DELETE FROM dbo.TaxCustomers WHERE taxId = @taxId AND buyerBranch = @branch`,
+    { taxId: text(data.taxId, 20), branch: text(data.branch, 100) || 'สำนักงานใหญ่' });
+  return { success: true };
 }
 
 // ยกเลิกใบกำกับ — ไม่ลบทิ้ง (เลขที่ออกไปแล้วต้องตรวจย้อนได้) แค่ทำเครื่องหมายไว้

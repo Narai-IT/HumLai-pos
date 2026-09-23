@@ -541,3 +541,17 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TaxInvoices_Order' AND object_id = OBJECT_ID('dbo.TaxInvoices'))
   CREATE INDEX IX_TaxInvoices_Order ON dbo.TaxInvoices (orderNumber);
 GO
+
+-- ลูกค้าที่เคยขอใบกำกับภาษี — ออกใบแล้วบันทึก/อัปเดตให้เอง ครั้งหน้าค้นหาจากชื่อหรือเลขผู้เสียภาษีแล้วดึงมาใช้ได้
+IF OBJECT_ID('dbo.TaxCustomers', 'U') IS NULL
+CREATE TABLE dbo.TaxCustomers (
+  taxId        NVARCHAR(20)   NOT NULL,
+  buyerBranch  NVARCHAR(100)  NOT NULL,
+  name         NVARCHAR(300)  NULL,
+  [address]    NVARCHAR(1000) NULL,
+  phone        NVARCHAR(60)   NULL,
+  useCount     INT            NULL,
+  lastUsedAt   NVARCHAR(40)   NULL,
+  CONSTRAINT PK_TaxCustomers PRIMARY KEY (taxId, buyerBranch)
+);
+GO
