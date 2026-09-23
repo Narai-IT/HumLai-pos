@@ -10,6 +10,30 @@ import pkg from 'node-thermal-printer';
 
 const { printer: ThermalPrinter, types: PrinterTypes } = pkg;
 
+// ── หัวใบครัว: ประเภท (ทานที่ร้าน/ห่อกลับบ้าน/เดลิเวอรี) + เบอร์โต๊ะ ──
+// ประเภทมาจากรายการอาหาร (dining) เบอร์โต๊ะมาจากชื่อลูกค้า/ที่อยู่ที่ขึ้นต้นด้วย "โต๊ะ ..."
+const diningOf = (orderData) => {
+  const items = Array.isArray(orderData.items) ? orderData.items : [];
+  for (const item of items) {
+    const d = item && item.dining;
+    const name = typeof d === 'string' ? d : (d && d.name);
+    if (name && String(name).trim()) return String(name).trim();
+  }
+  return String(orderData.dining || '').trim();
+};
+const tableOf = (orderData, dining) => {
+  const c = orderData.customerDetails || {};
+  for (const text of [c.address, c.name]) {
+    const m = String(text || '').match(/^โต๊ะ\s*(.+?)(?:\s*\(.*\))?\s*$/);
+    if (!m) continue;
+    const table = m[1].trim();
+    // หน้าลูกค้าสั่งเองแบบไม่มีเลขโต๊ะ ลงชื่อ "ทานที่ร้าน" / "Takehome" ไว้ — ไม่ใช่เบอร์โต๊ะจริง
+    if (!table || table === dining || /^(takehome|ทานที่ร้าน|ห่อกลับบ้าน)$/i.test(table)) return '';
+    return table;
+  }
+  return '';
+};
+
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
 // ให้ผู้เรียกตัดสินใจเองว่าจะตอบ HTTP อะไรหรือจะลองใหม่ไหม
 export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' }) => {
@@ -53,10 +77,14 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     }
     printer.println("--------------------------------");
 
-    if (printerType === 'kitchen') {
+    const isKitchen = printerType === 'kitchen';
+    const kitchenTable = isKitchen ? tableOf(orderData, diningOf(orderData)) : '';
+    if (isKitchen) {
+      // ตัวใหญ่ให้ครัวเห็นทันทีว่าทำให้ใคร: ประเภท + เบอร์โต๊ะ
       printer.setTextDoubleHeight();
       printer.setTextDoubleWidth();
-      printer.println("ใบสั่งทำอาหาร (KITCHEN)");
+      printer.println(diningOf(orderData) || 'ทานที่ร้าน');
+      if (kitchenTable) printer.println(`โต๊ะ ${kitchenTable}`);
       printer.setTextNormal();
     } else if (isPreBill) {
       printer.println("ใบแจ้งยอด (CHECK BILL)");
@@ -69,7 +97,8 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     printer.alignLeft();
     printer.println(`Order No: ${orderData.orderNumber || '-'}`);
     printer.println(`Date: ${new Date().toLocaleString('th-TH')}`);
-    if (orderData.customerDetails?.name) {
+    // ใบครัว: หัวใบบอกโต๊ะแล้ว ไม่พิมพ์ "โต๊ะ ..." ซ้ำ (เดลิเวอรียังพิมพ์ชื่อลูกค้า)
+    if (orderData.customerDetails?.name && !(isKitchen && /^โต๊ะ/.test(String(orderData.customerDetails.name)))) {
       printer.println(`Customer: ${orderData.customerDetails.name}`);
     }
     printer.println("--------------------------------");
