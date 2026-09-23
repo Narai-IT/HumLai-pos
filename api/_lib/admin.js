@@ -204,14 +204,16 @@ export const savePrinters = async (data) => {
   const branchId = await branchForWrite(data);
   const main = await defaultBranchId();
   const rows = (data.printers || []).map(p => ([
-    toText(p.id), toText(p.name), toText(p.ip), toText(p.type), p.printMode || 'combined', branchId
+    toText(p.id), toText(p.name), toText(p.ip), toText(p.type), p.printMode || 'combined', branchId,
+    // หมวดอาหารที่เครื่องนี้พิมพ์ ([] = ทุกหมวด)
+    JSON.stringify(Array.isArray(p.categories) ? p.categories.map(String) : [])
   ]));
   await withTransaction(async (runner) => {
     await runner(
       `DELETE FROM dbo.Printers WHERE BranchId = @b OR (BranchId IS NULL AND @b = @main)`,
       { b: branchId || '', main: main || '' }
     );
-    await insertRows('Printers', ['id','name','ip','type','printMode','BranchId'], rows, runner);
+    await insertRows('Printers', ['id','name','ip','type','printMode','BranchId','categories'], rows, runner);
   });
   return { success: true, saved: rows.length, branchId };
 };

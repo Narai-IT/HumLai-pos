@@ -1,8 +1,10 @@
 // ===============================================================
 // จับคู่รายการอาหารกับเครื่องพิมพ์ แล้วสั่งพิมพ์แยกใบตามเครื่อง
 // ---------------------------------------------------------------
-// เมนูแต่ละรายการตั้ง printerId ได้ที่ ตั้งค่าแอดมิน > จัดการเมนู
-// ถ้าไม่ได้ตั้ง จะตกไปที่เครื่องพิมพ์ประเภท "ครัว" เป็นค่าเริ่มต้น
+// ลำดับการเลือกเครื่องพิมพ์ของแต่ละรายการ:
+//   1) เมนูตั้ง printerId ไว้ (จัดการเมนู / เมนูรายสาขา)
+//   2) เครื่องครัว/บาร์ที่เลือกหมวดของเมนูนี้ไว้ (ตั้งค่าเครื่องพิมพ์ > หมวดที่พิมพ์) — ตรงหลายเครื่อง = ออกทุกเครื่อง
+//   3) เครื่องครัวที่ไม่ได้จำกัดหมวด → บาร์ที่ไม่จำกัดหมวด → เครื่องครัวเครื่องแรก
 // ===============================================================
 
 import { sendPrintJob } from './printServer';
@@ -72,6 +74,33 @@ const fallbackKitchenPrinter = (printers) =>
   printers.find(p => p.ip) ||
   null;
 
+// หมวดที่เครื่องพิมพ์เลือกไว้ ([] = ไม่จำกัด พิมพ์ได้ทุกหมวด)
+export const printerCategories = (printer) =>
+  (Array.isArray(printer && printer.categories) ? printer.categories : []).map(String).filter(Boolean);
+
+const CATEGORY_PRINTER_TYPES = ['kitchen', 'bar'];
+
+// เครื่องพิมพ์ที่รายการนี้ต้องไปออก (อาจมากกว่า 1 เครื่อง) — ดูลำดับที่หัวไฟล์
+export const printersForMenuItem = (menuItem, printers = getPrinters()) => {
+  const byId = getPrinterById(menuItem?.printerId, printers);
+  if (byId) return [byId];
+
+  // ใช้หมวดหลักของเมนู (หมวดเสริมมีไว้แสดงหน้าขายเท่านั้น ไม่งั้นเมนูที่อยู่หลายหมวดจะพิมพ์ซ้ำ)
+  const category = String(menuItem?.category || '');
+  if (category) {
+    const byCategory = printers.filter(p =>
+      p.ip && CATEGORY_PRINTER_TYPES.includes(p.type) && printerCategories(p).includes(category)
+    );
+    if (byCategory.length > 0) return byCategory;
+  }
+
+  const general =
+    printers.find(p => p.ip && p.type === 'kitchen' && printerCategories(p).length === 0) ||
+    printers.find(p => p.ip && p.type === 'bar' && printerCategories(p).length === 0) ||
+    fallbackKitchenPrinter(printers);
+  return general ? [general] : [];
+};
+
 // แบ่งรายการอาหารออกเป็นกลุ่มตามเครื่องพิมพ์ที่ต้องไป
 export const groupItemsByPrinter = (items = [], allMenu = [], printers = getPrinters()) => {
   const groups = new Map();
@@ -80,15 +109,17 @@ export const groupItemsByPrinter = (items = [], allMenu = [], printers = getPrin
   items.forEach(item => {
     const name = stripQty(item.isFlattened ? item.name : item.food?.name);
     const menuItem = allMenu.find(m => stripQty(m.name) === name || (m.nameEn && stripQty(m.nameEn) === name));
-    const printer = getPrinterById(menuItem?.printerId, printers) || fallbackKitchenPrinter(printers);
+    const targets = printersForMenuItem(menuItem, printers);
 
-    if (!printer) {
+    if (targets.length === 0) {
       unrouted.push(item);
       return;
     }
-    const key = String(printer.id);
-    if (!groups.has(key)) groups.set(key, { printer, items: [] });
-    groups.get(key).items.push(item);
+    targets.forEach(printer => {
+      const key = String(printer.id);
+      if (!groups.has(key)) groups.set(key, { printer, items: [] });
+      groups.get(key).items.push(item);
+    });
   });
 
   return { groups: Array.from(groups.values()), unrouted };

@@ -175,13 +175,29 @@ const printerByType = (type) => printersWithIp().find(p => p.type === type) || n
 const fallbackKitchenPrinter = () =>
   printerByType('kitchen') || printerByType('bar') || printersWithIp()[0] || null;
 
-const printerForItem = (item, menu) => {
+const printerCategories = (p) => (Array.isArray(p && p.categories) ? p.categories : []).map(String).filter(Boolean);
+
+// เมนูตั้งเครื่องไว้ → เครื่องครัว/บาร์ที่เลือกหมวดของเมนูนี้ (ทุกเครื่องที่ตรง) → เครื่องครัวที่ไม่จำกัดหมวด
+const printersForItem = (item, menu) => {
   const name = stripQty(item.name);
   const menuItem = menu.find(m => stripQty(m.name) === name || (m.nameEn && stripQty(m.nameEn) === name));
   const byId = menuItem && menuItem.printerId
     ? printersWithIp().find(p => String(p.id) === String(menuItem.printerId))
     : null;
-  return byId || fallbackKitchenPrinter();
+  if (byId) return [byId];
+
+  const category = String((menuItem && menuItem.category) || '');
+  if (category) {
+    const byCategory = printersWithIp().filter(p =>
+      ['kitchen', 'bar'].includes(p.type) && printerCategories(p).includes(category));
+    if (byCategory.length > 0) return byCategory;
+  }
+
+  const general =
+    printersWithIp().find(p => p.type === 'kitchen' && printerCategories(p).length === 0) ||
+    printersWithIp().find(p => p.type === 'bar' && printerCategories(p).length === 0) ||
+    fallbackKitchenPrinter();
+  return general ? [general] : [];
 };
 
 const printsSeparately = (printer) =>
@@ -191,11 +207,11 @@ const printsSeparately = (printer) =>
 const printOrder = async (order, menu) => {
   const groups = new Map();
   (order.items || []).forEach(item => {
-    const printer = printerForItem(item, menu);
-    if (!printer) return;
-    const key = String(printer.id || printer.ip);
-    if (!groups.has(key)) groups.set(key, { printer, items: [] });
-    groups.get(key).items.push(item);
+    printersForItem(item, menu).forEach(printer => {
+      const key = String(printer.id || printer.ip);
+      if (!groups.has(key)) groups.set(key, { printer, items: [] });
+      groups.get(key).items.push(item);
+    });
   });
 
   if (groups.size === 0) {
