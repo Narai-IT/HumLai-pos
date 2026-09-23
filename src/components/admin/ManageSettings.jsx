@@ -138,7 +138,7 @@ const ManageSettings = ({ users = [] }) => {
 
   // เปิดบังคับล็อกอินได้เมื่อมีแอดมินที่ล็อกอินได้จริงอย่างน้อย 1 คน กันล็อกตัวเองออกจากระบบ
   const canRequireLogin = (users || []).some(u =>
-    (u.isAdmin === true || u.isAdmin === 'TRUE') && String(u.pin || '').trim() !== ''
+    (u.isAdmin === true || u.isAdmin === 'TRUE') && (u.hasPin === true || String(u.pin || '').trim() !== '')
   );
 
   const handleSave = () => {

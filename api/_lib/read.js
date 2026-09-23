@@ -72,7 +72,8 @@ export async function buildStaticData(branchId = '') {
     allRows('Categories', CATEGORY_COLS, mapCategory),
     allRows('Menu', MENU_COLS, mapMenu),
     allRows('Promotions', PROMO_COLS, mapPromotion),
-    allRows('Users', USER_COLS, mapUser),
+    // ไม่ส่งรหัสพนักงานออกไป — ใครก็เรียก getStatic ได้ (หน้าลูกค้าสั่งเอง) รหัสเช็กที่เซิร์ฟเวอร์ตอนล็อกอิน
+    allRows('Users', USER_COLS, mapUser).then(list => list.map(({ pin, ...u }) => ({ ...u, hasPin: String(pin ?? '') !== '' }))),
     allRows('Printers', PRINTER_COLS, mapPrinter),
     allRows('Discounts', DISCOUNT_COLS, mapDiscount),
     getSettings(),
@@ -119,6 +120,10 @@ export async function handleGet(action, params) {
     // ?branch= → เมนูที่ปรับตามสาขา (เปิด/ปิดขาย ราคา ปริ้นเตอร์) — ไม่ส่ง = เมนูกลาง
     case 'getStatic':
       return await buildStaticData(requestedBranch(params));
+
+    // รายชื่อพนักงานพร้อมรหัส — เฉพาะหน้าหลังบ้าน > พนักงาน (แอดมินสำนักงานใหญ่)
+    case 'getUsers':
+      return { success: true, users: await allRows('Users', USER_COLS, mapUser) };
 
     // ส่วนที่สาขาหนึ่งปรับจากเมนูกลาง — ใช้ในหน้าหลังบ้าน > เมนูรายสาขา
     case 'getMenuBranch':

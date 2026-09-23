@@ -8,8 +8,9 @@ import * as admin from './admin.js';
 import { deductStock, recordStockIn, saveBOM, upsertIngredient, deleteIngredient } from './stock.js';
 import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
+import { login, authorize, clearEnforceCache } from './auth.js';
 
-export const BUILD = '2026-09-23-branches-p4';
+export const BUILD = '2026-09-23-auth';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -41,6 +42,7 @@ const POST_ACTIONS = {
   upsertPromotion:         admin.upsertPromotion,
   deletePromotion:         admin.deletePromotion,
   savePromotions:          admin.savePromotions,
+  login,
   saveUsers:               admin.saveUsers,
   saveBranches:            admin.saveBranches,
   saveBranchTables:        admin.saveBranchTables,
@@ -106,7 +108,11 @@ export function parseBody(body) {
 
 export async function route({ method, params = {}, body }) {
   if (method === 'GET') {
+    params = { ...params };
+    const token = params.token; delete params.token;
     const action = params.action || 'getAllData';
+    const auth = await authorize(action, token, null, params);
+    if (!auth.ok) return auth.response;
     if (action === 'ping') return await ping();
     const fromRead = await handleGet(action, params);
     if (fromRead) return fromRead;
@@ -121,7 +127,12 @@ export async function route({ method, params = {}, body }) {
     const action = data.action || 'insertOrder';
     const handler = POST_ACTIONS[action];
     if (!handler) return { success: false, error: 'Unknown action' };
-    return await handler(data);
+    const token = data._token; delete data._token;
+    const auth = await authorize(action, token, data, null);
+    if (!auth.ok) return auth.response;
+    const result = await handler(data);
+    if (action === 'saveSettings') clearEnforceCache(); // เปิด/ปิดบังคับล็อกอินมีผลทันที
+    return result;
   }
 
   return { success: false, error: 'Method not allowed' };

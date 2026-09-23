@@ -36,7 +36,7 @@ import { priceForSaleType } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob, setReceiptHeader } from './utils/printServer';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
-import { API_URL } from './utils/api';
+import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
 
 const MENU_ITEMS = [];
 
@@ -157,6 +157,7 @@ function App() {
   };
 
   const handleLogout = () => {
+    setAuthToken('');
     // ระหว่างยังไม่บังคับล็อกอิน การออกจากระบบแค่รีเซ็ตกลับเป็นแอดมิน ไม่เด้งไปหน้าล็อกอิน
     setCurrentUser(loginRequired() ? null : DEFAULT_ADMIN);
     loginAtRef.current = null;
@@ -268,6 +269,8 @@ function App() {
   const [serverPrinters, setServerPrinters] = useState(null);
   // สาขาที่ใช้เลือกผังโต๊ะและลิงก์ QR — ผู้ใช้ไม่ได้อยู่สาขาที่มีในรายการ ให้ถือเป็นสาขาหลัก
   const tablesBranch = branchKey || defaultBranch;
+  const kioskPathRef = React.useRef(isKioskPath);
+  kioskPathRef.current = isKioskPath;
   // ตัวดึงข้อมูลถูกเรียกจาก setInterval ที่ผูกไว้ตั้งแต่เปิดแอป — ต้องอ่านสาขาปัจจุบันผ่าน ref
   const branchKeyRef = React.useRef(branchKey);
   branchKeyRef.current = branchKey;
@@ -299,6 +302,18 @@ function App() {
     if (required && currentUser === DEFAULT_ADMIN) setCurrentUser(null);
     if (!required && !currentUser) setCurrentUser(DEFAULT_ADMIN);
   }, [posSettings, currentUser]);
+
+  // เซิร์ฟเวอร์ตอบว่า token หมดอายุ/ไม่มี (เปิดบังคับล็อกอินอยู่) → กลับหน้าล็อกอิน
+  React.useEffect(() => {
+    const onAuthRequired = () => {
+      if (kioskPathRef.current || !loginRequired()) return;
+      setAuthToken('');
+      setCurrentUser(null);
+      setSaveAlert({ type: 'error', msg: '🔒 หมดเวลาใช้งาน หรือยังไม่ได้ล็อกอิน — กรุณาล็อกอินใหม่' });
+    };
+    window.addEventListener(AUTH_REQUIRED_EVENT, onAuthRequired);
+    return () => window.removeEventListener(AUTH_REQUIRED_EVENT, onAuthRequired);
+  }, []);
 
   // พนักงานทุกสาขา + มีสาขาที่เปิดใช้งานอยู่สาขาเดียว → เลือกให้เลย ไม่ต้องกด
   React.useEffect(() => {
@@ -547,6 +562,7 @@ function App() {
 
   // ข้อมูล "ร้อน" — รายการอาหารรายโต๊ะ + ออเดอร์ล่าสุด ต้องสดเสมอ (อ่านแค่ 2 ชีท)
   const fetchOrdersFromSheet = async () => {
+    if (kioskPathRef.current) return; // หน้าลูกค้าสั่งเองไม่ใช้ข้อมูลโต๊ะ/บิล (และไม่มีสิทธิ์อ่านเมื่อบังคับล็อกอิน)
     if (inFlightRef.current) return; // รอบก่อนยังค้างอยู่ → ข้าม กันคำขอกองซ้อนกัน
     inFlightRef.current = true;
     const controller = new AbortController();
