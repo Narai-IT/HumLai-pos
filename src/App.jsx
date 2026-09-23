@@ -33,7 +33,7 @@ const LiquorStorage = lazy(() => import('./components/LiquorStorage'));
 const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining, resolveNoteConfig } from './utils/popupConfig';
-import { priceForSaleType } from './utils/salePricing';
+import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import './index.css';
 import { sendPrintJob, setReceiptHeader } from './utils/printServer';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
@@ -280,6 +280,8 @@ function App() {
   const tablesBranch = branchKey || defaultBranch;
   const kioskPathRef = React.useRef(isKioskPath);
   kioskPathRef.current = isKioskPath;
+  // ผังโต๊ะของสาขาสำหรับหน้าลูกค้า (เข้าจากหน้าแรกโดยไม่มีเลขโต๊ะ → ลูกค้าเลือกโต๊ะเอง)
+  const kioskTables = (branchTables && Array.isArray(branchTables[tablesBranch]) && branchTables[tablesBranch]) || readTablesConfig();
   // ตัวดึงข้อมูลถูกเรียกจาก setInterval ที่ผูกไว้ตั้งแต่เปิดแอป — ต้องอ่านสาขาปัจจุบันผ่าน ref
   const branchKeyRef = React.useRef(branchKey);
   branchKeyRef.current = branchKey;
@@ -1423,19 +1425,18 @@ function App() {
         <Route path="/" element={
           <BranchLanding
             branches={branches}
-            branchTables={branchTables}
             deviceBranch={deviceBranch}
             loaded={staticLoaded}
             lang={lang}
             onStaff={(id) => { setDeviceBranch(id); navigate('/index'); }}
-            onCustomer={(id, table) => {
+            onCustomer={(id) => {
               setDeviceBranch(id);
-              navigate(`/kiosk?b=${encodeURIComponent(id)}&table=${encodeURIComponent(table)}`);
+              navigate(`/kiosk?b=${encodeURIComponent(id)}`);
             }}
           />
         } />
-        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} />} />
-        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} />} />
+        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} tables={kioskTables} />} />
+        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} tables={kioskTables} />} />
 
         <Route path="/table-orders" element={
           !tableNumber ? <Navigate to="/index" replace /> :
