@@ -43,8 +43,9 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     const clean = (v) => String(v || '').trim();
 
     // ====== Format Receipt ======
+    // ชื่อร้านพิมพ์เฉพาะที่ตั้งไว้ในหน้าสาขา — ใบครัวไม่พิมพ์ชื่อร้าน (ครัวไม่ต้องใช้ ประหยัดกระดาษ)
     printer.alignCenter();
-    printer.println(clean(header.name) || "กะเพรา 10 หน้า");
+    if (isCustomerCopy && clean(header.name)) printer.println(clean(header.name));
     if (isCustomerCopy) {
       clean(header.address).split(/\r?\n/).map(clean).filter(Boolean).forEach(line => printer.println(line));
       if (clean(header.phone)) printer.println(`โทร ${clean(header.phone)}`);
