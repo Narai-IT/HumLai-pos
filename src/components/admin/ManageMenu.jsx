@@ -4,6 +4,9 @@ import { useOutletContext } from 'react-router-dom';
 import { emptyPopupFields, extractPopupConfig, flattenPopupConfig, hasOwnPopupSteps } from '../../utils/popupConfig';
 import { API_URL, nextItemId } from '../../utils/api';
 
+// ปุ่มเลื่อนลำดับเมนูขึ้น/ลง
+const ARROW_BTN = { padding: '0.15rem 0.4rem', lineHeight: 1, borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', fontSize: '0.72rem' };
+
 const ManageMenu = () => {
   const { lang } = useOutletContext();
   const [menuItems, setMenuItems] = useState([]);
@@ -18,6 +21,11 @@ const ManageMenu = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  // แสดงตามหมวด / จัดลำดับการแสดง
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [orderDirty, setOrderDirty] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+  const [orderMsg, setOrderMsg] = useState('');
 
   // BOM state
   const [bomConfig, setBomConfig] = useState({});
@@ -349,46 +357,101 @@ const ManageMenu = () => {
     return nameLow.includes(searchLow) || nameEnLow.includes(searchLow);
   });
 
-  return (
-    <div>
-      <div className="admin-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1>{lang === 'th' ? 'จัดการเมนู' : 'Manage Menu'}</h1>
-          <p>{lang === 'th' ? 'เพิ่ม แก้ไข หรือลบรายการอาหารและเครื่องดื่ม' : 'Add, edit, or remove food and drinks.'}</p>
-        </div>
-        <button className="admin-btn" onClick={handleAddNew}>
-          <Plus size={20} /> {lang === 'th' ? 'เพิ่มเมนูใหม่' : 'Add New Menu'}
-        </button>
-      </div>
 
-      <div className="admin-card">
-        <div style={{ marginBottom: '1rem', display: 'flex' }}>
-          <input 
-            type="text" 
-            placeholder={lang === 'th' ? 'ค้นหาเมนู (TH/EN)...' : 'Search menu...'} 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="admin-search-input"
-            style={{ width: '100%', maxWidth: '400px' }}
-          />
-        </div>
-        {loading ? <p>{lang === 'th' ? 'กำลังโหลดข้อมูลเมนู...' : 'Loading menu from database...'}</p> : (
-          <div className="admin-table-container">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>{lang === 'th' ? 'รูปภาพ' : 'Image'}</th>
-                  <th>{lang === 'th' ? 'ชื่อ (TH/EN)' : 'Name (TH/EN)'}</th>
-                  <th>{lang === 'th' ? 'หมวดหมู่' : 'Category'}</th>
-                  <th>{lang === 'th' ? 'ราคา' : 'Price'}</th>
-                  <th>{lang === 'th' ? 'เครื่องปริ้น' : 'Printer'}</th>
-                  <th>{lang === 'th' ? 'สถานะ' : 'Status'}</th>
-                  <th>{lang === 'th' ? 'จัดการ' : 'Actions'}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMenu.length > 0 ? filteredMenu.map(item => (
+  // ── แสดงตามหมวด + จัดลำดับการแสดง ──
+  // ลำดับใน menuItems = ลำดับที่หน้าขาย/หน้าลูกค้าแสดง (เซิร์ฟเวอร์ส่งมาเรียงตาม sortOrder แล้ว)
+  // เมนูอยู่ในส่วนของหมวดหลัก (category) เท่านั้น หมวดเสริมใช้แสดงหน้าขายอย่างเดียว
+  const priceOf = (item) => {
+    const base = Number(item.price);
+    if (Number.isFinite(base) && base > 0) return base;
+    const opts = Array.isArray(item.prices) ? item.prices.map(p => Number(p && p.price)).filter(n => Number.isFinite(n) && n > 0) : [];
+    return opts.length ? Math.min(...opts) : 0;
+  };
+
+  const menuGroups = (() => {
+    const known = new Set(categories.map(c => c.slug));
+    const groups = categories.map(c => ({ slug: c.slug, name: c.name || c.slug, icon: c.icon, items: menuItems.filter(m => m.category === c.slug) }));
+    const others = menuItems.filter(m => !known.has(m.category));
+    if (others.length) groups.push({ slug: '__none__', name: lang === 'th' ? 'ไม่มีหมวด' : 'Uncategorized', items: others });
+    return groups.filter(g => g.items.length > 0 && (!categoryFilter || g.slug === categoryFilter));
+  })();
+
+  // เอาเมนูของหมวดนั้นไปวางกลับตำแหน่งเดิมใน menuItems ตามลำดับใหม่
+  const reorderGroup = (slug, reordered) => {
+    const inGroup = (m) => (slug === '__none__' ? !categories.some(c => c.slug === m.category) : m.category === slug);
+    let k = 0;
+    setMenuItems(prev => prev.map(m => (inGroup(m) ? reordered[k++] : m)));
+    setOrderDirty(true);
+    setOrderMsg('');
+  };
+
+  const moveItem = (group, index, dir) => {
+    const target = index + dir;
+    if (target < 0 || target >= group.items.length) return;
+    const next = [...group.items];
+    [next[index], next[target]] = [next[target], next[index]];
+    reorderGroup(group.slug, next);
+  };
+
+  const sortGroupByPrice = (group, asc) => {
+    const next = [...group.items].sort((a, b) => (asc ? priceOf(a) - priceOf(b) : priceOf(b) - priceOf(a)));
+    reorderGroup(group.slug, next);
+  };
+
+  const saveOrder = async () => {
+    // บันทึกเรียงตามหมวด (ลำดับหมวดในหน้าหมวดหมู่) แล้วตามลำดับในหมวด
+    const known = new Set(categories.map(c => c.slug));
+    const ordered = [
+      ...categories.flatMap(c => menuItems.filter(m => m.category === c.slug)),
+      ...menuItems.filter(m => !known.has(m.category))
+    ];
+    setSavingOrder(true); setOrderMsg('');
+    try {
+      const res = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'saveMenuOrder', ids: ordered.map(m => String(m.id)) })
+      });
+      const json = await res.json().catch(() => null);
+      if (!json || json.success !== true) {
+        throw new Error(json && /Unknown action/i.test(json.error || '')
+          ? 'API ยังเป็นรุ่นเก่า — รัน update-api.bat ก่อน'
+          : (json && json.error) || 'เซิร์ฟเวอร์ไม่ตอบ success');
+      }
+      setMenuItems(ordered);
+      try {
+        const d = JSON.parse(localStorage.getItem('gas_all_data') || '{}');
+        if (Array.isArray(d.menu)) {
+          const pos = new Map(ordered.map((m, i) => [String(m.id), i]));
+          d.menu = [...d.menu].sort((a, b) => (pos.get(String(a.id)) ?? 1e9) - (pos.get(String(b.id)) ?? 1e9));
+          localStorage.setItem('gas_all_data', JSON.stringify(d));
+          window.dispatchEvent(new Event('appDataChanged'));
+        }
+      } catch {}
+      setOrderDirty(false);
+      setOrderMsg(lang === 'th' ? '✅ บันทึกลำดับแล้ว — หน้าขายเห็นภายใน 1 นาที' : '✅ Order saved');
+    } catch (e) {
+      setOrderMsg(`❌ ${lang === 'th' ? 'บันทึกลำดับไม่สำเร็จ' : 'Save failed'}: ${e.message || e}`);
+    }
+    setSavingOrder(false);
+  };
+
+  const tableHead = (withOrder) => (
+    <tr>
+      {withOrder && <th>{lang === 'th' ? 'ลำดับ' : 'Order'}</th>}
+      <th>{lang === 'th' ? 'รูปภาพ' : 'Image'}</th>
+      <th>{lang === 'th' ? 'ชื่อ (TH/EN)' : 'Name (TH/EN)'}</th>
+      <th>{lang === 'th' ? 'หมวดหมู่' : 'Category'}</th>
+      <th>{lang === 'th' ? 'ราคา' : 'Price'}</th>
+      <th>{lang === 'th' ? 'เครื่องปริ้น' : 'Printer'}</th>
+      <th>{lang === 'th' ? 'สถานะ' : 'Status'}</th>
+      <th>{lang === 'th' ? 'จัดการ' : 'Actions'}</th>
+    </tr>
+  );
+
+  // แถวเมนูหนึ่งแถว — orderCell = ช่องปุ่มเลื่อนลำดับ (โหมดค้นหาไม่มีช่องนี้)
+  const renderRow = (item, orderCell = null) => (
                   <tr key={item.id}>
+                    {orderCell}
                     <td>
                       <img
                         src={item.image || `/images/item_${item.id}.svg`}
@@ -453,16 +516,99 @@ const ManageMenu = () => {
                       </button>
                     </td>
                   </tr>
-                )) : (
+  );
+
+  return (
+    <div>
+      <div className="admin-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1>{lang === 'th' ? 'จัดการเมนู' : 'Manage Menu'}</h1>
+          <p>{lang === 'th' ? 'เพิ่ม แก้ไข หรือลบรายการอาหารและเครื่องดื่ม' : 'Add, edit, or remove food and drinks.'}</p>
+        </div>
+        <button className="admin-btn" onClick={handleAddNew}>
+          <Plus size={20} /> {lang === 'th' ? 'เพิ่มเมนูใหม่' : 'Add New Menu'}
+        </button>
+      </div>
+
+      <div className="admin-card">
+        <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <input 
+            type="text" 
+            placeholder={lang === 'th' ? 'ค้นหาเมนู (TH/EN)...' : 'Search menu...'} 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="admin-search-input"
+            style={{ width: '100%', maxWidth: '320px' }}
+          />
+          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} disabled={!!searchTerm.trim()}
+            style={{ padding: '0.55rem 0.75rem', borderRadius: 8, border: '1px solid rgba(0,0,0,0.15)', fontFamily: 'inherit', background: '#fff' }}>
+            <option value="">{lang === 'th' ? 'ทุกหมวด' : 'All categories'}</option>
+            {categories.map(c => <option key={c.slug} value={c.slug}>{c.icon ? `${c.icon} ` : ''}{c.name || c.slug}</option>)}
+          </select>
+          <button className="admin-btn" onClick={saveOrder} disabled={!orderDirty || savingOrder}
+            style={{ padding: '0.55rem 1rem', opacity: orderDirty ? 1 : 0.5, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <Save size={16} /> {savingOrder ? (lang === 'th' ? 'กำลังบันทึก...' : 'Saving...') : (lang === 'th' ? 'บันทึกลำดับการแสดง' : 'Save order')}
+          </button>
+          {orderMsg && <span style={{ fontSize: '0.85rem', color: orderMsg.startsWith('✅') ? '#16a34a' : '#dc2626' }}>{orderMsg}</span>}
+          {orderDirty && !orderMsg && <span style={{ fontSize: '0.82rem', color: '#b45309' }}>{lang === 'th' ? 'มีการเปลี่ยนลำดับ ยังไม่ได้บันทึก' : 'Unsaved order changes'}</span>}
+        </div>
+        {searchTerm.trim() && (
+          <p style={{ margin: '-0.5rem 0 0.75rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {lang === 'th' ? 'ล้างช่องค้นหาเพื่อจัดลำดับการแสดง' : 'Clear search to reorder'}
+          </p>
+        )}
+        {loading ? <p>{lang === 'th' ? 'กำลังโหลดข้อมูลเมนู...' : 'Loading menu from database...'}</p> : searchTerm.trim() ? (
+          <div className="admin-table-container">
+            <table className="admin-table">
+              <thead>{tableHead(false)}</thead>
+              <tbody>
+                {filteredMenu.length > 0 ? filteredMenu.map(item => renderRow(item)) : (
                   <tr>
-                    <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-                      {lang === 'th' ? 'ไม่มีรายการเมนู ลองเริ่มต้นเพิ่มสิ่งแรกดูสิ!' : 'No menu items found. Get started by adding a new product!'}
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                      {lang === 'th' ? 'ไม่พบเมนูที่ค้นหา' : 'No menu found'}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+        ) : menuGroups.length === 0 ? (
+          <p style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+            {lang === 'th' ? 'ไม่มีรายการเมนู ลองเริ่มต้นเพิ่มสิ่งแรกดูสิ!' : 'No menu items found. Get started by adding a new product!'}
+          </p>
+        ) : menuGroups.map(group => (
+          <div key={group.slug} style={{ marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', margin: '0 0 0.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem' }}>
+                {group.icon ? `${group.icon} ` : ''}{group.name} <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>({group.items.length})</span>
+              </h3>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                <button className="admin-btn secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }} onClick={() => sortGroupByPrice(group, true)}>
+                  {lang === 'th' ? 'ราคา น้อย → มาก' : 'Price low → high'}
+                </button>
+                <button className="admin-btn secondary" style={{ padding: '0.3rem 0.7rem', fontSize: '0.8rem' }} onClick={() => sortGroupByPrice(group, false)}>
+                  {lang === 'th' ? 'ราคา มาก → น้อย' : 'Price high → low'}
+                </button>
+              </div>
+            </div>
+            <div className="admin-table-container">
+              <table className="admin-table">
+                <thead>{tableHead(true)}</thead>
+                <tbody>
+                  {group.items.map((item, idx) => renderRow(item, (
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <span style={{ minWidth: 20, textAlign: 'right', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{idx + 1}</span>
+                        <button type="button" title={lang === 'th' ? 'เลื่อนขึ้น' : 'Move up'} disabled={idx === 0} onClick={() => moveItem(group, idx, -1)} style={{ ...ARROW_BTN, opacity: idx === 0 ? 0.3 : 1 }}>▲</button>
+                        <button type="button" title={lang === 'th' ? 'เลื่อนลง' : 'Move down'} disabled={idx === group.items.length - 1} onClick={() => moveItem(group, idx, 1)} style={{ ...ARROW_BTN, opacity: idx === group.items.length - 1 ? 0.3 : 1 }}>▼</button>
+                      </div>
+                    </td>
+                  )))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
         )}
       </div>
 

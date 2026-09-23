@@ -10,7 +10,7 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 
-export const BUILD = '2026-09-23-printer-cats';
+export const BUILD = '2026-09-23-menu-order';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -47,6 +47,7 @@ const POST_ACTIONS = {
   saveBranches:            admin.saveBranches,
   saveBranchTables:        admin.saveBranchTables,
   saveMenuBranch:          admin.saveMenuBranch,
+  saveMenuOrder:           admin.saveMenuOrder,
   savePrinters:            admin.savePrinters,
   saveDiscounts:           admin.saveDiscounts,
   saveSettings:            admin.saveSettings,

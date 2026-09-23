@@ -61,6 +61,11 @@ export const getBranchTables = async () => {
   } catch { return {}; }
 };
 
+// เมนูเรียงตามลำดับที่จัดไว้ในหน้าจัดการเมนู — เมนูที่ยังไม่เคยจัด (sortOrder ว่าง) ต่อท้ายตามลำดับที่สร้าง
+// ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ไม่มีคอลัมน์ sortOrder) → เรียงแบบเดิม ไม่ให้หน้าร้านโหลดเมนูไม่ขึ้น
+const getMenuRows = () => allRows('Menu', MENU_COLS, mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq')
+  .catch(() => allRows('Menu', MENU_COLS, mapMenu));
+
 // ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
 // ต้องไม่ทำให้ getStatic ทั้งก้อนพัง ไม่งั้นหน้าร้านโหลดเมนูไม่ขึ้น
 const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() => []);
@@ -70,7 +75,7 @@ const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() =
 export async function buildStaticData(branchId = '') {
   const [categories, rawMenu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch, menuBranchRows] = await Promise.all([
     allRows('Categories', CATEGORY_COLS, mapCategory),
-    allRows('Menu', MENU_COLS, mapMenu),
+    getMenuRows(),
     allRows('Promotions', PROMO_COLS, mapPromotion),
     // ไม่ส่งรหัสพนักงานออกไป — ใครก็เรียก getStatic ได้ (หน้าลูกค้าสั่งเอง) รหัสเช็กที่เซิร์ฟเวอร์ตอนล็อกอิน
     allRows('Users', USER_COLS, mapUser).then(list => list.map(({ pin, ...u }) => ({ ...u, hasPin: String(pin ?? '') !== '' }))),
