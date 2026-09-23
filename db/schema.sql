@@ -439,3 +439,14 @@ BEGIN
   UPDATE dbo.PaymentSummary SET BranchId = @def WHERE BranchId IS NULL;
 END
 GO
+
+-- ─────────────────────────────────────────
+-- ปริ้นเตอร์แยกสาขา (เฟส 3) — แต่ละร้านมีเครื่องพิมพ์และ Print Server ของตัวเอง
+-- ─────────────────────────────────────────
+IF COL_LENGTH('dbo.Printers', 'BranchId') IS NULL
+  ALTER TABLE dbo.Printers ADD BranchId NVARCHAR(60) NULL;
+GO
+DECLARE @def NVARCHAR(60) = (SELECT TOP (1) id FROM dbo.Branches WHERE ISNULL(isActive, 1) = 1 ORDER BY Seq ASC);
+IF @def IS NOT NULL
+  UPDATE dbo.Printers SET BranchId = @def WHERE BranchId IS NULL;
+GO

@@ -85,7 +85,7 @@ export const mapBranch = rowMapper({
   id: 's', name: 's', billPrefix: 's', phone: 's', address: 's', taxId: 's', receiptFooter: 's', isActive: 'b'
 });
 
-export const mapPrinter = rowMapper({ id: 's', name: 's', ip: 's', type: 's', printMode: 's' });
+export const mapPrinter = rowMapper({ id: 's', name: 's', ip: 's', type: 's', printMode: 's', branchId: 's' });
 
 export const mapDiscount = rowMapper({ id: 's', name: 's', type: 's', value: 'n', categories: 'j' });
 
