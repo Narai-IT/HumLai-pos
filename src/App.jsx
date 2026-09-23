@@ -58,8 +58,16 @@ const DEFAULT_ADMIN = { id: 'admin', username: 'admin', branch: 'admin', canChec
 // สร้างข้อมูลใบครัวจากแถวของชีต TableOrders
 // ส่งแบบ flattened: ชื่อมี (xN) ต่อท้ายให้เครื่องอ่านจำนวนออก และยัดตัวเลือก/หมายเหตุ
 // ลง subItems เพื่อให้ครัวเห็นครบ (เช่น "📝 ไม่ใส่ผัก")
-const buildKitchenOrder = (rows, tableNo, id, timestamp) => ({
+// ประเภทของโต๊ะตามโซนในผังโต๊ะ → หัวใบครัว (ทานที่ร้าน / ห่อกลับบ้าน / Delivery)
+const ZONE_DINING = { Takehome: 'ห่อกลับบ้าน', Delivery: 'Delivery' };
+const diningForTable = (tables, tableNo) => {
+  const t = (Array.isArray(tables) ? tables : []).find(x => String(x.name) === String(tableNo));
+  return (t && ZONE_DINING[t.zone]) || '';
+};
+
+const buildKitchenOrder = (rows, tableNo, id, timestamp, dining = '') => ({
   id,
+  dining,
   orderNumber: `โต๊ะ ${tableNo}`,
   customerDetails: { name: `โต๊ะ ${tableNo}`, address: `โต๊ะ ${tableNo}` },
   items: rows.map(row => {
@@ -918,7 +926,7 @@ function App() {
     // แยกใบไปตามเครื่องพิมพ์ที่ตั้งไว้ในแต่ละเมนู (printerId) ไม่ได้ตั้งก็ตกไปเครื่องประเภทครัว
     // ไม่ await เพื่อไม่ให้การบันทึกลงชีตต้องรอเครื่องพิมพ์ตอบ
     if (getPrinters().length > 0) {
-      printKitchenOrder(buildKitchenOrder(newLocalItems, tableNumber, sessionId, timestamp), allMenu)
+      printKitchenOrder(buildKitchenOrder(newLocalItems, tableNumber, sessionId, timestamp, diningForTable(kioskTables, tableNumber)), allMenu)
         .then(res => {
           // เงียบตอนสำเร็จ แต่ต้องบอกให้รู้ตอนพิมพ์ไม่ออก ไม่งั้นครัวไม่ได้ใบแล้วไม่มีใครรู้
           if (!res.success) {
@@ -981,7 +989,7 @@ function App() {
       return;
     }
     const res = await printKitchenOrder(
-      buildKitchenOrder(rows, tableNumber, 'reprint-' + Date.now(), getThaiTimeISO()),
+      buildKitchenOrder(rows, tableNumber, 'reprint-' + Date.now(), getThaiTimeISO(), diningForTable(kioskTables, tableNumber)),
       allMenu
     );
     if (res.success) {
