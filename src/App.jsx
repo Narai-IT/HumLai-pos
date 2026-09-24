@@ -1025,7 +1025,7 @@ function App() {
   // =============================================
   // NEW: Complete payment - save to Orders, clear TableOrders
   // =============================================
-  const handleCheckoutComplete = async (grandTotal, paymentMethod, paymentDetails) => {
+  const handleCheckoutComplete = async (grandTotal, paymentMethod, paymentDetails, printInfo = {}) => {
     const finalTotal = grandTotal || checkoutTotal;
 
     const nextNum = (branchMaxMap[branch] || 0) + 1;
@@ -1073,9 +1073,11 @@ function App() {
     // เดิมสั่งพิมพ์เป็นขั้นสุดท้าย จึงต้องรอเซิร์ฟเวอร์ตอบครบ 3 รอบ (บันทึกบิล → ล้างโต๊ะ → ตัดสต็อก)
     // ใบเสร็จเลยออกช้าหลายวินาที ทั้งที่เครื่องพิมพ์ว่างรออยู่
     try {
-      const receiptPrinter = getPrinterByType('receipt');
+      // กดพิมพ์ใบเสร็จจากหน้าชำระเงินไปแล้ว → ไม่พิมพ์ซ้ำ
+      const receiptPrinter = printInfo.receiptPrinted ? null : getPrinterByType('receipt');
       if (receiptPrinter) {
-        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: newOrder })
+        // ใช้ใบเสร็จแบบเต็มจากหน้าชำระเงิน (จำนวน ตัวเลือก ส่วนลด VAT) — ไม่มีค่อยใช้แบบย่อ
+        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: printInfo.receiptOrder ? { ...printInfo.receiptOrder, orderNumber: newOrderNumber, id: newOrderNumber } : newOrder })
           .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
           .catch(err => console.error('Silent print failed:', err));
       }

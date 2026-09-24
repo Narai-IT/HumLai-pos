@@ -4,6 +4,8 @@ import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, Chevr
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { print80mm, scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
+import { getPrinters, getPrinterByType } from '../utils/printerRouting';
+import { sendPrintJob } from '../utils/printServer';
 
 const calcCharges = (subtotal, settings = {}, discount = null) => {
   let discountAmount = 0;
@@ -208,9 +210,50 @@ const CheckoutModal = ({
     `;
   };
 
+  // ── ใบเสร็จสำหรับเครื่องพิมพ์ความร้อน (Print Server) — ข้อมูลชุดเดียวกับพรีวิว ──
+  const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const buildReceiptOrder = () => {
+    const summary = [];
+    if (hasDiscount || hasCharges) summary.push({ label: 'ยอดอาหาร', value: money2(subtotal) });
+    if (hasDiscount) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-${money2(discountAmount)}` });
+    if (sc > 0) summary.push({ label: `เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, value: money2(sc) });
+    if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(vat) });
+    if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
+    return {
+      id: orderNumber,
+      orderNumber: orderNumber || '-',
+      customerDetails: { name: tableNo ? `โต๊ะ ${tableNo}` : '' },
+      items: (tableOrderItems || []).map(it => {
+        const qty = Number(it.Quantity) || 1;
+        return {
+          isFlattened: true,
+          name: qty > 1 ? `${it.ItemName} (x${qty})` : it.ItemName,
+          amount: (Number(it.ItemPrice) || 0) * qty,
+          subItems: it.Options ? String(it.Options).split(', ').filter(Boolean) : []
+        };
+      }),
+      summary,
+      total: money2(grand)
+    };
+  };
+
+  // พิมพ์ออกเครื่องใบเสร็จผ่าน Print Server — เครื่องนี้ยังไม่ได้ตั้งเครื่องพิมพ์ ค่อยใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
+  const [receiptPrinted, setReceiptPrinted] = useState(false);
+  const [printStatus, setPrintStatus] = useState('');
+  const printReceipt = async () => {
+    const printers = getPrinters();
+    const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+    if (!printer || !printer.ip) { print80mm(buildReceiptHtml()); return; }
+    setPrintStatus('กำลังส่งไปเครื่องพิมพ์...');
+    const res = await sendPrintJob({ ip: printer.ip, printerType: 'receipt', orderData: buildReceiptOrder() });
+    if (res.success) { setReceiptPrinted(true); setPrintStatus('🖨️ ส่งใบเสร็จไปที่เครื่องพิมพ์แล้ว'); }
+    else setPrintStatus(`❌ พิมพ์ไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}`);
+  };
+
   const finalizeComplete = () => {
     const pc = pendingComplete || { method: 'เงินสด' };
-    onComplete(grand, pc.method, pc.details);
+    // กดพิมพ์ใบเสร็จไปแล้ว → บอกหน้าหลักไม่ต้องพิมพ์ซ้ำตอนปิดบิล
+    onComplete(grand, pc.method, pc.details, { receiptPrinted, receiptOrder: buildReceiptOrder() });
   };
 
   const PriceBreakdown = ({ compact = false }) => (
@@ -888,7 +931,7 @@ const CheckoutModal = ({
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
-                onClick={() => print80mm(buildReceiptHtml())}
+                onClick={printReceipt}
                 style={{ flex: 1, padding: '0.85rem', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '12px', color: '#2563eb', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
               >
                 <Printer size={18} /> {lang === 'th' ? 'พิมพ์ใบเสร็จ' : 'Print'}
@@ -902,6 +945,9 @@ const CheckoutModal = ({
                 {lang === 'th' ? 'เสร็จสิ้น' : 'Done'}
               </button>
             </div>
+            {printStatus && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 700, color: printStatus.startsWith('❌') ? '#dc2626' : '#15803d' }}>{printStatus}</div>
+            )}
           </div>
         )}
 
