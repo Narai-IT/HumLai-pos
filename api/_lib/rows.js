@@ -74,7 +74,7 @@ export const mapTableOrder = rowMapper({
 export const mapMenu = rowMapper({
   id: 'i', category: 's', name: 's', nameEn: 's', description: 's', descriptionEn: 's',
   price: 'n', image: 's', isActive: 'b', bundledItems: 'j', popupConfig: 'j', prices: 'j',
-  categories: 'j', printerId: 's'
+  categories: 'j', printerId: 's', branches: 'j'
 });
 
 export const mapPromotion = rowMapper({ id: 'i', name: 's', nameEn: 's', price: 'n', origPrice: 'n' });
@@ -131,5 +131,7 @@ for (let i = 1; i <= 6; i++) {
   categorySpec[`popup${i}Free`]     = 'b';
 }
 categorySpec.hasDining = 'b';
+// ใครเห็นหมวดนี้: '' / 'all' = ทั้งพนักงานและลูกค้า · 'staff' = เฉพาะหน้าพนักงาน · 'customer' = เฉพาะหน้าลูกค้าสั่งเอง
+categorySpec.visibility = 's';
 export const CATEGORY_SPEC = categorySpec;
 export const mapCategory = rowMapper(categorySpec);

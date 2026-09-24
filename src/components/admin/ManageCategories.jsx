@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, GripVertical } from 'lucide-react';
 import { useOutletContext } from 'react-router-dom';
 import { API_URL, nextItemId } from '../../utils/api';
+import { VISIBILITY_OPTIONS } from '../../utils/categoryVisibility';
 
 const ManageCategories = () => {
   const { lang } = useOutletContext();
@@ -135,6 +136,7 @@ const ManageCategories = () => {
       nameEn: '',
       icon: '📌',
       isActive: true,
+      visibility: 'all',
       hasPopup1: false, popup1Category: '', popup1Items: [], popup1ItemsMax: {}, popup1Min: 0, popup1Max: 0, popup1Free: false,
       hasPopup2: false, popup2Category: '', popup2Items: [], popup2ItemsMax: {}, popup2Min: 0, popup2Max: 0, popup2Free: false,
       hasPopup3: false, popup3Category: '', popup3Items: [], popup3ItemsMax: {}, popup3Min: 0, popup3Max: 0, popup3Free: false,
@@ -275,6 +277,11 @@ const ManageCategories = () => {
                       }}>
                         {item.isActive !== false ? (lang === 'th' ? 'เปิดแสดง' : 'Active') : (lang === 'th' ? 'ซ่อน' : 'Hidden')}
                       </span>
+                      {item.isActive !== false && item.visibility && item.visibility !== 'all' && (
+                        <div style={{ marginTop: 4, fontSize: '0.78rem', fontWeight: 600, color: item.visibility === 'staff' ? '#2563eb' : '#c2410c' }}>
+                          {item.visibility === 'staff' ? (lang === 'th' ? '👤 เฉพาะพนักงาน' : 'Staff only') : (lang === 'th' ? '📱 เฉพาะลูกค้า' : 'Customers only')}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <button className="admin-btn secondary" style={{ marginRight: '0.5rem', padding: '0.4rem' }} onClick={() => handleEdit(item)}>
@@ -345,6 +352,27 @@ const ManageCategories = () => {
                 <label htmlFor="cat-active" style={{ marginBottom: 0, cursor: 'pointer' }}>
                   {lang === 'th' ? 'เปิดใช้งาน (แสดงบนหน้าร้าน)' : 'Active (Show on storefront)'}
                 </label>
+              </div>
+
+              <div className="admin-form-group">
+                <label>{lang === 'th' ? 'แสดงให้ใครเห็น' : 'Visible to'}</label>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  {VISIBILITY_OPTIONS.map(opt => {
+                    const on = (editingItem.visibility || 'all') === opt.value;
+                    return (
+                      <button type="button" key={opt.value} onClick={() => setEditingItem({ ...editingItem, visibility: opt.value })}
+                        style={{ padding: '0.45rem 0.85rem', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: on ? 700 : 500,
+                          border: `1.5px solid ${on ? 'var(--accent)' : 'rgba(0,0,0,0.15)'}`, background: on ? 'rgba(234,179,8,0.15)' : '#fff', color: 'var(--text-main)' }}>
+                        {lang === 'th' ? opt.label : opt.labelEn}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {lang === 'th'
+                    ? 'เฉพาะพนักงาน = ไม่ขึ้นในหน้าลูกค้าสั่งเอง/QR · เฉพาะลูกค้า = ไม่ขึ้นในหน้าขายของพนักงาน · เมนูในหมวดยังใช้เป็นตัวเลือกในป๊อปอัพได้ตามเดิม'
+                    : 'Staff only = hidden on the self-order/QR page · Customers only = hidden on the staff POS · items still work as popup options.'}
+                </div>
               </div>
 
               <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', background: 'rgba(249,115,22,0.06)', border: '1px solid rgba(249,115,22,0.2)', borderRadius: '8px', padding: '0.85rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>

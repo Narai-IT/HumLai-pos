@@ -5,7 +5,7 @@ import { nextIds } from './ids.js';
 import { clearBranchCache, branchForWrite, defaultBranchId } from './branch.js';
 import { getBranchTables } from './read.js';
 
-const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
+const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId','branches'];
 const CATEGORY_COLS = Object.keys(CATEGORY_SPEC);
 
 const menuValues = (item) => ([
@@ -13,7 +13,9 @@ const menuValues = (item) => ([
   toText(item.description), toText(item.descriptionEn), Number(item.price) || 0, toText(item.image),
   item.isActive !== false ? 1 : 0,
   toJson(item.bundledItems, '[]'), toJson(item.popupConfig, '{}'),
-  toJson(item.prices, '[]'), toJson(item.categories, '[]'), toText(item.printerId)
+  toJson(item.prices, '[]'), toJson(item.categories, '[]'), toText(item.printerId),
+  // สาขาที่ขายเมนูนี้ — [] = ทุกสาขา
+  JSON.stringify(Array.isArray(item.branches) ? item.branches.map(String).filter(Boolean) : [])
 ]);
 
 // ค่าเริ่มต้นของแต่ละคอลัมน์ยกมาจากสคริปต์เดิมทั้งหมด
@@ -31,6 +33,7 @@ const categoryValues = (c) => {
     out.push(c[`popup${i}Free`] === true ? 1 : 0);
   }
   out.push(c.hasDining !== false ? 1 : 0);
+  out.push(['staff', 'customer'].includes(c.visibility) ? c.visibility : 'all');
   return out;
 };
 

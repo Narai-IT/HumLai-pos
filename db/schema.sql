@@ -555,3 +555,14 @@ CREATE TABLE dbo.TaxCustomers (
   CONSTRAINT PK_TaxCustomers PRIMARY KEY (taxId, buyerBranch)
 );
 GO
+
+-- ─────────────────────────────────────────
+-- เมนูขายเฉพาะบางสาขา — JSON array ของรหัสสาขา ([] / NULL = ทุกสาขา)
+-- หมวดหมู่แสดงให้ใครเห็น — all (ทั้งคู่) / staff (เฉพาะหน้าพนักงาน) / customer (เฉพาะหน้าลูกค้าสั่งเอง)
+-- ─────────────────────────────────────────
+IF COL_LENGTH('dbo.Menu', 'branches') IS NULL
+  ALTER TABLE dbo.Menu ADD branches NVARCHAR(MAX) NULL;
+GO
+IF COL_LENGTH('dbo.Categories', 'visibility') IS NULL
+  ALTER TABLE dbo.Categories ADD visibility NVARCHAR(20) NULL;
+GO
