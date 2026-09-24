@@ -231,3 +231,33 @@ export async function cancelTaxInvoice(data) {
   if (!res.rowsAffected || !res.rowsAffected[0]) return { success: false, error: 'ไม่พบใบกำกับนี้ หรือถูกยกเลิกไปแล้ว' };
   return { success: true };
 }
+
+// แก้ไขข้อมูลผู้ซื้อของใบที่ออกไปแล้ว — ใบกำกับภาษีห้ามแก้เลขเดิม จึงยกเลิกใบเดิม (บันทึกเหตุผล) แล้วออกเลขใหม่ให้เลย
+// ออกใบใหม่ไม่สำเร็จ → คืนสถานะใบเดิม ไม่ให้บิลค้างอยู่โดยไม่มีใบ
+export async function reissueTaxInvoice(data) {
+  const invoiceNo = text(data.invoiceNo, 60);
+  const buyer = data.buyer || {};
+  if (!invoiceNo) return { success: false, error: 'ไม่ได้ระบุเลขที่ใบกำกับภาษี' };
+  if (!text(buyer.name, 300) || !text(buyer.address, 1000)) return { success: false, error: 'กรุณากรอกชื่อและที่อยู่ผู้ซื้อ' };
+  if (!/^\d{13}$/.test(text(buyer.taxId, 40).replace(/[\s-]/g, ''))) return { success: false, error: 'เลขประจำตัวผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก' };
+
+  const found = await query(`SELECT TOP (1) orderNumber FROM dbo.TaxInvoices WHERE invoiceNo = @invoiceNo AND ISNULL(cancelled, 0) = 0`, { invoiceNo });
+  if (!found.recordset.length) return { success: false, error: 'ไม่พบใบกำกับนี้ หรือถูกยกเลิกไปแล้ว' };
+  const orderNumber = found.recordset[0].orderNumber;
+
+  const cancelled = await cancelTaxInvoice({ invoiceNo, reason: 'แก้ไขข้อมูลผู้ซื้อ — ออกใบใหม่แทน' });
+  if (!cancelled.success) return cancelled;
+  let result;
+  try {
+    result = await issueTaxInvoice({ orderNumber, buyer, issuedBy: data.issuedBy });
+  } catch (err) {
+    result = { success: false, error: err.message };
+  }
+  if (!result.success) {
+    await query(`UPDATE dbo.TaxInvoices SET cancelled = 0, cancelledAt = NULL, cancelReason = NULL WHERE invoiceNo = @invoiceNo`, { invoiceNo });
+    return result;
+  }
+  await query(`UPDATE dbo.TaxInvoices SET cancelReason = @reason WHERE invoiceNo = @invoiceNo`,
+    { invoiceNo, reason: `แก้ไขข้อมูลผู้ซื้อ — ออกใบใหม่ ${result.invoice.invoiceNo}` }).catch(() => {});
+  return { success: true, invoice: result.invoice, replaced: invoiceNo };
+}
