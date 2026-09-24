@@ -1,0 +1,190 @@
+<meta charset=utf8><style>
+*{box-sizing:border-box}body{margin:0;background:#fff;font-family:'Sarabun','Leelawadee UI','Tahoma','Loma',sans-serif;color:#0f172a;width:1500px;padding:22px}
+h1{font-size:24px;margin:0 0 4px}.sub{color:#64748b;margin:0 0 14px;font-size:14px}
+.screen{position:relative;background:#f1f5f9;border:2px solid #cbd5e1;border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px}
+.top{background:#fff;border-radius:10px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800}.logo{width:28px;height:28px;border-radius:8px;background:#fde68a}
+.badge{background:#16a34a;color:#fff;border-radius:999px;padding:2px 10px;font-size:12px}
+.b{display:inline-flex;align-items:center;gap:4px;padding:6px 11px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;font-size:12.5px;font-weight:700;white-space:nowrap}
+.b.g{background:#16a34a;color:#fff;border-color:#16a34a}.b.r{color:#dc2626;border-color:#fecaca}
+.row{display:flex;gap:8px;align-items:center}
+.body{display:flex;gap:8px}.main{flex:1;display:flex;flex-direction:column;gap:8px}
+.card{background:#fff;border-radius:10px;padding:8px 10px}
+.notice{background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:6px 10px;font-size:12.5px;color:#166534}
+.leg{font-size:11.5px;color:#475569;display:flex;gap:10px}.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:3px}
+.tables{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:8px}
+.t{border:1px solid #e2e8f0;border-radius:8px;padding:5px 7px;font-size:12px;font-weight:800}.t small{display:block;font-weight:400;color:#64748b;font-size:10.5px}
+.t.busy{background:#dcfce7;border-color:#86efac}.t.late{background:#fef3c7;border-color:#fcd34d}
+.chips{display:flex;gap:6px}.chip{padding:5px 11px;border-radius:999px;border:1px solid #e2e8f0;background:#fff;font-size:12px;font-weight:700}.chip.on{background:#16a34a;color:#fff}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.m{background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e2e8f0}.m .img{height:62px;background:linear-gradient(135deg,#fde68a,#fdba74)}
+.m .n{padding:5px 7px;font-size:12px;font-weight:700}.m .p{display:flex;justify-content:space-between;padding:0 7px 6px;font-weight:800;color:#ca8a04;font-size:12.5px}
+.plus{width:20px;height:20px;border-radius:50%;background:#eab308;color:#fff;text-align:center;line-height:20px}
+.cart{width:330px;background:#fff;border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:7px}
+.ct{background:#0f172a;color:#fff;border-radius:8px;padding:7px 10px;font-weight:800;display:flex;justify-content:space-between}
+.inp{border:1px solid #cbd5e1;border-radius:8px;padding:6px 9px;font-size:12px;color:#94a3b8}
+.li{border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;font-size:12px}.li.sent{background:#f0fdf4}
+.sec{font-size:11px;font-weight:800;color:#64748b}
+.tot{display:flex;justify-content:space-between;font-weight:800;font-size:15px;border-top:1px dashed #cbd5e1;padding-top:6px}
+.big{padding:9px;border-radius:9px;text-align:center;font-weight:800;font-size:13px}
+.n{position:relative}
+.num{position:absolute;top:-10px;left:-10px;z-index:5;width:22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px #fff}
+.legend{columns:3;column-gap:26px;margin-top:16px;font-size:13px;line-height:1.5}
+.legend div{break-inside:avoid;margin-bottom:7px;display:flex;gap:7px}
+.legend b.k{flex:0 0 22px;height:22px;border-radius:50%;background:#dc2626;color:#fff;font-size:12px;display:flex;align-items:center;justify-content:center}
+.legend span{flex:1}.legend strong{color:#0f172a}
+
+@page{size:A4 landscape;margin:8mm}
+@media print{html{zoom:0.7}.page{break-after:page}}
+.flow h2{font-size:21px;margin:0 0 10px;border-bottom:3px solid #16a34a;padding-bottom:4px}
+.flows{display:grid;grid-template-columns:1fr 1fr;gap:16px 26px}
+.f{border:1px solid #e2e8f0;border-radius:12px;padding:12px 16px;break-inside:avoid}
+.f h3{margin:0 0 6px;font-size:16px}.f ol{margin:0;padding-left:20px;font-size:13.5px;line-height:1.6}
+.f .tip{margin-top:6px;font-size:12.5px;color:#92400e;background:#fffbeb;border-radius:8px;padding:5px 9px}
+.n2{display:inline-flex;width:18px;height:18px;border-radius:50%;background:#dc2626;color:#fff;font-size:11px;font-weight:800;align-items:center;justify-content:center;vertical-align:1px}
+</style>
+<div class=page><h1>คู่มือหน้าขาย (POS) — อธิบายทีละปุ่ม</h1><p class=sub>ตัวเลขสีแดงในภาพ ตรงกับคำอธิบายด้านล่าง</p>
+<div class=screen>
+ <div class=top>
+  <div class="brand n"><span class=num>1</span><span class=logo></span>ข้าวมันไก่หำไหล <span class=badge>โต๊ะ 5</span></div>
+  <div class=row>
+   <span class="b n"><span class=num>2</span>🧾 ย้าย/รวมโต๊ะ</span>
+   <span class="b n"><span class=num>3</span>⚙️ หลังบ้าน</span>
+   <span class="b n"><span class=num>4</span>⋯ เพิ่มเติม</span>
+   <span class="n" style="font-size:12px;line-height:1.1;text-align:right"><span class=num>5</span><b>admin</b><br><span style="color:#64748b">สาขาหลัก</span></span>
+   <span class="b r n"><span class=num>6</span>⎋ ออกจากระบบ</span>
+  </div>
+ </div>
+ <div class=body>
+  <div class=main>
+   <div class="notice n"><span class=num>7</span>เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ</div>
+   <div class=card>
+    <div class=row style="justify-content:space-between">
+     <div class="leg n"><span class=num>8</span><b style="color:#0f172a">🪑 โต๊ะ</b><span><i class=dot style="background:#cbd5e1"></i>ว่าง</span><span><i class=dot style="background:#16a34a"></i>มีลูกค้า</span><span><i class=dot style="background:#f59e0b"></i>เกิน 90 นาที</span><span><i class=dot style="background:#6366f1"></i>ลูกค้าจ่ายเองแล้ว</span></div>
+     <div class=row>
+      <span class="n row"><span class=num>9</span><span class="b g">ทานที่ร้าน</span><span class=b>ห่อกลับบ้าน</span><span class=b>Delivery</span></span>
+      <span class="b n"><span class=num>10</span>⟳</span>
+      <span class="n row"><span class=num>11</span><span class=inp>เบอร์โต๊ะอื่น</span><span class=b>เปิด</span></span>
+     </div>
+    </div>
+    <div class="tables n"><span class=num>12</span>
+     <div class=t>1<small>ว่าง</small></div><div class=t>2<small>ว่าง</small></div><div class="t busy">3<small>2 ออเดอร์ · 25 นาที</small></div><div class=t>4<small>ว่าง</small></div><div class="t busy">5<small>1 ออเดอร์ · 10 นาที</small></div><div class="t late">6<small>เกิน 95 นาที</small></div><div class=t>7<small>ว่าง</small></div><div class=t>8<small>ว่าง</small></div><div class=t>9<small>ว่าง</small></div><div class=t>10<small>ว่าง</small></div>
+    </div>
+   </div>
+   <div class="chips n"><span class=num>13</span><span class="chip on">📌 ชุดอิ่มเดี่ยว</span><span class=chip>📌 ไก่ล้วนๆ</span><span class=chip>📌 ท็อปปิ้งเสริม</span><span class=chip>📌 เครื่องดื่ม</span><span class=chip>📌 ของหวาน</span></div>
+   <div class="grid n"><span class=num>14</span>
+    <div class=m><div class=img></div><div class=n>ข้าวมันไก่หำไหล</div><div class=p>฿69<span class=plus>+</span></div></div>
+    <div class=m><div class=img></div><div class=n>ชุดข้าวมันไก่สิงคโปร์</div><div class=p>฿89<span class=plus>+</span></div></div>
+    <div class=m><div class=img></div><div class=n>ข้าวมันไก่ทอด</div><div class=p>฿75<span class=plus>+</span></div></div>
+    <div class=m><div class=img></div><div class=n>ข้าวมันไก่สองใจ</div><div class=p>฿79<span class=plus>+</span></div></div>
+    <div class=m><div class=img></div><div class=n>ข้าวมันไก่สามเซียน</div><div class=p>฿79<span class=plus>+</span></div></div>
+   </div>
+  </div>
+  <div class=cart>
+   <div class="ct n"><span class=num>15</span><span>🪑 โต๊ะ</span><span>5</span></div>
+   <div class=row><span class="inp n" style="flex:1;color:#0f172a"><span class=num>16</span>ทานที่ร้าน (ราคาปกติ) ▾</span><span class="b r n"><span class=num>17</span>ล้าง</span></div>
+   <div class="inp n"><span class=num>18</span>🔍 พิมพ์ค้นหาเมนู แล้วกดเพื่อเพิ่ม</div>
+   <div class="inp n"><span class=num>19</span>ชื่อลูกค้า (ถ้ามี)</div>
+   <div class="n" style="display:flex;flex-direction:column;gap:5px"><span class=num>20</span>
+    <div class=sec>✅ ส่งครัวแล้ว · แตะเพื่อจัดการ</div>
+    <div class="li sent"><b>1×</b> ข้าวมันไก่ทอด <span style="float:right">฿75</span></div>
+    <div class=sec>🆕 รายการใหม่ (ยังไม่ส่ง)</div>
+    <div class=li><b>2×</b> ข้าวมันไก่หำไหล <span style="float:right">฿138</span><div style="color:#64748b;margin-top:3px">− 2 + · 📝 หมายเหตุ · ลบ</div></div>
+   </div>
+   <div class=row><span class="b n" style="flex:1;justify-content:center"><span class=num>21</span>🏷️ เพิ่มส่วนลด</span><span class="b n" style="flex:1;justify-content:center"><span class=num>22</span>🧾 ใบแจ้งยอด</span></div>
+   <div class=tot><span>สุทธิ</span><span>฿213</span></div>
+   <div class="big n" style="background:#eab308;color:#0f172a"><span class=num>23</span>ส่งรายการอาหาร</div>
+   <div class="big n" style="background:#16a34a;color:#fff"><span class=num>24</span>ชำระเงิน</div>
+  </div>
+ </div>
+</div>
+<div class=legend>
+<div><b class=k>1</b><span><strong>ชื่อร้าน + ป้ายโต๊ะ</strong> — ป้ายเขียวบอกโต๊ะที่กำลังคีย์อยู่</span></div>
+<div><b class=k>2</b><span><strong>ย้าย/รวมโต๊ะ</strong> — ย้ายรายการไปโต๊ะอื่น รวมบิลหลายโต๊ะ หรือแยกบิล (ต้องเลือกโต๊ะก่อน)</span></div>
+<div><b class=k>3</b><span><strong>หลังบ้าน</strong> — ตั้งค่าเมนู โต๊ะ ปริ้นเตอร์ รายงาน (แคชเชียร์/แอดมิน)</span></div>
+<div><b class=k>4</b><span><strong>เพิ่มเติม</strong> — รีเฟรช, สรุปยอดขายวันนี้/ระหว่างวัน, ใบกำกับภาษี, บันทึกการทิ้ง, หน้าลูกค้าสั่งเอง, เปลี่ยนภาษา</span></div>
+<div><b class=k>5</b><span><strong>ผู้ใช้ที่ล็อกอิน</strong> และสาขาของเครื่องนี้</span></div>
+<div><b class=k>6</b><span><strong>ออกจากระบบ</strong> — เปลี่ยนพนักงาน / ปิดกะ</span></div>
+<div><b class=k>7</b><span><strong>แถบแนะนำ</strong> — ขึ้นเมื่อยังไม่ได้เลือกโต๊ะ</span></div>
+<div><b class=k>8</b><span><strong>สีสถานะโต๊ะ</strong> — เทา=ว่าง เขียว=มีลูกค้า ส้ม=นั่งเกิน 90 นาที ม่วง=ลูกค้าจ่ายเองผ่าน QR แล้ว</span></div>
+<div><b class=k>9</b><span><strong>โซนโต๊ะ</strong> — ทานที่ร้าน / ห่อกลับบ้าน / Delivery ราคาเมนูเปลี่ยนตามโซน</span></div>
+<div><b class=k>10</b><span><strong>รีเฟรช</strong> — ดึงสถานะโต๊ะและบิลล่าสุด</span></div>
+<div><b class=k>11</b><span><strong>เบอร์โต๊ะอื่น</strong> — พิมพ์เลขโต๊ะที่ไม่มีในผัง แล้วกด "เปิด"</span></div>
+<div><b class=k>12</b><span><strong>ช่องโต๊ะ</strong> — กดเพื่อเลือก/เปิดโต๊ะ โต๊ะว่างจะถามจำนวนลูกค้า</span></div>
+<div><b class=k>13</b><span><strong>หมวดหมู่</strong> — กดเพื่อแสดงเมนูในหมวดนั้น</span></div>
+<div><b class=k>14</b><span><strong>เมนู</strong> — กดการ์ดหรือปุ่ม + เพื่อเพิ่มลงตะกร้า เมนูที่มีตัวเลือกจะเปิดหน้าต่างให้เลือกก่อน</span></div>
+<div><b class=k>15</b><span><strong>โต๊ะของบิลนี้</strong> — เช็กก่อนส่งทุกครั้ง กันคีย์ผิดโต๊ะ</span></div>
+<div><b class=k>16</b><span><strong>ประเภทการขาย</strong> — ชุดราคา ปกติ/Takehome/Deli (ล็อกตามโซนของโต๊ะ)</span></div>
+<div><b class=k>17</b><span><strong>ล้าง</strong> — ลบรายการใหม่ที่ยังไม่ส่งทั้งหมด</span></div>
+<div><b class=k>18</b><span><strong>ค้นหาเมนู</strong> — พิมพ์ชื่อเมนูแล้วกดผลค้นหาเพื่อเพิ่ม</span></div>
+<div><b class=k>19</b><span><strong>ชื่อลูกค้า</strong> — ใส่ได้ถ้าต้องการ (เช่นลูกค้าสั่งกลับบ้าน)</span></div>
+<div><b class=k>20</b><span><strong>รายการในบิล</strong> — ส่งครัวแล้ว: แตะเพื่อพิมพ์ใบครัวซ้ำ/ยกเลิก · รายการใหม่: ปรับจำนวน − +, ใส่หมายเหตุถึงครัว, ลบ</span></div>
+<div><b class=k>21</b><span><strong>เพิ่มส่วนลด</strong> — เลือกส่วนลดที่ตั้งไว้ในหลังบ้าน</span></div>
+<div><b class=k>22</b><span><strong>ใบแจ้งยอด</strong> — พิมพ์ให้ลูกค้าตรวจก่อนจ่าย (ไม่เปิดลิ้นชัก)</span></div>
+<div><b class=k>23</b><span><strong>ส่งรายการอาหาร</strong> — ส่งรายการใหม่เข้าบิลโต๊ะ และพิมพ์ใบครัว/บาร์อัตโนมัติ</span></div>
+<div><b class=k>24</b><span><strong>ชำระเงิน</strong> — เลือกเงินสด/โอน/บัตร/แยกจ่าย → พิมพ์ใบเสร็จ → เสร็จสิ้น (คืนโต๊ะว่าง)</span></div>
+</div>
+</div>
+<div class="page flow">
+<h2>ขั้นตอนงานประจำวัน</h2>
+<div class=flows>
+<div class=f><h3>1. เปิดโต๊ะและรับออเดอร์</h3><ol>
+<li>เลือกโซน <span class=n2>9</span> ทานที่ร้าน / ห่อกลับบ้าน / Delivery</li>
+<li>กดช่องโต๊ะ <span class=n2>12</span> — โต๊ะว่างจะถามจำนวนลูกค้า (กดข้ามได้)</li>
+<li>เช็กเลขโต๊ะที่แผงขวา <span class=n2>15</span> ให้ตรง</li>
+<li>กดหมวด <span class=n2>13</span> แล้วกดเมนู <span class=n2>14</span> หรือพิมพ์ค้นหา <span class=n2>18</span></li>
+<li>เมนูที่มีตัวเลือก (ความเผ็ด/ท็อปปิ้ง/ทานที่ร้าน-กลับบ้าน) เลือกในหน้าต่างให้ครบแล้วกดยืนยัน</li>
+<li>ปรับจำนวน − + หรือใส่ 📝 หมายเหตุถึงครัวในรายการ <span class=n2>20</span></li>
+<li>กด <b>ส่งรายการอาหาร</b> <span class=n2>23</span> — ใบครัว/บาร์พิมพ์เองตามหมวดของเมนู</li>
+</ol><div class=tip>ลูกค้าสั่งเพิ่ม: เลือกโต๊ะเดิม คีย์เพิ่ม แล้วกดส่งอีกครั้ง รายการเก่าไม่ถูกส่งซ้ำ</div></div>
+
+<div class=f><h3>2. ชำระเงินและคืนโต๊ะ</h3><ol>
+<li>เลือกโต๊ะ → (ถ้าลูกค้าขอดูยอด) กด <b>ใบแจ้งยอด</b> <span class=n2>22</span></li>
+<li>ใส่ส่วนลดถ้ามี <span class=n2>21</span></li>
+<li>กด <b>ชำระเงิน</b> <span class=n2>24</span> → เลือก เงินสด / โอน (QR) / บัตร / แยกจ่าย</li>
+<li>หน้า "ชำระเงินสำเร็จ" กด <b>พิมพ์ใบเสร็จ</b> — ออกเครื่องปริ้นใบเสร็จทันที</li>
+<li>กด <b>เสร็จสิ้น</b> — บันทึกบิลและคืนโต๊ะเป็นว่าง</li>
+</ol><div class=tip>ไม่ได้กดพิมพ์ใบเสร็จ ระบบพิมพ์ให้เองตอนกดเสร็จสิ้น (ไม่พิมพ์ซ้ำถ้ากดไปแล้ว)</div></div>
+
+<div class=f><h3>3. ลูกค้าสั่งเองผ่าน QR (โต๊ะสีม่วง)</h3><ol>
+<li>ลูกค้าสแกน QR เลือกทานที่ร้าน/ห่อกลับบ้าน สั่งและโอนเงินเอง</li>
+<li>ใบครัวพิมพ์เองอัตโนมัติ (Print Server)</li>
+<li>โต๊ะขึ้นสีม่วง "ลูกค้าจ่ายเองแล้ว" <span class=n2>8</span> — รายการอยู่ในส่วน 💳 ของแผงขวา</li>
+<li>ลูกค้ากลับแล้ว กด <b>เรียบร้อย — คืนโต๊ะให้ว่าง</b> (ไม่ต้องเก็บเงินซ้ำ)</li>
+</ol></div>
+
+<div class=f><h3>4. ย้ายโต๊ะ / รวมโต๊ะ / แยกบิล</h3><ol>
+<li>เลือกโต๊ะต้นทาง → กด <b>ย้าย/รวมโต๊ะ</b> <span class=n2>2</span></li>
+<li>เลือกรายการที่จะย้าย (หรือทั้งโต๊ะ) แล้วเลือกโต๊ะปลายทาง</li>
+<li>ยืนยัน — รายการย้ายไปโต๊ะใหม่ ครัวไม่ได้รับใบซ้ำ</li>
+</ol></div>
+
+<div class=f><h3>5. พิมพ์ใบครัวซ้ำ / ยกเลิกรายการ</h3><ol>
+<li>แตะรายการใต้หัว "ส่งครัวแล้ว" <span class=n2>20</span></li>
+<li>เลือก <b>พิมพ์ใบครัวซ้ำ</b> (กระดาษติด/ใบหาย) หรือ <b>ยกเลิกรายการนี้</b></li>
+<li>ต้องการพิมพ์ใบครัวซ้ำทั้งโต๊ะ ใช้ปุ่มพิมพ์ใบครัวซ้ำที่หัวส่วน "ส่งครัวแล้ว"</li>
+</ol><div class=tip>ยกเลิกรายการที่ส่งครัวไปแล้ว ควรแจ้งครัวด้วยปากเปล่า</div></div>
+
+<div class=f><h3>6. ใบกำกับภาษี (แคชเชียร์/แอดมิน)</h3><ol>
+<li>กด <b>เพิ่มเติม</b> <span class=n2>4</span> → <b>🧾 ใบกำกับภาษี</b></li>
+<li>เลือกวันที่ หาบิล แล้วกด <b>ออกใบกำกับภาษี</b></li>
+<li>ลูกค้าเก่า: พิมพ์ชื่อ/เลขผู้เสียภาษีในช่องค้นหาแล้วกดเลือก · ลูกค้าใหม่: กรอกเลข 13 หลัก ชื่อ ที่อยู่ สาขา</li>
+<li>กดออกใบ — ได้เลขที่ใบและพิมพ์ออกเครื่องใบเสร็จทันที</li>
+<li>พิมพ์ซ้ำ/แก้ไขข้อมูล: กดเลขที่ใบสีเขียว → พิมพ์ต้นฉบับ/สำเนา หรือ <b>แก้ไขข้อมูล</b> (ได้เลขใหม่)</li>
+</ol></div>
+
+<div class=f><h3>7. ระหว่างวัน / ปิดวัน</h3><ol>
+<li><b>เพิ่มเติม → สรุปยอดขายวันนี้</b> ดูยอดรวม แยกเงินสด/โอน/บัตร</li>
+<li><b>เพิ่มเติม → บันทึกการทิ้ง</b> เมื่อทิ้งวัตถุดิบ/อาหารเสีย</li>
+<li>ข้อมูลโต๊ะดูไม่ตรง กด <b>รีเฟรช</b> <span class=n2>10</span></li>
+<li>เปลี่ยนคน/เลิกงาน กด <b>ออกจากระบบ</b> <span class=n2>6</span></li>
+</ol></div>
+
+<div class=f><h3>8. ปัญหาที่เจอบ่อย</h3><ol>
+<li><b>กดเมนูไม่ได้</b> — ยังไม่ได้เลือกโต๊ะ (ดูแถบเขียว <span class=n2>7</span>)</li>
+<li><b>เมนูขึ้น "ยังไม่ตั้งราคา"</b> — เมนูไม่มีราคาของประเภทการขายนี้ <span class=n2>16</span> ตั้งราคาที่หลังบ้าน</li>
+<li><b>พิมพ์ไม่ออก</b> — เช็กเครื่องปริ้นเปิดอยู่/มีกระดาษ และเครื่อง Print Server เปิดอยู่</li>
+<li><b>แถบแดง "บันทึกบิลไม่สำเร็จ"</b> — ระบบลองส่งใหม่เองทุก 90 วินาที ถ้าไม่หายแจ้งผู้ดูแล</li>
+</ol></div>
+</div>
+</div>
