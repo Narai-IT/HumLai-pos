@@ -630,9 +630,6 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       background: '#ffffff', cursor: 'pointer', fontFamily: 'inherit', color: '#0f172a',
       boxShadow: '0 6px 20px rgba(0,0,0,0.05)'
     });
-    const priceTag = (text, color, bg) => (
-      <span style={{ display: 'inline-block', marginTop: 6, padding: '0.2rem 0.65rem', borderRadius: 999, fontSize: '0.8rem', fontWeight: 800, color, background: bg }}>{text}</span>
-    );
     return (
       <div style={{ minHeight: '100dvh', background: '#f8fafc', width: '100%', maxWidth: 480, margin: '0 auto', padding: '1.5rem 1rem', boxSizing: 'border-box', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif', color: '#0f172a' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
@@ -654,17 +651,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.9rem' }}>
             <button style={bigBtn(false)} onClick={() => chooseOrderType('dine_in')}>
               <span style={{ fontSize: '2.4rem' }}>🍽️</span>
-              <span>
-                <b style={{ fontSize: '1.25rem' }}>{lang === 'th' ? 'ทานที่ร้าน' : 'Dine in'}</b><br />
-                {priceTag(lang === 'th' ? 'ราคาปกติ' : 'Regular price', '#15803d', '#dcfce7')}
-              </span>
+              <b style={{ fontSize: '1.25rem' }}>{lang === 'th' ? 'ทานที่ร้าน' : 'Dine in'}</b>
             </button>
             <button style={bigBtn(false)} onClick={() => chooseOrderType('takeaway')}>
               <span style={{ fontSize: '2.4rem' }}>🛍️</span>
-              <span>
-                <b style={{ fontSize: '1.25rem' }}>{lang === 'th' ? 'ห่อกลับบ้าน' : 'Take away'}</b><br />
-                {priceTag(lang === 'th' ? 'ราคา Takehome' : 'Takehome price', '#c2410c', '#ffedd5')}
-              </span>
+              <b style={{ fontSize: '1.25rem' }}>{lang === 'th' ? 'ห่อกลับบ้าน' : 'Take away'}</b>
             </button>
           </div>
         </>
