@@ -1,12 +1,14 @@
 import React, { useState, useCallback } from 'react';
-import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download } from 'lucide-react';
+import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download, FileText, List } from 'lucide-react';
 import { API_URL } from '../../utils/api';
+import TaxInvoiceModal from './TaxInvoiceModal';
 
 const TABS = [
   { key: 'daily',   label: 'สรุปประจำวัน',       icon: <TrendingUp size={15} /> },
+  { key: 'history', label: 'รายงานยอดขาย',       icon: <Receipt   size={15} /> },
+  { key: 'detail',  label: 'รายละเอียดการขาย',   icon: <List      size={15} /> },
   { key: 'income',  label: 'รายรับ-รายจ่าย',   icon: <TrendingUp size={15} /> },
   { key: 'menu',    label: 'ยอดขายตามเมนู',      icon: <BarChart2  size={15} /> },
-  { key: 'history', label: 'ประวัติการขาย',       icon: <Receipt   size={15} /> },
   { key: 'cancel',  label: 'ประวัติการยกเลิก',    icon: <XCircle   size={15} /> },
   { key: 'shift',   label: 'รายงานปิดกะ',         icon: <Clock     size={15} /> },
 ];
@@ -91,13 +93,17 @@ const td_    = { padding: '0.65rem 0.9rem', fontSize: '0.875rem', borderBottom: 
 
 const branchOf = (u) => String(u?.branch || u?.id || u?.username || '').trim();
 
-export default function Reports({ allMenu = [], isAdmin = false, branch = '', users = [] }) {
+export default function Reports({ allMenu = [], isAdmin = false, branch = '', users = [], userName = '' }) {
   const [tab,     setTab]     = useState('daily');
   const [from,    setFrom]    = useState(TODAY);
   const [to,      setTo]      = useState(TODAY);
   const [loading, setLoading] = useState(false);
   const [data,    setData]    = useState(null);
   const [error,   setError]   = useState('');
+  // ใบกำกับภาษีที่ออกไปแล้ว (โหลดแยก — API รุ่นเก่ายังไม่มี ก็แค่ว่าง) / บิลที่กำลังเปิดหน้าต่างใบกำกับ
+  const [invoices, setInvoices] = useState([]);
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [detailSearch, setDetailSearch] = useState('');
   // ฟิลเตอร์สาขา: admin เลือกได้ทุกสาขา (ค่าว่าง=ทุกสาขา), ไม่ใช่ admin ล็อกเฉพาะสาขาตัวเอง
   const [branchFilter, setBranchFilter] = useState(isAdmin ? '' : branch);
   const inBranch = (r) => !branchFilter || String(r.RecordedBy || '').trim() === branchFilter;
@@ -112,10 +118,6 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     !branchFilter || String(s.openStaff || '').trim() === branchFilter || String(s.closeStaff || '').trim() === branchFilter
   );
 
-  React.useEffect(() => {
-    load(from, to);
-  }, [load, from, to]);
-
   const load = useCallback(async (f, t) => {
     setLoading(true); setError('');
     try {
@@ -123,8 +125,17 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
       const json = await res.json();
       if (json.success) setData(json); else setError('โหลดข้อมูลไม่สำเร็จ');
     } catch { setError('เชื่อมต่อ GAS ไม่ได้ กรุณาตรวจสอบการเชื่อมต่อ'); }
+    try {
+      const res  = await fetch(`${API_URL}?action=getTaxInvoices`);
+      const json = await res.json();
+      setInvoices(json && json.success && Array.isArray(json.invoices) ? json.invoices : []);
+    } catch { setInvoices([]); }
     setLoading(false);
   }, []);
+
+  React.useEffect(() => {
+    load(from, to);
+  }, [load, from, to]);
 
   // ─── Derived ────────────────────────────────────────────────
   const payMap = {};
@@ -144,6 +155,44 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   });
   const completedOrders = Object.values(orderMap).filter(o => ['completed','Completed'].includes(o.status))
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // ใบกำกับของแต่ละบิล: ใบที่ยังใช้อยู่ก่อน ไม่มีค่อยใช้ใบล่าสุดที่ยกเลิกแล้ว (รายการจากเซิร์ฟเวอร์เรียงใหม่ → เก่า)
+  const invoiceByOrder = {};
+  invoices.forEach(inv => {
+    const cur = invoiceByOrder[inv.orderNumber];
+    if (!cur || (cur.cancelled && !inv.cancelled)) invoiceByOrder[inv.orderNumber] = inv;
+  });
+  const salesTotal = completedOrders.reduce((sum, o) => sum + o.total, 0);
+  const invoicedCount = completedOrders.filter(o => invoiceByOrder[o.orderNumber] && !invoiceByOrder[o.orderNumber].cancelled).length;
+  const updateInvoice = (inv) => setInvoices(prev => [inv, ...prev.filter(x => x.invoiceNo !== inv.invoiceNo)]);
+
+  // รายละเอียดการขาย: ทุกรายการอาหารของบิลที่ขายสำเร็จ (ตัวเลือก ↳ ต่อท้ายรายการก่อนหน้า)
+  const completedSet = new Set(completedOrders.map(o => o.orderNumber));
+  const orderInfo = Object.fromEntries(completedOrders.map(o => [o.orderNumber, o]));
+  const detailRows = [];
+  (data?.orders || []).forEach(r => {
+    if (!completedSet.has(r.OrderNumber) || !inBranch(r)) return;
+    const detail = String(r.ItemDetail || '').trim();
+    if (!detail) return;
+    if (detail.startsWith('↳')) {
+      const last = detailRows[detailRows.length - 1];
+      if (last && last.orderNumber === r.OrderNumber) last.options.push(detail.replace(/^↳\s*/, ''));
+      return;
+    }
+    const o = orderInfo[r.OrderNumber];
+    detailRows.push({
+      timestamp: r.Timestamp, orderNumber: r.OrderNumber, customerName: r.CustomerName,
+      name: detail, options: [], dining: r.DiningOption || '', qty: Number(r.Quantity) || 1,
+      amount: Number(r.Price) || 0, paymentMethod: o ? o.paymentMethod : '—'
+    });
+  });
+  detailRows.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const detailQ = detailSearch.trim().toLowerCase();
+  const detailShown = detailQ
+    ? detailRows.filter(d => [d.name, d.orderNumber, d.customerName, d.options.join(' ')].some(v => String(v || '').toLowerCase().includes(detailQ)))
+    : detailRows;
+  const detailQty = detailShown.reduce((s, d) => s + d.qty, 0);
+  const detailAmount = detailShown.reduce((s, d) => s + d.amount, 0);
 
   const cancelledOrders = [];
   const seen = new Set();
@@ -275,8 +324,15 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     exportXLSX([{ name: 'ยอดขายตามเมนู', headers: ['อันดับ','ชื่อเมนู','จำนวน (ครั้ง)','รายได้รวม (บาท)'], rows }], `ยอดขายตามเมนู_${from}_${to}`);
   };
   const exportHistory = () => {
-    const rows = completedOrders.map(o => [fmtD(o.timestamp), o.orderNumber, o.customerName, o.total, o.paymentMethod, o.staff]);
-    exportXLSX([{ name: 'ประวัติการขาย', headers: ['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','ชำระด้วย','พนักงาน'], rows }], `ประวัติการขาย_${from}_${to}`);
+    const rows = completedOrders.map(o => {
+      const inv = invoiceByOrder[o.orderNumber];
+      return [fmtD(o.timestamp), o.orderNumber, o.customerName, o.total, o.paymentMethod, o.staff, inv && !inv.cancelled ? inv.invoiceNo : ''];
+    });
+    exportXLSX([{ name: 'รายงานยอดขาย', headers: ['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','ชำระด้วย','พนักงาน','ใบกำกับภาษี'], rows }], `รายงานยอดขาย_${from}_${to}`);
+  };
+  const exportDetail = () => {
+    const rows = detailShown.map(d => [fmtD(d.timestamp), d.orderNumber, d.customerName, d.name, d.options.join(', '), d.dining, d.qty, d.amount, d.paymentMethod]);
+    exportXLSX([{ name: 'รายละเอียดการขาย', headers: ['วันเวลา','เลขบิล','โต๊ะ','รายการ','ตัวเลือก','ประเภท','จำนวน','ยอดเงิน','ชำระด้วย'], rows }], `รายละเอียดการขาย_${from}_${to}`);
   };
   const exportCancel = () => {
     const rows = cancelledOrders.map(o => [fmtD(o.Timestamp), o.OrderNumber, o.CustomerName, o.TotalAmount, o.RecordedBy || '—']);
@@ -305,7 +361,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     ], `รายงานทั้งหมด_${from}_${to}`);
   };
 
-  const TAB_EXPORT = { daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, cancel: exportCancel, shift: exportShift };
+  const TAB_EXPORT = { daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, detail: exportDetail, cancel: exportCancel, shift: exportShift };
 
   return (
     <div style={{ color: 'var(--text-main)', fontFamily: 'inherit' }}>
@@ -504,22 +560,78 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
             </TableWrap>
           )}
 
-          {/* ── Tab: ประวัติการขาย ── */}
+          {/* ── Tab: รายงานยอดขาย (รายการบิล + ใบกำกับภาษี) ── */}
           {tab === 'history' && (
             <>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '0.75rem' }}>พบ {completedOrders.length} รายการ</div>
-              <TableWrap empty={completedOrders.length === 0} headers={['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','ชำระด้วย','พนักงาน']}>
-                {completedOrders.map((o, i) => (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+                {[
+                  ['จำนวนบิล', fmt(completedOrders.length)],
+                  ['ยอดขายรวม', `฿${fmt(salesTotal)}`],
+                  ['เฉลี่ยต่อบิล', `฿${fmt(completedOrders.length ? Math.round(salesTotal / completedOrders.length) : 0)}`],
+                  ['ออกใบกำกับภาษีแล้ว', `${fmt(invoicedCount)} บิล`],
+                ].map(([k, v]) => (
+                  <div key={k} style={card}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{k}</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 800, marginTop: 4 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <TableWrap empty={completedOrders.length === 0} headers={['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','ชำระด้วย','พนักงาน','ใบกำกับภาษี']}>
+                {completedOrders.map((o, i) => {
+                  const inv = invoiceByOrder[o.orderNumber];
+                  const active = inv && !inv.cancelled;
+                  return (
+                    <tr key={i}>
+                      <Td muted nowrap>{fmtD(o.timestamp)}</Td>
+                      <Td bold color="var(--text-main)">{o.orderNumber}</Td>
+                      <Td>{o.customerName}</Td>
+                      <Td bold>฿{fmt(o.total)}</Td>
+                      <td style={td_}><PayBadge method={o.paymentMethod} /></td>
+                      <Td muted>{o.staff || '—'}</Td>
+                      <td style={td_}>
+                        <button onClick={() => setInvoiceOrder(o)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.78rem', fontWeight: 700, whiteSpace: 'nowrap',
+                            border: `1px solid ${active ? 'rgba(34,197,94,0.4)' : 'rgba(0,0,0,0.15)'}`, background: active ? 'rgba(34,197,94,0.1)' : '#fff', color: active ? '#15803d' : 'var(--text-main)' }}>
+                          <FileText size={13} /> {active ? inv.invoiceNo : 'ออกใบกำกับภาษี'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </TableWrap>
+            </>
+          )}
+
+          {/* ── Tab: รายละเอียดการขาย (ทุกรายการอาหาร) ── */}
+          {tab === 'detail' && (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                <input value={detailSearch} onChange={e => setDetailSearch(e.target.value)} placeholder="ค้นหาเมนู / เลขบิล / โต๊ะ"
+                  style={{ background: '#fff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, padding: '0.45rem 0.75rem', fontFamily: 'inherit', fontSize: '0.85rem', minWidth: 240 }} />
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {fmt(detailShown.length)} รายการ · จำนวนรวม {fmt(detailQty)} · ยอดรวม ฿{fmt(detailAmount)}
+                </span>
+              </div>
+              <TableWrap empty={detailShown.length === 0} headers={['วันเวลา','เลขบิล','โต๊ะ','รายการ','ประเภท','จำนวน','ยอดเงิน','ชำระด้วย']}>
+                {detailShown.map((d, i) => (
                   <tr key={i}>
-                    <Td muted nowrap>{fmtD(o.timestamp)}</Td>
-                    <Td bold color="var(--text-main)">{o.orderNumber}</Td>
-                    <Td>{o.customerName}</Td>
-                    <Td bold>฿{fmt(o.total)}</Td>
-                    <td style={td_}><PayBadge method={o.paymentMethod} /></td>
-                    <Td muted>{o.staff || '—'}</Td>
+                    <Td muted nowrap>{fmtD(d.timestamp)}</Td>
+                    <Td bold color="var(--text-main)">{d.orderNumber}</Td>
+                    <Td>{d.customerName}</Td>
+                    <td style={td_}>
+                      <div style={{ fontWeight: 600 }}>{d.name}</div>
+                      {d.options.length > 0 && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{d.options.join(', ')}</div>}
+                    </td>
+                    <Td muted>{d.dining || '—'}</Td>
+                    <Td center>{d.qty}</Td>
+                    <Td bold>฿{fmt(d.amount)}</Td>
+                    <td style={td_}><PayBadge method={d.paymentMethod} /></td>
                   </tr>
                 ))}
               </TableWrap>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                ยอดเงินรายการเป็นราคาก่อนส่วนลด/ค่าบริการท้ายบิล — ยอดขายสุทธิดูที่แท็บรายงานยอดขาย
+              </p>
             </>
           )}
 
@@ -594,6 +706,16 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
       )}
 
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      {invoiceOrder && (
+        <TaxInvoiceModal
+          order={invoiceOrder}
+          invoice={invoiceByOrder[invoiceOrder.orderNumber] || null}
+          canCancel={isAdmin}
+          userName={userName}
+          onChanged={updateInvoice}
+          onClose={() => setInvoiceOrder(null)}
+        />
+      )}
     </div>
   );
 }

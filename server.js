@@ -9,7 +9,7 @@ const SERVER_NAME = 'humlai-print-server';
 const SERVER_VERSION = '1.3.0';
 // ความสามารถที่ Print Server ตัวนี้มี — หน้าเว็บใช้เช็คว่าเครื่องนี้รันโค้ดเวอร์ชันใหม่พอไหม
 // (เครื่องที่ยังรันตัวเก่าจะไม่มี features กลับมา หน้าเว็บจะได้บอกให้อัปเดตแทนที่จะฟ้อง 404 เฉย ๆ)
-const SERVER_FEATURES = ['autoPrint', 'privateNetwork'];
+const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice'];
 const DEFAULT_PRINTER_PORT = 9100;
 
 const app = express();

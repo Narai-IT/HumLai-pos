@@ -49,6 +49,113 @@ const tableLineOf = (orderData, dining) => {
   return dining === DINE_IN ? `โต๊ะ ${table}` : table;
 };
 
+// ── ใบกำกับภาษีเต็มรูป (กระดาษม้วน) ──
+// หน้าเว็บส่งข้อมูลใบที่เซิร์ฟเวอร์ออกเลขแล้วมาใน orderData.taxInvoice (+ amountText = ยอดเป็นตัวอักษร)
+const LINE = 32;
+// สระบน/ล่างและวรรณยุกต์ไทยไม่กินช่อง — นับความกว้างจริงเพื่อจัดชิดขวาให้ตรง
+const widthOf = (s) => String(s).replace(/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/g, '').length;
+const leftRight = (left, right) => {
+  const gap = LINE - widthOf(left) - widthOf(right);
+  return gap >= 1 ? left + ' '.repeat(gap) + right : `${left}\n${' '.repeat(Math.max(0, LINE - widthOf(right)))}${right}`;
+};
+// ตัดข้อความยาวเป็นหลายบรรทัดตามความกว้างกระดาษ (ตัดที่ช่องว่างถ้าทำได้)
+const wrap = (text, width = LINE) => {
+  const out = [];
+  String(text || '').split(/\r?\n/).forEach(para => {
+    let line = '';
+    for (const word of para.split(/(\s+)/)) {
+      if (widthOf(line + word) <= width) { line += word; continue; }
+      if (line.trim()) out.push(line.trimEnd());
+      line = word.trimStart();
+      while (widthOf(line) > width) {           // คำเดียวยาวเกินบรรทัด (ภาษาไทยไม่มีช่องว่าง) → ตัดตามความกว้าง
+        let cut = 0, w = 0;
+        while (cut < line.length && w < width) { cut++; w = widthOf(line.slice(0, cut)); }
+        while (cut < line.length && /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/.test(line[cut])) cut++;
+        out.push(line.slice(0, cut));
+        line = line.slice(cut);
+      }
+    }
+    if (line.trim()) out.push(line.trimEnd());
+  });
+  return out;
+};
+const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtTaxId = (id) => {
+  const d = String(id || '').replace(/\D/g, '');
+  return d.length === 13 ? `${d[0]}-${d.slice(1, 5)}-${d.slice(5, 10)}-${d.slice(10, 12)}-${d[12]}` : String(id || '');
+};
+const buyerBranchText = (b) => {
+  const s = String(b || '').trim();
+  if (!s || s === 'สำนักงานใหญ่' || /^0+$/.test(s)) return 'สำนักงานใหญ่';
+  return /^\d+$/.test(s) ? `สาขาที่ ${s.padStart(5, '0')}` : s;
+};
+const thaiDateTime = (iso) => {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso || '');
+  return d.toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
+const printTaxInvoice = (printer, inv, copy) => {
+  const seller = inv.seller || {};
+  const buyer = inv.buyer || {};
+  const rule = () => printer.println('-'.repeat(LINE));
+
+  printer.alignCenter();
+  printer.bold(true);
+  wrap(seller.name).forEach(l => printer.println(l));
+  printer.bold(false);
+  wrap(seller.address).forEach(l => printer.println(l));
+  if (seller.phone) printer.println(`โทร ${seller.phone}`);
+  printer.println(`เลขผู้เสียภาษี ${fmtTaxId(seller.taxId)}`);
+  printer.println(`(${seller.branchLabel || 'สำนักงานใหญ่'})`);
+  rule();
+  printer.bold(true);
+  printer.println('ใบกำกับภาษี/ใบเสร็จรับเงิน');
+  printer.bold(false);
+  printer.println('TAX INVOICE / RECEIPT');
+  printer.println(inv.cancelled ? '*** ยกเลิกแล้ว ***' : (copy ? '(สำเนา)' : '(ต้นฉบับ)'));
+  rule();
+
+  printer.alignLeft();
+  printer.println(`เลขที่ ${inv.invoiceNo || '-'}`);
+  printer.println(`วันที่ ${thaiDateTime(inv.issuedAt)}`);
+  printer.println(`อ้างอิงบิล ${inv.orderNumber || '-'}`);
+  rule();
+  printer.println('ผู้ซื้อ');
+  wrap(buyer.name).forEach(l => printer.println(l));
+  printer.println(`เลขผู้เสียภาษี ${fmtTaxId(buyer.taxId)}`);
+  printer.println(buyerBranchText(buyer.branch));
+  wrap(buyer.address).forEach(l => printer.println(l));
+  rule();
+
+  (inv.items || []).forEach(it => {
+    if (it.adjustment) { printer.println(leftRight(it.name, money2(it.amount))); return; }
+    const name = `${it.qty}x ${it.name}`;
+    const amount = money2(it.amount);
+    const lines = wrap(name, LINE - widthOf(amount) - 1);
+    lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+    if (Number(it.qty) > 1) printer.println(`   @ ${money2(it.unitPrice)}`);
+  });
+  rule();
+  printer.println(leftRight('มูลค่าก่อนภาษี', money2(inv.subtotal)));
+  printer.println(leftRight(`ภาษีมูลค่าเพิ่ม ${inv.vatRate}%`, money2(inv.vatAmount)));
+  printer.bold(true);
+  printer.println(leftRight('รวมทั้งสิ้น', money2(inv.total)));
+  printer.bold(false);
+  if (inv.amountText) {
+    printer.alignCenter();
+    wrap(`(${inv.amountText})`).forEach(l => printer.println(l));
+  }
+  printer.alignLeft();
+  rule();
+  printer.println('');
+  printer.println('ผู้รับเงิน ______________________');
+  if (inv.cancelled && inv.cancelReason) {
+    printer.println('');
+    wrap(`ยกเลิก: ${inv.cancelReason}`).forEach(l => printer.println(l));
+  }
+};
+
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
 // ให้ผู้เรียกตัดสินใจเองว่าจะตอบ HTTP อะไรหรือจะลองใหม่ไหม
 export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' }) => {
@@ -69,6 +176,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     const isConnected = await printer.isPrinterConnected();
     if (!isConnected) {
       return { success: false, error: 'Printer is not connected or reachable at ' + ip };
+    }
+
+    // ใบกำกับภาษีเต็มรูป — รูปแบบของตัวเอง ไม่ใช้หัวใบเสร็จ และไม่เปิดลิ้นชัก
+    if (printerType === 'taxinvoice') {
+      if (!orderData.taxInvoice) return { success: false, error: 'ไม่มีข้อมูลใบกำกับภาษี' };
+      printTaxInvoice(printer, orderData.taxInvoice, !!orderData.copy);
+      printer.cut();
+      await printer.execute();
+      console.log(`Tax invoice ${orderData.taxInvoice.invoiceNo} sent to ${ip}`);
+      return { success: true };
     }
 
     // ใบแจ้งยอด = ให้ลูกค้าตรวจก่อนจ่าย หน้าตาเหมือนใบเสร็จแต่ยังไม่ใช่ใบเสร็จ
