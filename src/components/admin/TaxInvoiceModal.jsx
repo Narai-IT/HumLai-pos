@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, FileText, Printer, Ban, Search } from 'lucide-react';
+import { X, FileText, Printer, Ban, Search, Pencil } from 'lucide-react';
 import { API_URL } from '../../utils/api';
 import { printTaxInvoice } from '../../utils/taxInvoicePrint';
 
@@ -25,6 +25,8 @@ export default function TaxInvoiceModal({ order, invoice, onClose, onChanged, ca
   const [error, setError] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [askCancel, setAskCancel] = useState(false);
+  // แก้ไขข้อมูลผู้ซื้อของใบที่ออกแล้ว = ยกเลิกใบเดิม + ออกเลขใหม่ (ทำที่เซิร์ฟเวอร์ในคำสั่งเดียว)
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -78,11 +80,25 @@ export default function TaxInvoiceModal({ order, invoice, onClose, onChanged, ca
     };
     setBusy(true);
     try {
-      const json = await post({ action: 'issueTaxInvoice', orderNumber: order.orderNumber, buyer: payloadBuyer, issuedBy: userName });
-      onChanged && onChanged(json.invoice);
-      await doPrint(json.invoice);
+      if (editMode && invoice && !invoice.cancelled) {
+        const json = await post({ action: 'reissueTaxInvoice', invoiceNo: invoice.invoiceNo, buyer: payloadBuyer, issuedBy: userName });
+        onChanged && onChanged({ ...invoice, cancelled: true, cancelReason: `แก้ไขข้อมูลผู้ซื้อ — ออกใบใหม่ ${json.invoice.invoiceNo}` });
+        onChanged && onChanged(json.invoice);
+        setEditMode(false);
+        await doPrint(json.invoice);
+      } else {
+        const json = await post({ action: 'issueTaxInvoice', orderNumber: order.orderNumber, buyer: payloadBuyer, issuedBy: userName });
+        onChanged && onChanged(json.invoice);
+        await doPrint(json.invoice);
+      }
     } catch (e) { setError(e.message || String(e)); }
     setBusy(false);
+  };
+
+  const startEdit = () => {
+    const b = invoice.buyer || {};
+    setBuyer({ name: b.name || '', taxId: String(b.taxId || ''), address: b.address || '', phone: '', branchType: isHQ(b.branch) ? 'hq' : 'branch', branchNo: isHQ(b.branch) ? '' : b.branch });
+    setError(''); setInfo(''); setAskCancel(false); setEditMode(true);
   };
 
   const cancel = async () => {
@@ -113,7 +129,7 @@ export default function TaxInvoiceModal({ order, invoice, onClose, onChanged, ca
           {order.customerName || '—'} · ยอดบิล <b style={{ color: 'var(--text-main)' }}>฿{money(order.total)}</b>
         </div>
 
-        {active ? (
+        {active && !editMode ? (
           <>
             <div style={{ marginTop: '1rem', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 12, padding: '0.85rem 1rem', lineHeight: 1.7, fontSize: '0.9rem' }}>
               <div>เลขที่ <b>{active.invoiceNo}</b></div>
@@ -124,6 +140,7 @@ export default function TaxInvoiceModal({ order, invoice, onClose, onChanged, ca
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '1rem' }}>
               <button style={btn('#0f172a')} onClick={() => doPrint(active)}><Printer size={16} /> พิมพ์ต้นฉบับ</button>
               <button style={btn('#475569')} onClick={() => doPrint(active, true)}><Printer size={16} /> พิมพ์สำเนา</button>
+              <button style={btn('#eff6ff', '#2563eb')} onClick={startEdit}><Pencil size={16} /> แก้ไขข้อมูล</button>
               {canCancel && !askCancel && (
                 <button style={btn('rgba(220,38,38,0.1)', '#dc2626')} onClick={() => setAskCancel(true)}><Ban size={16} /> ยกเลิกใบนี้</button>
               )}
@@ -141,7 +158,12 @@ export default function TaxInvoiceModal({ order, invoice, onClose, onChanged, ca
           </>
         ) : (
           <>
-            {invoice && invoice.cancelled && (
+            {editMode && (
+              <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '0.6rem 0.8rem' }}>
+                แก้ไขข้อมูลใบ {invoice.invoiceNo} — กดบันทึกแล้วระบบจะยกเลิกใบเดิมและออก<b>เลขที่ใหม่</b>ให้ทันที (ใบกำกับภาษีแก้เลขเดิมไม่ได้) แล้วพิมพ์ใบใหม่ออกเครื่อง
+              </div>
+            )}
+            {!editMode && invoice && invoice.cancelled && (
               <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', color: '#b45309' }}>
                 ใบเดิม {invoice.invoiceNo} ถูกยกเลิกแล้ว ({invoice.cancelReason}) — ออกใบใหม่ได้ด้านล่าง
               </div>
@@ -186,9 +208,9 @@ export default function TaxInvoiceModal({ order, invoice, onClose, onChanged, ca
 
             <div style={{ marginTop: '1.1rem', display: 'flex', gap: '0.5rem' }}>
               <button style={btn('#16a34a')} disabled={busy} onClick={issue}>
-                <FileText size={16} /> {busy ? 'กำลังออกใบ...' : 'ออกใบกำกับภาษีและพิมพ์'}
+                <FileText size={16} /> {busy ? 'กำลังบันทึก...' : (editMode ? 'บันทึกการแก้ไขและพิมพ์ใบใหม่' : 'ออกใบกำกับภาษีและพิมพ์')}
               </button>
-              <button style={btn('#e2e8f0', '#0f172a')} onClick={onClose}>ปิด</button>
+              <button style={btn('#e2e8f0', '#0f172a')} onClick={editMode ? () => setEditMode(false) : onClose}>{editMode ? 'ยกเลิกการแก้ไข' : 'ปิด'}</button>
             </div>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '0.75rem 0 0' }}>
               พิมพ์ออกเครื่องพิมพ์ใบเสร็จของเครื่องนี้ · ยอดเงินคิดจากบิลจริง ราคารวม VAT แล้ว (ถอด VAT ตามอัตราในตั้งค่าร้าน ไม่ได้ตั้ง = 7%) · ข้อมูลร้านมาจาก หลังบ้าน &gt; สาขา · ลูกค้าถูกบันทึกไว้ใช้ครั้งหน้าอัตโนมัติ
