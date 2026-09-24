@@ -251,7 +251,14 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
           }
         }
 
-        printer.println(`${qty}x ${itemName}`);
+        // ใบเสร็จ/ใบแจ้งยอดที่หน้าเว็บส่งราคาบรรทัดมาด้วย (amount) → พิมพ์ราคาชิดขวา
+        if (isCustomerCopy && item.amount !== undefined && item.amount !== null && item.amount !== '') {
+          const amount = money2(item.amount);
+          const lines = wrap(`${qty}x ${itemName}`, LINE - widthOf(amount) - 1);
+          lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+        } else {
+          printer.println(`${qty}x ${itemName}`);
+        }
 
         // Print SubItems / Options
         if (item.isFlattened && item.subItems) {
