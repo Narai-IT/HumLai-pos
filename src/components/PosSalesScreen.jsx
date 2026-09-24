@@ -382,7 +382,7 @@ const PosSalesScreen = ({
           {/* ── แถบเตือนสถานะ ── */}
           {!tableNumber && (
             <div className="pos2-notice">
-              👆 {t('เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ',
+              {t('เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ',
                     'Pick a table below, then tap menu items to add them.')}
             </div>
           )}
