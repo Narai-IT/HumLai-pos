@@ -14,8 +14,11 @@ const cols = (list) => list.map(c => `[${c}]`).join(', ');
 
 const ORDER_COLS   = cols(['Timestamp','OrderNumber','CustomerName','Address','ItemDetail','DiningOption','Price','TotalAmount','Status','OrderStartTime','CompletionTime','RecordedBy','Quantity']);
 const TABLE_COLS   = cols(['TableNumber','SessionId','ItemName','ItemNameEn','ItemPrice','Quantity','Options','Timestamp','Status','RecordedBy']);
-const MENU_COLS    = cols(['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId']);
+const MENU_BASE    = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
+const MENU_COLS    = cols([...MENU_BASE, 'branches']);
 const CATEGORY_COLS= cols(Object.keys(CATEGORY_SPEC));
+// ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ยังไม่มีคอลัมน์ใหม่) → อ่านแบบเดิม หน้าร้านต้องโหลดเมนูได้เสมอ
+const CATEGORY_BASE= cols(Object.keys(CATEGORY_SPEC).filter(k => k !== 'visibility'));
 const PROMO_COLS   = cols(['id','name','nameEn','price','origPrice']);
 const USER_COLS    = cols(['id','username','pin','canCheckout','isAdmin','isCashier','branch']);
 const BRANCH_COLS  = cols(['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive']);
@@ -64,7 +67,10 @@ export const getBranchTables = async () => {
 // เมนูเรียงตามลำดับที่จัดไว้ในหน้าจัดการเมนู — เมนูที่ยังไม่เคยจัด (sortOrder ว่าง) ต่อท้ายตามลำดับที่สร้าง
 // ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ไม่มีคอลัมน์ sortOrder) → เรียงแบบเดิม ไม่ให้หน้าร้านโหลดเมนูไม่ขึ้น
 const getMenuRows = () => allRows('Menu', MENU_COLS, mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq')
-  .catch(() => allRows('Menu', MENU_COLS, mapMenu));
+  .catch(() => allRows('Menu', cols(MENU_BASE), mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq'))
+  .catch(() => allRows('Menu', cols(MENU_BASE), mapMenu));
+const getCategoryRows = () => allRows('Categories', CATEGORY_COLS, mapCategory)
+  .catch(() => allRows('Categories', CATEGORY_BASE, mapCategory));
 
 // ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
 // ต้องไม่ทำให้ getStatic ทั้งก้อนพัง ไม่งั้นหน้าร้านโหลดเมนูไม่ขึ้น
@@ -74,7 +80,7 @@ const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() =
 // branchId = ส่งเมนูที่ปรับตามสาขานั้นแล้ว ('' = เมนูกลาง ใช้ในหน้าหลังบ้าน)
 export async function buildStaticData(branchId = '') {
   const [categories, rawMenu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch, menuBranchRows] = await Promise.all([
-    allRows('Categories', CATEGORY_COLS, mapCategory),
+    getCategoryRows(),
     getMenuRows(),
     allRows('Promotions', PROMO_COLS, mapPromotion),
     // ไม่ส่งรหัสพนักงานออกไป — ใครก็เรียก getStatic ได้ (หน้าลูกค้าสั่งเอง) รหัสเช็กที่เซิร์ฟเวอร์ตอนล็อกอิน

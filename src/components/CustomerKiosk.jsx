@@ -4,6 +4,7 @@ import { ShoppingBag, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRig
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
+import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
 
@@ -442,12 +443,14 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // ── หน้าแรกโชว์ครบทุกเมนู แยกเป็นบล็อกตามหมวด ──
   // เดิมกรองให้เห็นทีละหมวด ลูกค้าไม่รู้ว่ามีอะไรอีกบ้างถ้าไม่กดเปลี่ยนหมวด
   // ตอนนี้ไล่ดูรวดเดียวได้ ส่วนปุ่มหมวดหมู่เปลี่ยนหน้าที่เป็น "เลื่อนไปยังหมวดนั้น"
+  // หมวดที่ตั้งเป็น "เฉพาะพนักงาน" ไม่แสดงที่นี่ (ป๊อปอัพยังใช้เมนูครบชุดตามเดิม)
   const menuSections = useMemo(() => {
-    const sections = categories.map(cat => ({
+    const shownMenu = liveMenu.filter(item => menuVisibleFor(item, categories, 'customer'));
+    const sections = categories.filter(cat => categoryVisibleFor(cat, 'customer')).map(cat => ({
       slug: cat.slug,
       name: lang === 'th' ? cat.name : (cat.nameEn || cat.name),
       icon: cat.icon || '🍲',
-      items: liveMenu.filter(item => {
+      items: shownMenu.filter(item => {
         const primary = item.category || 'food';
         const extra = Array.isArray(item.categories) ? item.categories : [];
         return primary === cat.slug || extra.includes(cat.slug);
@@ -456,7 +459,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
     // เมนูที่หมวดของมันถูกลบ/เปลี่ยนชื่อไปแล้ว ต้องยังเห็นอยู่ ไม่ใช่หายไปเงียบ ๆ
     const shown = new Set(sections.flatMap(section => section.items.map(item => String(item.id))));
-    const rest = liveMenu.filter(item => !shown.has(String(item.id)));
+    const rest = shownMenu.filter(item => !shown.has(String(item.id)));
     if (rest.length > 0) {
       sections.push({ slug: '__other__', name: lang === 'th' ? 'เมนูอื่น ๆ' : 'Others', icon: '🍽️', items: rest });
     }

@@ -49,7 +49,11 @@ export function applyBranchMenu(menu, rows, printers, branchId) {
     return twin ? String(twin.id) : id; // หาไม่เจอ → หน้าเว็บตกไปใช้ปริ้นเตอร์ครัวเอง
   };
 
-  return menu.map(item => {
+  // เมนูที่ตั้งให้ขายเฉพาะบางสาขา — สาขาอื่นไม่เห็นเลย (หน้าขาย หน้าลูกค้า ป๊อปอัพ)
+  const soldHere = (item) => !Array.isArray(item.branches) || item.branches.length === 0 ||
+    item.branches.some(b => String(b) === String(branchId));
+
+  return menu.filter(soldHere).map(item => {
     const row = byMenu.get(String(item.id));
     const out = { ...item, printerId: localPrinterFor(item.printerId) };
     if (!row) return out;

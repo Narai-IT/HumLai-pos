@@ -11,7 +11,7 @@ import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { issueTaxInvoice, cancelTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-09-23-tax-invoice';
+export const BUILD = '2026-09-24-menu-visibility';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {

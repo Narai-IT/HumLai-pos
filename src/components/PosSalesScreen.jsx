@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import FoodCard from './FoodCard';
 import { SALE_TYPES, sameTable, readTablesConfig, priceTypeForTable, saleTypesForTable } from '../utils/salePricing';
+import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import './PosSalesScreen.css';
 
 // โต๊ะที่มีของค้างนานเกินเท่านี้ (นาที) จะขึ้นสีส้มเตือน
@@ -175,9 +176,10 @@ const PosSalesScreen = ({
     const q = query.trim().toLowerCase();
     if (!q) return [];
     return liveMenu
+      .filter(m => menuVisibleFor(m, categories, 'staff'))
       .filter(m => String(m.name || '').toLowerCase().includes(q) || String(m.nameEn || '').toLowerCase().includes(q))
       .slice(0, 20);
-  }, [query, liveMenu]);
+  }, [query, liveMenu, categories]);
 
   // ── โต๊ะที่ลูกค้าจ่ายมาเองครบแล้ว = เหลือแค่กดว่าเรียบร้อยเพื่อคืนโต๊ะให้ว่าง ──
   // ต้องไม่มีของค้างในตะกร้าและไม่มีของที่ต้องเก็บเงิน ไม่งั้นของจะหายไปพร้อมการปิดโต๊ะ
@@ -314,7 +316,8 @@ const PosSalesScreen = ({
     return () => document.removeEventListener('mousedown', close);
   }, [moreOpen]);
 
-  const visibleCats = categories.filter(c => liveMenu.some(i => itemInCategory(i, c.slug)));
+  // หมวดที่ตั้งเป็น "เฉพาะลูกค้า" ไม่แสดงในหน้าขายของพนักงาน
+  const visibleCats = categories.filter(c => categoryVisibleFor(c, 'staff') && liveMenu.some(i => itemInCategory(i, c.slug)));
   const gridItems = liveMenu.filter(i => itemInCategory(i, activeCategory));
 
   return (

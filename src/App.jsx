@@ -34,6 +34,7 @@ const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
 import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining, resolveNoteConfig } from './utils/popupConfig';
 import { priceForSaleType, readTablesConfig } from './utils/salePricing';
+import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
 import { sendPrintJob, setReceiptHeader } from './utils/printServer';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
@@ -671,7 +672,7 @@ function App() {
   };
 
   React.useEffect(() => {
-    const visibleCats = categories.filter(cat => liveMenu.some(i => itemInCategory(i, cat.slug)));
+    const visibleCats = categories.filter(cat => categoryVisibleFor(cat, 'staff') && liveMenu.some(i => itemInCategory(i, cat.slug)));
     if (visibleCats.length > 0 && !visibleCats.find(c => c.slug === activeCategory)) {
       setActiveCategory(visibleCats[0].slug);
     }

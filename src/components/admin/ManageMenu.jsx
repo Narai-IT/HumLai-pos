@@ -11,6 +11,8 @@ const ManageMenu = () => {
   const { lang } = useOutletContext();
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
+  // สาขาทั้งหมด — ใช้ตั้งว่าเมนูขายเฉพาะสาขาไหน (มีสาขาเดียวไม่ต้องแสดงตัวเลือก)
+  const [branchList, setBranchList] = useState([]);
 
   // ตารางเมนูเคยโชว์รหัสหมวดดิบ ๆ ซึ่งอ่านรู้เรื่องตอนรหัสเป็นคำอย่าง 'food'
   // พอรหัสเป็น HL##### ต้องแปลงเป็นชื่อหมวดก่อนแสดง
@@ -94,6 +96,7 @@ const ManageMenu = () => {
         localStorage.setItem('gas_all_data', JSON.stringify(data));
         setMenuItems(Array.isArray(data.menu) ? data.menu.map(flattenPopupConfig) : []);
         setCategories(Array.isArray(data.categories) ? data.categories : []);
+        setBranchList(Array.isArray(data.branches) ? data.branches.filter(b => b && b.id && b.isActive !== false) : []);
       }
     } catch(e) {
       console.error('Failed to fetch menu:', e);
@@ -160,6 +163,7 @@ const ManageMenu = () => {
       isActive: true,
       bundledItems: [],
       printerId: '',
+      branches: [],
       prices: [
         { name: 'ปกติ', price: '' },
         { name: 'Takehome', price: '' },
@@ -506,6 +510,11 @@ const ManageMenu = () => {
                       }}>
                         {item.isActive !== false ? (lang === 'th' ? 'เปิด' : 'Active') : (lang === 'th' ? 'ซ่อน' : 'Hidden')}
                       </span>
+                      {Array.isArray(item.branches) && item.branches.length > 0 && (
+                        <div style={{ marginTop: 4, fontSize: '0.75rem', color: '#2563eb', fontWeight: 600 }}>
+                          🏠 {item.branches.map(id => (branchList.find(b => String(b.id) === String(id)) || {}).name || id).join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td>
                       <button className="admin-btn secondary" style={{ marginRight: '0.5rem', padding: '0.4rem' }} onClick={() => handleEdit(item)}>
@@ -838,6 +847,43 @@ const ManageMenu = () => {
                   {lang === 'th' ? 'เปิดใช้งาน (แสดงบนหน้าร้าน)' : 'Active (Show on storefront)'}
                 </label>
               </div>
+
+              {/* สาขาที่ขายเมนูนี้ */}
+              {branchList.length > 1 && (() => {
+                const chosen = Array.isArray(editingItem.branches) ? editingItem.branches.map(String) : [];
+                const allBranches = chosen.length === 0;
+                const toggle = (id) => {
+                  const next = chosen.includes(id) ? chosen.filter(x => x !== id) : [...chosen, id];
+                  setEditingItem({ ...editingItem, branches: next });
+                };
+                return (
+                  <div className="admin-form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.25rem' }}>
+                    <label style={{ marginBottom: '0.5rem', display: 'block' }}>{lang === 'th' ? 'แสดงที่สาขา' : 'Sold at branches'}</label>
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button type="button" onClick={() => setEditingItem({ ...editingItem, branches: [] })}
+                        style={{ padding: '0.4rem 0.8rem', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: allBranches ? 700 : 500,
+                          border: `1.5px solid ${allBranches ? 'var(--accent)' : 'rgba(0,0,0,0.15)'}`, background: allBranches ? 'rgba(234,179,8,0.15)' : '#fff', color: 'var(--text-main)' }}>
+                        {lang === 'th' ? 'ทุกสาขา' : 'All branches'}
+                      </button>
+                      {branchList.map(b => {
+                        const on = chosen.includes(String(b.id));
+                        return (
+                          <button type="button" key={b.id} onClick={() => toggle(String(b.id))}
+                            style={{ padding: '0.4rem 0.8rem', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: on ? 700 : 500,
+                              border: `1.5px solid ${on ? '#2563eb' : 'rgba(0,0,0,0.15)'}`, background: on ? 'rgba(37,99,235,0.1)' : '#fff', color: 'var(--text-main)' }}>
+                            {on ? '✓ ' : ''}{b.name || b.id}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {lang === 'th'
+                        ? (allBranches ? 'ขายทุกสาขา (รวมสาขาที่เพิ่มใหม่ในอนาคต)' : 'สาขาที่ไม่ได้เลือกจะไม่เห็นเมนูนี้เลย ทั้งหน้าขายและหน้าลูกค้า — ต้องรัน update-api.bat ก่อนถึงจะมีผล')
+                        : (allBranches ? 'Sold at every branch' : 'Unselected branches will not see this item at all.')}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Printer Selection */}
               <div className="admin-form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.25rem' }}>
