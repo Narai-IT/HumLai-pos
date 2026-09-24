@@ -34,7 +34,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (!tableParam) setTableNo(type === 'takeaway' ? takeawayTable : DINE_IN_LABEL);
   };
 
-  // เมนูพร้อมราคาตามที่เลือก: ห่อกลับบ้าน = ราคา Takehome ถ้าเมนูตั้งไว้ (ไม่ตั้ง = ราคาปกติ)
+  // เมนูพร้อมราคาตามที่เลือก: ห่อกลับบ้าน = ราคา Takehome
+  // เมนูที่ไม่ได้ตั้งราคา Takehome → ไม่แสดงในรายการตอนห่อกลับบ้าน (noTakehomePrice)
+  //   แต่ยังอยู่ในชุดนี้ด้วยราคาปกติ ให้ป๊อปอัพ/ของแถมที่อ้างถึงยังหาเจอ
   // เมนูที่มีแต่ราคาช่องทางอื่น (เช่นเฉพาะ Delivery) ไม่แสดง เหมือนหน้าขาย
   const liveMenu = useMemo(() => {
     if (!orderType) return rawMenu;
@@ -44,7 +46,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       const takehome = orderType === 'takeaway' ? priceForSaleType(opts, 'Takehome') : null;
       const chosen = takehome || priceForSaleType(opts, '');
       if (!chosen) return;
-      out.push({ ...food, price: Number(chosen.price) || 0, ...(takehome ? { priceName: takehome.name } : {}) });
+      out.push({ ...food, price: Number(chosen.price) || 0, ...(takehome ? { priceName: takehome.name } : {}),
+        ...(orderType === 'takeaway' && !takehome ? { noTakehomePrice: true } : {}) });
     });
     return out;
   }, [rawMenu, orderType]);
@@ -445,7 +448,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // ตอนนี้ไล่ดูรวดเดียวได้ ส่วนปุ่มหมวดหมู่เปลี่ยนหน้าที่เป็น "เลื่อนไปยังหมวดนั้น"
   // หมวดที่ตั้งเป็น "เฉพาะพนักงาน" ไม่แสดงที่นี่ (ป๊อปอัพยังใช้เมนูครบชุดตามเดิม)
   const menuSections = useMemo(() => {
-    const shownMenu = liveMenu.filter(item => menuVisibleFor(item, categories, 'customer'));
+    const shownMenu = liveMenu.filter(item => !item.noTakehomePrice && menuVisibleFor(item, categories, 'customer'));
     const sections = categories.filter(cat => categoryVisibleFor(cat, 'customer')).map(cat => ({
       slug: cat.slug,
       name: lang === 'th' ? cat.name : (cat.nameEn || cat.name),
@@ -891,6 +894,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           categories={categories}
           basePrice={Number(selectedFood.price) || 0}
           askDining={false}
+          hasPriceForCustomerType={(m) => !m.noTakehomePrice}
           noteOptions={kioskNoteConfig.options}
           allowCustomNote={kioskNoteConfig.allowCustom}
           onClose={() => setSelectedFood(null)}
