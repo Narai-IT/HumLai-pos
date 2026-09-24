@@ -199,8 +199,9 @@ export async function handleGet(action, params) {
       if (to)   bounds.to   = to;
 
       const [orders, payments, shifts, waste] = await Promise.all([
-        query(`SELECT ${ORDER_COLS} FROM dbo.Orders ${range('TsLocal')} ORDER BY RowId ASC`, bounds)
-          .then(r => r.recordset.map(mapOrder)),
+        // BranchId ให้หน้าใบกำกับภาษีของแต่ละสาขาเห็นเฉพาะบิลของร้านตัวเอง
+        query(`SELECT ${ORDER_COLS}, [BranchId] FROM dbo.Orders ${range('TsLocal')} ORDER BY RowId ASC`, bounds)
+          .then(r => r.recordset.map(row => ({ ...mapOrder(row), BranchId: row.BranchId ? String(row.BranchId) : '' }))),
         // payments ส่งทั้งหมดไม่กรองวัน — หน้าบ้านจับคู่ด้วยเลขบิล (เหมือนของเดิม)
         lastRows('PaymentSummary', PAYMENT_COLS, mapPayment),
         allRows('Shifts', SHIFT_COLS, mapShift),
