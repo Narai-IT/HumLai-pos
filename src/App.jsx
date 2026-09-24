@@ -12,6 +12,7 @@ import { isAllBranches } from './utils/branches';
 // โหลดแบบ lazy: 2 โมดอลนี้ลากไลบรารีหนัก (html2canvas, qrcode) เปิดตอนกดเท่านั้น → bundle หน้าแรกเล็กลง
 const SalesSummaryModal = lazy(() => import('./components/SalesSummaryModal'));
 const TaxInvoicePage = lazy(() => import('./components/TaxInvoicePage'));
+const KioskPaymentAlerts = lazy(() => import('./components/KioskPaymentAlerts'));
 const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
 // โหลดแบบ lazy: หน้าหลังบ้าน/ครัว/เหล้า/บิลค้าง ไม่ต้องโหลดตอนเปิดหน้าร้าน → เริ่มแอปไวขึ้น
 const KitchenMonitor = lazy(() => import('./components/KitchenMonitor'));
@@ -1290,6 +1291,50 @@ function App() {
     }, 0);
   };
 
+  // ── ลูกค้าแจ้งโอน (หน้าคีออส) → รอพนักงานหน้าขายกดยืนยัน ──
+  // ส่งออเดอร์ทั้งก้อนไปเก็บไว้ก่อน บิลจริงออกตอนพนักงานกด "ได้รับเงินแล้ว" (respondKioskPayment)
+  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel) => {
+    const cartForServer = cartItems.map(item => {
+      let unitPrice = Number(item.food.price) || 0;
+      if (item.allPopups && item.allPopups.length > 0) {
+        item.allPopups.forEach(p => { unitPrice += Number(p.price || 0); });
+      }
+      return { ...item, food: { ...item.food, price: unitPrice } };
+    });
+    const payload = {
+      action: 'kioskPaymentRequest',
+      branchId: branchKey,
+      tableNumber: String(targetTableNo || ''),
+      dining: diningLabel || '',
+      sessionId: String(paySessionId),
+      items: cartForServer,
+      total: Number(total) || 0,
+      timestamp: getThaiTimeISO()
+    };
+    let lastError = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
+        const json = await res.json().catch(() => null);
+        if (json && json.success) return { success: true, status: json.status || 'pending', orderNumber: json.orderNumber || '' };
+        lastError = (json && json.error) || 'ส่งไม่สำเร็จ';
+        if (/Unknown action/i.test(lastError)) break;
+      } catch (e) {
+        lastError = String(e.message || e);
+      }
+      await new Promise(r => setTimeout(r, 1200 * (attempt + 1)));
+    }
+    return { success: false, error: lastError };
+  };
+
+  const checkKioskPayment = async (paySessionId) => {
+    try {
+      const res = await fetch(`${API_URL}?action=getKioskPayment&id=${encodeURIComponent(paySessionId)}`);
+      const json = await res.json();
+      return json && json.success ? json : null;
+    } catch { return null; }
+  };
+
   // ออเดอร์จากคีออส — ลูกค้าโอนเงินและสลิปผ่านการตรวจมาแล้ว จึงต้องบันทึกเป็น "บิลที่จ่ายแล้ว"
   // ไม่ใช่แค่รายการรายโต๊ะ ไม่งั้นยอดไม่เข้ารายงาน/สรุปกะ และพนักงานอาจเก็บเงินซ้ำตอนปิดโต๊ะ
   // ฝั่งเซิร์ฟเวอร์ (action kioskPaidOrder) ออกเลขบิล + ลง Orders/PaymentSummary/TableOrders + ตัดสต็อก
@@ -1448,8 +1493,8 @@ function App() {
             }}
           />
         } />
-        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} tables={kioskTables} />} />
-        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} lang={lang} tables={kioskTables} />} />
+        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} />} />
+        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} />} />
 
         <Route path="/table-orders" element={
           !tableNumber ? <Navigate to="/index" replace /> :
@@ -1625,6 +1670,18 @@ function App() {
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmOrder}
         />
+      )}
+
+      {/* ลูกค้าสแกน QR แจ้งโอน → เด้งให้พนักงานสาขานี้ยืนยันยอด (ทุกหน้าของพนักงาน ยกเว้นหน้าลูกค้า/หน้าแรก) */}
+      {currentUser && !isKioskPath && !isLandingPath && (
+        <Suspense fallback={null}>
+          <KioskPaymentAlerts
+            branchId={branchKey}
+            userName={currentUser?.username || ''}
+            allMenu={allMenu.length > 0 ? allMenu : liveMenu}
+            onApproved={() => { refreshTableOrders(); fetchOrdersFromSheet(); }}
+          />
+        </Suspense>
       )}
 
       {showTaxInvoicePage && (
