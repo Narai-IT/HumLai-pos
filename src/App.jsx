@@ -1521,6 +1521,7 @@ function App() {
               onOpenAdmin={() => navigate('/admin')}
               onOpenWaste={() => navigate('/waste')}
               onOpenPrep={() => navigate('/prep')}
+              onOpenStockCount={() => navigate('/stock-count')}
               onOpenSummary={(mode) => { setSalesSummaryMode(mode); setShowSalesSummaryModal(true); }}
               onOpenTaxInvoice={() => setShowTaxInvoicePage(true)}
             onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
@@ -1554,6 +1555,19 @@ function App() {
           <WasteRecord
             key="waste"
             mode="waste"
+            currentUser={currentUser}
+            lang={lang}
+            branch={branch}
+            onBack={() => navigate('/index')}
+            menu={allMenu.length > 0 ? allMenu : liveMenu}
+            categories={allCategories.length > 0 ? allCategories : categories}
+          />
+        } />
+
+        <Route path="/stock-count" element={
+          <WasteRecord
+            key="count"
+            mode="count"
             currentUser={currentUser}
             lang={lang}
             branch={branch}

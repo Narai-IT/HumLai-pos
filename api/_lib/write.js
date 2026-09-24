@@ -352,7 +352,7 @@ export async function saveLiquorRecord(data) {
   return { success: true };
 }
 
-// บันทึกการทิ้ง / บันทึกการเตรียม — ตารางเดียวกัน แยกด้วยคอลัมน์ kind
+// บันทึกการทิ้ง / การเตรียม / การนับสต็อก — ตาราง Waste เดียวกัน แยกด้วยคอลัมน์ kind (waste/prep/count)
 // itemType: 'menu' (เมนูที่ขาย) / 'ingredient' (วัตถุดิบในระบบสต็อก)
 async function saveKitchenLog(data, kind) {
   const ts = data.timestamp || thaiTimeISO();
@@ -366,3 +366,4 @@ async function saveKitchenLog(data, kind) {
 
 export const saveWasteRecord = (data) => saveKitchenLog(data, 'waste');
 export const savePrepRecord = (data) => saveKitchenLog(data, 'prep');
+export const saveStockCount = (data) => saveKitchenLog(data, 'count');

@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Trash2, RefreshCw, X, Save, ChevronLeft, Clock, Building2, ChefHat } from 'lucide-react';
+import { Trash2, RefreshCw, X, Save, ChevronLeft, Clock, Building2, ChefHat, ClipboardList } from 'lucide-react';
 import { API_URL } from '../utils/api';
 
 const WASTE_UNITS = ['จาน', 'แก้ว', 'ขวด', 'ชิ้น', 'ถ้วย', 'ที่', 'กรัม', 'กิโลกรัม', 'มล.', 'ลิตร', 'ถุง', 'แพ็ค', 'ฟอง', 'หม้อ', 'รายการ'];
 
-// หน้าเดียวใช้ 2 แบบ: บันทึกการทิ้ง (waste) / บันทึกการเตรียม (prep) — เลือกได้ทั้งเมนูและวัตถุดิบ
+// หน้าเดียวใช้ 3 แบบ: บันทึกการทิ้ง (waste) / การเตรียม (prep) / การนับสต็อก (count) — เลือกได้ทั้งเมนูและวัตถุดิบ
 const MODES = {
   waste: { color: '#dc2626', soft: 'rgba(239,68,68,', text: '#fca5a5', title: 'บันทึกการทิ้ง (Waste)', titleEn: 'Waste Record', verb: 'ทิ้ง', action: 'saveWasteRecord', newBtn: 'ทิ้งใหม่', notePh: 'เช่น หมดอายุ, ทำตก, ลูกค้าคืน' },
-  prep:  { color: '#0891b2', soft: 'rgba(8,145,178,', text: '#67e8f9', title: 'บันทึกการเตรียม (Prep)', titleEn: 'Prep Record', verb: 'เตรียม', action: 'savePrepRecord', newBtn: 'เตรียมใหม่', notePh: 'เช่น เตรียมรอบเช้า, ต้มน้ำซุป, หั่นไก่' }
+  prep:  { color: '#0891b2', soft: 'rgba(8,145,178,', text: '#67e8f9', title: 'บันทึกการเตรียม (Prep)', titleEn: 'Prep Record', verb: 'เตรียม', action: 'savePrepRecord', newBtn: 'เตรียมใหม่', notePh: 'เช่น เตรียมรอบเช้า, ต้มน้ำซุป, หั่นไก่' },
+  count: { color: '#d97706', soft: 'rgba(217,119,6,', text: '#fcd34d', title: 'บันทึกการนับสต็อก (Stock count)', titleEn: 'Stock Count', verb: 'นับ', action: 'saveStockCount', newBtn: 'นับใหม่', notePh: 'เช่น นับปิดร้าน, นับตู้เย็น 2' }
 };
 
 // เวลาประเทศไทย (ISO + offset) — เก็บเวลาที่ลงให้ตรงเขตเวลาไทย
@@ -30,7 +31,7 @@ const isPromoCategory = (c) => {
 
 const WasteRecord = ({ currentUser, lang = 'th', branch: loginBranch = '', onBack, menu = [], categories = [], mode = 'waste' }) => {
   const M = MODES[mode] || MODES.waste;
-  const Icon = mode === 'prep' ? ChefHat : Trash2;
+  const Icon = mode === 'prep' ? ChefHat : mode === 'count' ? ClipboardList : Trash2;
   // วัตถุดิบ (ระบบสต็อก) — โหลดตอนเปิดหน้าต่างบันทึกครั้งแรก
   const [ingredients, setIngredients] = useState(null);
   const [records, setRecords] = useState([]);
@@ -46,7 +47,7 @@ const WasteRecord = ({ currentUser, lang = 'th', branch: loginBranch = '', onBac
   const fetchRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}?action=getWasteRecords${mode === 'prep' ? '&kind=prep' : ''}`);
+      const res = await fetch(`${API_URL}?action=getWasteRecords${mode !== 'waste' ? `&kind=${mode}` : ''}`);
       const data = await res.json();
       if (data.success) setRecords(data.records || []);
     } catch (e) {}
@@ -352,7 +353,7 @@ const WasteRecord = ({ currentUser, lang = 'th', branch: loginBranch = '', onBac
               </div>
 
               <div>
-                <label style={labelStyle}>{lang === 'th' ? `จำนวนที่${M.verb} *` : 'Quantity *'}</label>
+                <label style={labelStyle}>{lang === 'th' ? (mode === 'count' ? 'จำนวนที่นับได้ (คงเหลือ) *' : `จำนวนที่${M.verb} *`) : 'Quantity *'}</label>
                 <div style={{ display: 'flex', gap: '0.6rem' }}>
                   <input type="number" min="0" step="any" style={{ ...inputStyle, flex: 1 }} placeholder="0" value={form.qty} onChange={e => setForm(f => ({ ...f, qty: e.target.value }))} />
                   <select value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} style={{ ...inputStyle, width: 110, flexShrink: 0, cursor: 'pointer' }}>

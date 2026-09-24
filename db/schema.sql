@@ -569,7 +569,7 @@ GO
 
 -- ─────────────────────────────────────────
 -- ตาราง Waste ใช้เก็บทั้ง "บันทึกการทิ้ง" และ "บันทึกการเตรียม"
---   kind: waste (NULL = waste แถวเดิม) / prep · itemType: menu (NULL = เมนู) / ingredient
+--   kind: waste (NULL = waste แถวเดิม) / prep / count (นับสต็อก) · itemType: menu (NULL = เมนู) / ingredient
 -- ─────────────────────────────────────────
 IF COL_LENGTH('dbo.Waste', 'kind') IS NULL
   ALTER TABLE dbo.Waste ADD kind NVARCHAR(20) NULL;

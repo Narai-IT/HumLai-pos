@@ -164,14 +164,15 @@ export async function handleGet(action, params) {
     case 'getLiquorRecords':
       return { success: true, records: await lastRows('LiquorStorage', LIQUOR_COLS, mapLiquor) };
 
-    // ?kind=prep → บันทึกการเตรียม / ไม่ส่ง = บันทึกการทิ้ง (แถวเดิมที่ kind ว่างนับเป็นการทิ้ง)
+    // ?kind=prep → บันทึกการเตรียม / ?kind=count → บันทึกการนับสต็อก / ไม่ส่ง = บันทึกการทิ้ง (แถวเดิมที่ kind ว่างนับเป็นการทิ้ง)
     case 'getWasteRecords': {
-      const prep = String(params.kind || '') === 'prep';
+      const kind = ['prep', 'count'].includes(String(params.kind || '')) ? String(params.kind) : 'waste';
+      const prep = kind !== 'waste';
       try {
         const res = await query(
           `SELECT ${WASTE_COLS_KIND} FROM (SELECT TOP (1000) RowId, ${WASTE_COLS_KIND} FROM dbo.Waste
              WHERE ISNULL(kind, 'waste') = @kind ORDER BY RowId DESC) t ORDER BY RowId ASC`,
-          { kind: prep ? 'prep' : 'waste' });
+          { kind });
         return { success: true, records: res.recordset.map(mapWaste) };
       } catch {
         // ยังไม่ได้รัน sql:init (ไม่มีคอลัมน์ kind) → ทุกแถวคือการทิ้ง
