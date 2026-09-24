@@ -11,6 +11,7 @@ import BranchLanding from './components/BranchLanding';
 import { isAllBranches } from './utils/branches';
 // โหลดแบบ lazy: 2 โมดอลนี้ลากไลบรารีหนัก (html2canvas, qrcode) เปิดตอนกดเท่านั้น → bundle หน้าแรกเล็กลง
 const SalesSummaryModal = lazy(() => import('./components/SalesSummaryModal'));
+const TaxInvoicePage = lazy(() => import('./components/TaxInvoicePage'));
 const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
 // โหลดแบบ lazy: หน้าหลังบ้าน/ครัว/เหล้า/บิลค้าง ไม่ต้องโหลดตอนเปิดหน้าร้าน → เริ่มแอปไวขึ้น
 const KitchenMonitor = lazy(() => import('./components/KitchenMonitor'));
@@ -429,6 +430,7 @@ function App() {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutDiscount, setCheckoutDiscount] = useState(null);
   const [showSalesSummaryModal, setShowSalesSummaryModal] = useState(false);
+  const [showTaxInvoicePage, setShowTaxInvoicePage] = useState(false);
   const [salesSummaryMode, setSalesSummaryMode] = useState('daily'); // 'daily' | 'range'
 
   // เก็บ JSON ของแต่ละส่วนที่ apply ไปแล้ว → อัปเดต state เฉพาะส่วนที่เปลี่ยนจริง (กัน re-render ทั้งแอปทุก 10 วิ)
@@ -1519,6 +1521,7 @@ function App() {
               onOpenAdmin={() => navigate('/admin')}
               onOpenWaste={() => navigate('/waste')}
               onOpenSummary={(mode) => { setSalesSummaryMode(mode); setShowSalesSummaryModal(true); }}
+              onOpenTaxInvoice={() => setShowTaxInvoicePage(true)}
             onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
           />
         } />
@@ -1592,6 +1595,17 @@ function App() {
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmOrder}
         />
+      )}
+
+      {showTaxInvoicePage && (
+        <Suspense fallback={null}>
+          <TaxInvoicePage
+            isAdmin={isAdmin}
+            userName={currentUser?.username || ''}
+            branchId={branchKey}
+            onClose={() => setShowTaxInvoicePage(false)}
+          />
+        </Suspense>
       )}
 
       {showSalesSummaryModal && (

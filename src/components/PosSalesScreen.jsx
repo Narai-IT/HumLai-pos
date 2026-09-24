@@ -28,7 +28,7 @@ const PosSalesScreen = ({
   settings = {},
   isAdmin, isCashier, branch, currentUser,
   onLogout, onRefresh, isRefreshing,
-  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onDecreaseQuantity
+  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onOpenTaxInvoice, onDecreaseQuantity
 }) => {
   const t = (th, en) => (lang === 'th' ? th : en);
 
@@ -352,6 +352,9 @@ const PosSalesScreen = ({
                 </button>
                 <button onClick={() => { setMoreOpen(false); onOpenSummary('daily'); }}>📊 {t('สรุปยอดขายวันนี้', 'Today sales')}</button>
                 <button onClick={() => { setMoreOpen(false); onOpenSummary('range'); }}>📅 {t('สรุปยอดขายระหว่างวัน', 'Sales by range')}</button>
+                {(isAdmin || isCashier) && onOpenTaxInvoice && (
+                  <button onClick={() => { setMoreOpen(false); onOpenTaxInvoice(); }}>🧾 {t('ใบกำกับภาษี', 'Tax invoice')}</button>
+                )}
                 <button onClick={() => { setMoreOpen(false); onOpenWaste(); }}>🗑️ {t('บันทึกการทิ้ง', 'Waste')}</button>
                 <button onClick={() => { setMoreOpen(false); onOpenKiosk(); }}>📱 {t('หน้าลูกค้าสั่งเอง', 'Customer kiosk')}</button>
                 <button onClick={() => { setMoreOpen(false); setLang(lang === 'th' ? 'en' : 'th'); }}>
