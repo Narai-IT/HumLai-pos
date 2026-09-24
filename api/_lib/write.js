@@ -352,11 +352,18 @@ export async function saveLiquorRecord(data) {
   return { success: true };
 }
 
-export async function saveWasteRecord(data) {
+// บันทึกการทิ้ง / การเตรียม / การนับสต็อก — ตาราง Waste เดียวกัน แยกด้วยคอลัมน์ kind (waste/prep/count)
+// itemType: 'menu' (เมนูที่ขาย) / 'ingredient' (วัตถุดิบในระบบสต็อก)
+async function saveKitchenLog(data, kind) {
   const ts = data.timestamp || thaiTimeISO();
-  await insertRows('Waste', ['timestamp','branch','itemName','category','qty','unit','note','staff','TsLocal'], [[
+  const itemType = data.itemType === 'ingredient' ? 'ingredient' : 'menu';
+  await insertRows('Waste', ['timestamp','branch','itemName','category','qty','unit','note','staff','TsLocal','kind','itemType'], [[
     ts, toText(data.branch), toText(data.itemName), toText(data.category),
-    Number(data.qty) || 0, toText(data.unit), toText(data.note), toText(data.staff), toThaiClock(ts)
+    Number(data.qty) || 0, toText(data.unit), toText(data.note), toText(data.staff), toThaiClock(ts), kind, itemType
   ]]);
   return { success: true };
 }
+
+export const saveWasteRecord = (data) => saveKitchenLog(data, 'waste');
+export const savePrepRecord = (data) => saveKitchenLog(data, 'prep');
+export const saveStockCount = (data) => saveKitchenLog(data, 'count');

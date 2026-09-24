@@ -26,7 +26,9 @@ const BRANCH_COLS  = cols(['id','name','billPrefix','phone','address','taxId','r
 const PRINTER_COLS = cols(['id','name','ip','type','printMode','branchId','categories']);
 const DISCOUNT_COLS= cols(['id','name','type','value','categories']);
 const LIQUOR_COLS  = cols(['timestamp','type','customerName','phone','productName','qty','note','staff','category','unit']);
-const WASTE_COLS   = cols(['timestamp','branch','itemName','category','qty','unit','note','staff']);
+const WASTE_BASE   = ['timestamp','branch','itemName','category','qty','unit','note','staff'];
+const WASTE_COLS   = cols(WASTE_BASE);
+const WASTE_COLS_KIND = cols([...WASTE_BASE, 'kind', 'itemType']);
 const APPROVAL_COLS= cols(['id','timestamp','tableNo','orderNumber','amount','requestedBy','status','approver','respondedAt']);
 const OUTSTAND_COLS= cols(['id','shiftId','tableNo','customerName','phone','total','items','createdAt','status']);
 const SHIFT_COLS   = cols(['id','openTime','closeTime','openStaff','closeStaff','openCash','closeCash','totalSales','totalCash','totalCard','totalTransfer','totalOrders','status','note']);
@@ -162,8 +164,27 @@ export async function handleGet(action, params) {
     case 'getLiquorRecords':
       return { success: true, records: await lastRows('LiquorStorage', LIQUOR_COLS, mapLiquor) };
 
-    case 'getWasteRecords':
-      return { success: true, records: await lastRows('Waste', WASTE_COLS, mapWaste) };
+    // ?kind=prep → บันทึกการเตรียม / ?kind=count → บันทึกการนับสต็อก / ไม่ส่ง = บันทึกการทิ้ง (แถวเดิมที่ kind ว่างนับเป็นการทิ้ง)
+    case 'getWasteRecords': {
+      const kind = ['prep', 'count'].includes(String(params.kind || '')) ? String(params.kind) : 'waste';
+      const prep = kind !== 'waste';
+      try {
+        const res = await query(
+          `SELECT ${WASTE_COLS_KIND} FROM (SELECT TOP (1000) RowId, ${WASTE_COLS_KIND} FROM dbo.Waste
+             WHERE ISNULL(kind, 'waste') = @kind ORDER BY RowId DESC) t ORDER BY RowId ASC`,
+          { kind });
+        return { success: true, records: res.recordset.map(mapWaste) };
+      } catch {
+        // ยังไม่ได้รัน sql:init (ไม่มีคอลัมน์ kind) → ทุกแถวคือการทิ้ง
+        return { success: true, records: prep ? [] : await lastRows('Waste', WASTE_COLS, mapWaste) };
+      }
+    }
+
+    // รายชื่อวัตถุดิบสำหรับหน้าบันทึกการทิ้ง/เตรียม — ส่งแค่ชื่อ/หน่วย/หมวด (ไม่ส่งต้นทุน) พนักงานทุกคนเรียกได้
+    case 'getIngredientNames': {
+      const res = await query(`SELECT id, name, unit, category FROM dbo.Ingredients ORDER BY Seq ASC`).catch(() => ({ recordset: [] }));
+      return { success: true, ingredients: res.recordset.map(r => ({ id: String(r.id), name: r.name || '', unit: r.unit || '', category: r.category || '' })) };
+    }
 
     // คำขออนุมัติ QR — เฉพาะที่ยัง pending หรือเพิ่งตอบใน 10 นาทีล่าสุด (เหมือนของเดิม)
     case 'getPaymentApprovals': {
@@ -205,7 +226,9 @@ export async function handleGet(action, params) {
         // payments ส่งทั้งหมดไม่กรองวัน — หน้าบ้านจับคู่ด้วยเลขบิล (เหมือนของเดิม)
         lastRows('PaymentSummary', PAYMENT_COLS, mapPayment),
         allRows('Shifts', SHIFT_COLS, mapShift),
-        query(`SELECT ${WASTE_COLS} FROM dbo.Waste ${range('TsLocal')} ORDER BY RowId ASC`, bounds)
+        // รายงานนับเฉพาะการทิ้ง (บันทึกการเตรียมอยู่ตารางเดียวกันแต่ kind = 'prep')
+        query(`SELECT ${WASTE_COLS} FROM dbo.Waste WHERE (${range('TsLocal').replace(/^WHERE /, '') || '1 = 1'}) AND ISNULL(kind, 'waste') = 'waste' ORDER BY RowId ASC`, bounds)
+          .catch(() => query(`SELECT ${WASTE_COLS} FROM dbo.Waste ${range('TsLocal')} ORDER BY RowId ASC`, bounds))
           .then(r => r.recordset.map(mapWaste))
       ]);
       return { success: true, orders, payments, shifts, waste };

@@ -11,7 +11,7 @@ import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-09-24-tax-invoice-edit';
+export const BUILD = '2026-09-24-stock-count';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -38,6 +38,8 @@ const POST_ACTIONS = {
   savePaymentRecord:       write.savePaymentRecord,
   saveLiquorRecord:        write.saveLiquorRecord,
   saveWasteRecord:         write.saveWasteRecord,
+  savePrepRecord:          write.savePrepRecord,
+  saveStockCount:          write.saveStockCount,
 
   upsertMenu:              admin.upsertMenu,
   deleteMenu:              admin.deleteMenu,

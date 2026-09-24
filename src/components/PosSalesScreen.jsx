@@ -28,7 +28,7 @@ const PosSalesScreen = ({
   settings = {},
   isAdmin, isCashier, branch, currentUser,
   onLogout, onRefresh, isRefreshing,
-  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onOpenTaxInvoice, onDecreaseQuantity
+  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onOpenTaxInvoice, onOpenPrep, onOpenStockCount, onDecreaseQuantity
 }) => {
   const t = (th, en) => (lang === 'th' ? th : en);
 
@@ -356,6 +356,8 @@ const PosSalesScreen = ({
                   <button onClick={() => { setMoreOpen(false); onOpenTaxInvoice(); }}>🧾 {t('ใบกำกับภาษี', 'Tax invoice')}</button>
                 )}
                 <button onClick={() => { setMoreOpen(false); onOpenWaste(); }}>🗑️ {t('บันทึกการทิ้ง', 'Waste')}</button>
+                {onOpenPrep && <button onClick={() => { setMoreOpen(false); onOpenPrep(); }}>🧑‍🍳 {t('บันทึกการเตรียม', 'Prep')}</button>}
+                {onOpenStockCount && <button onClick={() => { setMoreOpen(false); onOpenStockCount(); }}>📋 {t('บันทึกการนับสต็อก', 'Stock count')}</button>}
                 <button onClick={() => { setMoreOpen(false); onOpenKiosk(); }}>📱 {t('หน้าลูกค้าสั่งเอง', 'Customer kiosk')}</button>
                 <button onClick={() => { setMoreOpen(false); setLang(lang === 'th' ? 'en' : 'th'); }}>
                   <Globe size={15} /> {lang === 'th' ? 'English' : 'ภาษาไทย'}
@@ -382,7 +384,7 @@ const PosSalesScreen = ({
           {/* ── แถบเตือนสถานะ ── */}
           {!tableNumber && (
             <div className="pos2-notice">
-              👆 {t('เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ',
+              {t('เลือกโต๊ะจากแถบด้านล่างก่อน แล้วจึงกดเมนูเพื่อคีย์รายการ',
                     'Pick a table below, then tap menu items to add them.')}
             </div>
           )}

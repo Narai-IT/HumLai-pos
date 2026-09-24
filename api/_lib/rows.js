@@ -95,7 +95,8 @@ export const mapLiquor = rowMapper({
 });
 
 export const mapWaste = rowMapper({
-  timestamp: 's', branch: 's', itemName: 's', category: 's', qty: 'n', unit: 's', note: 's', staff: 's'
+  timestamp: 's', branch: 's', itemName: 's', category: 's', qty: 'n', unit: 's', note: 's', staff: 's',
+  kind: 's', itemType: 's'
 });
 
 export const mapApproval = rowMapper({
