@@ -577,3 +577,28 @@ GO
 IF COL_LENGTH('dbo.Waste', 'itemType') IS NULL
   ALTER TABLE dbo.Waste ADD itemType NVARCHAR(20) NULL;
 GO
+
+-- ─────────────────────────────────────────
+-- ลูกค้าสแกน QR แจ้งโอน → พนักงานหน้าขายยืนยันยอด (แทนการตรวจสลิปอัตโนมัติ)
+-- status: pending (รอพนักงาน) / approving (กำลังออกบิล) / approved (ยืนยันแล้ว) / rejected (ยังไม่ได้รับเงิน)
+-- payloadJson = ออเดอร์ทั้งก้อนจากหน้าลูกค้า — ออกบิลตอนพนักงานกดยืนยัน
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.KioskPayments', 'U') IS NULL
+CREATE TABLE dbo.KioskPayments (
+  RowId        INT IDENTITY(1,1),
+  id           NVARCHAR(60)  NOT NULL PRIMARY KEY,
+  branchId     NVARCHAR(60)  NULL,
+  tableNo      NVARCHAR(50)  NULL,
+  dining       NVARCHAR(50)  NULL,
+  payloadJson  NVARCHAR(MAX) NULL,
+  total        DECIMAL(18,2) NULL,
+  [status]     NVARCHAR(20)  NULL,
+  requestedAt  NVARCHAR(40)  NULL,
+  respondedAt  NVARCHAR(40)  NULL,
+  respondedBy  NVARCHAR(120) NULL,
+  orderNumber  NVARCHAR(60)  NULL
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_KioskPayments_Status' AND object_id = OBJECT_ID('dbo.KioskPayments'))
+  CREATE INDEX IX_KioskPayments_Status ON dbo.KioskPayments ([status], branchId, requestedAt);
+GO

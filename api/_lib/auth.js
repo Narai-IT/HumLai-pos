@@ -122,7 +122,8 @@ export async function login(data) {
 
 // ── นโยบายสิทธิ์ของแต่ละคำสั่ง ──
 // ไม่ต้องล็อกอิน: หน้าลูกค้าสแกน QR สั่งเอง และ Print Server (ไม่มีคนล็อกอิน)
-const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskPaidOrder']);
+// kioskPaidOrder (ออกบิลทันทีไม่ผ่านพนักงาน) ไม่เปิดสาธารณะแล้ว — ลูกค้าแจ้งโอน (kioskPaymentRequest) แล้วพนักงานยืนยันเป็นคนออกบิล
+const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskPaymentRequest', 'getKioskPayment']);
 
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([

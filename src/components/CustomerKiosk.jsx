@@ -14,7 +14,7 @@ const DINE_IN_DINING = { id: 'dine_in', name: 'ทานที่ร้าน', 
 const DINE_IN_LABEL = 'ทานที่ร้าน';
 
 // tables = ผังโต๊ะของสาขานี้ (ใช้ตอนเข้าหน้าลูกค้าจากหน้าแรกของเว็บ ที่ไม่มีเลขโต๊ะติดมากับลิงก์)
-const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onSendOrder, lang: initialLang = 'th', tables = [] }) => {
+const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [] }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   // QR โต๊ะมีเลขโต๊ะในลิงก์ (ส่งไปหลังบ้านให้พนักงานรู้โต๊ะ แต่ไม่แสดงให้ลูกค้าเห็น)
@@ -67,28 +67,20 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const [selectedFood, setSelectedFood] = useState(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
-  const [isPaid, setIsPaid] = useState(false);
-  const [orderSentSuccess, setOrderSentSuccess] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');   // เลขบิลที่ระบบออกให้ ใช้อ้างอิงกับพนักงาน
-  const [sendError, setSendError] = useState('');       // บันทึกออเดอร์ไม่สำเร็จ (ลูกค้าจ่ายไปแล้ว)
-  const [needStaff, setNeedStaff] = useState(false);    // ส่งออเดอร์ได้ แต่ต้องให้พนักงานยืนยันยอดให้
   // รหัสอ้างอิงการชำระครั้งนี้ — ส่งค่าเดิมทุกครั้งที่กดส่งซ้ำ ระบบหลังบ้านจะได้ไม่ออกบิลซ้อน
   const paySessionRef = React.useRef('');
 
-  // ── ตรวจสลิปอัตโนมัติ (SlipOK) ──
-  // ลูกค้าสั่งเองต้องพิสูจน์ว่าโอนจริงตามยอดใน QR ก่อน ถึงจะส่งออเดอร์เข้าครัวได้
-  const [slipPreview, setSlipPreview] = useState('');   // รูปสลิปที่เลือก (แสดงตัวอย่าง)
-  const [slipChecking, setSlipChecking] = useState(false);
-  const [slipResult, setSlipResult] = useState(null);   // ข้อมูลสลิปที่ผ่านการตรวจแล้ว
-  const [slipError, setSlipError] = useState('');
+  // ── ลูกค้ากด "ฉันโอนเงินแล้ว" → รอพนักงานหน้าขายยืนยันยอด ──
+  // payStage: '' (ยังไม่แจ้ง) / 'waiting' (รอตรวจสอบ) / 'rejected' (ร้านยังไม่พบยอด) / 'approved' (สำเร็จ)
+  // paySnap = รายการ/ยอดที่แจ้งโอนไป (เก็บใน sessionStorage — ปิดแท็บ/รีเฟรชแล้วกลับมารอต่อได้)
+  const [payStage, setPayStage] = useState('');
+  const [paySnap, setPaySnap] = useState(null);
+  const [payError, setPayError] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
 
   // ข้อความใต้ปุ่มบันทึกรูป QR ('saved' | 'error' | '')
   const [qrSaveState, setQrSaveState] = useState('');
-
-  // ตัวตรวจสลิปใช้ไม่ได้ (ยังไม่ deploy / คีย์หมดอายุ / โควตาหมด / เน็ตร้านล่ม)
-  // ลูกค้าถ่ายใหม่กี่ครั้งก็ไม่ผ่าน จึงเปิดทางให้ยืนยันเองแทน ไม่งั้นร้านเสียออเดอร์ทั้งโต๊ะ
-  const [slipServiceDown, setSlipServiceDown] = useState(false);
-  const [transferConfirmed, setTransferConfirmed] = useState(false);
 
   // แผงเลือกหมวดหมู่ (เปิดจากปุ่ม 3 ขีด)
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
@@ -109,16 +101,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // ปิดหน้าชำระเงิน หรือยอดเปลี่ยน = ต้องตรวจสลิปใหม่
-  // (ยอดที่ตรวจผ่านไปแล้ว ต้องเป็นยอดเดียวกับที่ส่งเข้าครัวเสมอ ไม่งั้นสั่งเพิ่มแล้วสลิปเดิมผ่าน)
-  useEffect(() => {
-    setSlipPreview('');
-    setSlipResult(null);
-    setSlipError('');
-    setSlipServiceDown(false);
-    setTransferConfirmed(false);
-    setQrSaveState('');
-  }, [isCheckoutOpen, cartSubtotal]);
+  useEffect(() => { setQrSaveState(''); }, [isCheckoutOpen, cartSubtotal]);
 
   // Generate QR Code when checkout opens
   useEffect(() => {
@@ -279,167 +262,99 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     }
   };
 
-  // ย่อรูปก่อนส่ง แต่ยังต้องคมพอให้ SlipOK อ่าน QR ในสลิปออก จึงใช้ 1400px / คุณภาพ 0.92
-  const slipToDataUrl = (file) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const img = new Image();
-      img.onload = () => {
-        const maxDim = 1400;
-        let { width, height } = img;
-        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
-        else if (height >= width && height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.92));
-      };
-      img.onerror = reject;
-      img.src = ev.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+  const PAY_KEY = 'kiosk_pending_payment';
+  const savePending = (snap) => { try { if (snap) sessionStorage.setItem(PAY_KEY, JSON.stringify(snap)); else sessionStorage.removeItem(PAY_KEY); } catch { /* ไม่มีที่เก็บ */ } };
 
-  // ข้อความบอกสาเหตุที่สลิปไม่ผ่าน — แยกเป็น 2 กลุ่ม
-  //   ก) ลูกค้าแก้เองได้ (ถ่ายใหม่ / โอนใหม่ให้ยอดตรง)
-  //   ข) ปัญหาฝั่งร้าน (คีย์ผิด แพ็กเกจหมด ตั้งบัญชีผิด) → ลูกค้าถ่ายใหม่กี่ครั้งก็ไม่หาย
-  // รหัสอ้างอิงจากตารางของ SlipOK — อย่าสลับ 1013 (ยอดไม่ตรง) กับ 1014 (บัญชีผู้รับไม่ใช่ของร้าน)
-  const SLIP_ERRORS = {
-    1000: ['ไม่พบข้อมูลในสลิป กรุณาเลือกรูปสลิปใหม่', 'No slip data found. Please pick the slip image again.'],
-    1001: ['ตั้งค่าระบบตรวจสลิปของร้านไม่ถูกต้อง กรุณาแจ้งพนักงาน', 'Shop verification setup error. Please call our staff.'],
-    1002: ['ระบบตรวจสลิปของร้านยังตั้งค่าไม่ถูกต้อง กรุณาแจ้งพนักงาน', 'Shop verification key error. Please call our staff.'],
-    1003: ['ระบบตรวจสลิปของร้านหมดอายุ กรุณาแจ้งพนักงาน', 'The shop verification service has expired. Please call our staff.'],
-    1004: ['โควตาตรวจสลิปของร้านหมด กรุณาแจ้งพนักงาน', 'The shop verification quota ran out. Please call our staff.'],
-    1005: ['ไฟล์ที่เลือกไม่ใช่รูปภาพ กรุณาเลือกรูปสลิป (.jpg .png)', 'That file is not an image. Please pick a slip photo.'],
-    1006: ['รูปสลิปไม่ถูกต้อง กรุณาถ่าย/เลือกใหม่', 'Invalid slip image. Please try another photo.'],
-    1007: ['ไม่พบ QR ในรูปสลิป กรุณาถ่ายใหม่ให้เห็น QR ชัด ๆ', 'No QR found on the slip. Retake a clearer photo.'],
-    1008: ['รูปนี้ไม่ใช่สลิปการโอนเงิน กรุณาเลือกรูปสลิปที่ถูกต้อง', 'This is not a transfer slip. Please pick the right image.'],
-    1009: ['ระบบธนาคารขัดข้องชั่วคราว กรุณาลองใหม่ในอีก 15 นาที', 'The bank system is temporarily down. Please retry in 15 minutes.'],
-    1010: ['ธนาคารนี้ต้องรอสักครู่หลังโอน กรุณารอ 1-2 นาทีแล้วลองใหม่', 'This bank needs a moment after transfer. Please retry shortly.'],
-    1011: ['ไม่พบรายการโอนนี้ หรือสลิปหมดอายุแล้ว', 'Transfer not found or the slip has expired.'],
-    1012: ['สลิปนี้ถูกใช้ยืนยันไปแล้ว กรุณาใช้สลิปของรายการนี้', 'This slip has already been used.'],
-    1013: ['ยอดเงินในสลิปไม่ตรงกับยอดที่ต้องชำระ', 'Slip amount does not match the total.'],
-    1014: ['บัญชีปลายทางในสลิปไม่ใช่บัญชีของร้าน กรุณาสแกน QR ในหน้านี้เท่านั้น', 'The receiving account is not the shop account. Please use the QR on this page.']
-  };
-
-  // รหัสที่แปลว่า "ฝั่งร้านมีปัญหา" — ลูกค้าทำอะไรก็ไม่ผ่าน ต้องเปิดทางยืนยันเองแทน
-  const SHOP_SIDE_CODES = [1001, 1002, 1003, 1004];
-
-  const slipErrorText = (json) => {
-    const hit = SLIP_ERRORS[json && json.code];
-    if (hit) return lang === 'th' ? hit[0] : hit[1];
-    return (json && json.message) || (lang === 'th' ? 'ตรวจสลิปไม่สำเร็จ กรุณาลองใหม่' : 'Slip verification failed.');
-  };
-
-  const handleSlipFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-
-    setSlipError('');
-    setSlipResult(null);
-    setSlipChecking(true);
-    // ข้อมูลสลิปที่ตรวจผ่าน — ใช้ส่งออเดอร์ต่อทันทีในรอบนี้เลย
-    // (state ยังไม่อัปเดตตอนนี้ จึงส่งค่าไปกับพารามิเตอร์ตรง ๆ)
-    let verified = null;
+  // เปิดหน้าใหม่/รีเฟรชระหว่างรอพนักงานยืนยัน → กลับมาที่หน้ารอเดิม
+  useEffect(() => {
     try {
-      const dataUrl = await slipToDataUrl(file);
-      setSlipPreview(dataUrl);
-      const base64 = String(dataUrl).split(',')[1];
-
-      const res = await fetch('/api/verify-slip', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64, mimeType: 'image/jpeg', amount: cartSubtotal })
-      });
-      const json = await res.json().catch(() => null);
-
-      if (res.ok && json && json.success && json.data) {
-        // กันกรณีที่ SlipOK ไม่ได้เทียบยอดให้ — เทียบซ้ำฝั่งเราอีกชั้น
-        const paid = Number(json.data.amount);
-        if (!isNaN(paid) && Math.abs(paid - cartSubtotal) > 0.01) {
-          setSlipError(lang === 'th'
-            ? `ยอดในสลิป ฿${paid.toLocaleString()} ไม่ตรงกับยอดที่ต้องชำระ ฿${cartSubtotal.toLocaleString()}`
-            : `Slip amount does not match the total.`);
-        } else {
-          setSlipResult(json.data);
-          verified = json.data;
-        }
-      } else {
-        setSlipError(slipErrorText(json));
-        // ปัญหาฝั่งร้าน หรือฟังก์ชันตรวจสลิปยังไม่พร้อม (404/500) = ตรวจอัตโนมัติใช้ไม่ได้
-        if (SHOP_SIDE_CODES.includes(json && json.code) || res.status === 404 || res.status >= 500) {
-          setSlipServiceDown(true);
-        }
+      const snap = JSON.parse(sessionStorage.getItem(PAY_KEY) || 'null');
+      if (snap && snap.id) {
+        paySessionRef.current = snap.id;
+        setPaySnap(snap);
+        if (snap.orderType) setOrderType(snap.orderType);
+        setPayStage('waiting');
+        setIsCheckoutOpen(true);
       }
-    } catch (err) {
-      console.error('verify slip error:', err);
-      setSlipError(lang === 'th' ? 'เชื่อมต่อระบบตรวจสลิปไม่ได้ กรุณาลองใหม่' : 'Cannot reach the verification service.');
-      setSlipServiceDown(true);
-    }
-    setSlipChecking(false);
+    } catch { /* ข้อมูลเสีย ข้าม */ }
+  }, []);
 
-    // ตรวจผ่านแล้วถือว่าจ่ายครบ ไม่ต้องให้ลูกค้ากดยืนยันซ้ำอีกที — ส่งเข้าครัวเลย
-    if (verified) await handleConfirmSelfPayment(verified);
-  };
-
-  // ส่งออเดอร์ได้เมื่อสลิปผ่าน — หรือตัวตรวจสลิปใช้ไม่ได้จริง ๆ แล้วลูกค้ายืนยันเอง
-  const canSendOrder = !!slipResult || (slipServiceDown && transferConfirmed);
-
-  // verifiedSlip = ข้อมูลสลิปที่เพิ่งตรวจผ่านในรอบนี้ (ยังไม่เข้า state)
-  // เรียกจากปุ่มก็ได้ ไม่ต้องส่งอะไรมา จะใช้ผลตรวจที่เก็บไว้แทน
-  const handleConfirmSelfPayment = async (verifiedSlip = null) => {
-    if (cart.length === 0) return;
-    const slip = verifiedSlip || slipResult;
-    // ต้องผ่านการตรวจสลิป หรือตัวตรวจใช้ไม่ได้แล้วลูกค้ายืนยันเอง เท่านั้น
-    if (!slip && !(slipServiceDown && transferConfirmed)) return;
-    if (isPaid) return;        // กดรัว ๆ / ส่งซ้อนกับตัวส่งอัตโนมัติ
-    setSendError('');
-    setIsPaid(true);
-
-    if (!paySessionRef.current) {
-      paySessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    }
-
-    let result = { success: true, orderNumber: '' };
-    if (onSendOrder) {
-      // เขียนวิธีชำระให้พนักงานแยกออกว่ายอดนี้ตรวจสลิปแล้ว หรือลูกค้ายืนยันเอง (ต้องกระทบยอดกับบัญชีร้านเอง)
-      const payMethod = slip
-        ? `เงินโอน (QR ตรวจสลิปแล้ว)${slip.transRef ? ` [${slip.transRef}]` : ''}`
-        : 'เงินโอน (QR ลูกค้ายืนยันเอง)';
-      result = (await onSendOrder(
-        tableNo, cart, cartSubtotal, payMethod, paySessionRef.current
-      )) || { success: true };
-    }
-
-    // ลูกค้าโอนเงินไปแล้ว ถ้าบันทึกไม่ผ่านห้ามปิดจอเงียบ ๆ — ค้างจอไว้ให้กดส่งซ้ำหรือเรียกพนักงาน
-    if (result.success === false) {
-      setIsPaid(false);
-      setSendError(lang === 'th'
-        ? 'โอนเงินเรียบร้อยแล้ว แต่ส่งออเดอร์เข้าระบบไม่สำเร็จ — กดปุ่มส่งอีกครั้ง ถ้ายังไม่ได้กรุณาแจ้งพนักงานพร้อมแสดงหน้านี้'
-        : 'Your transfer went through but the order could not be sent. Please tap send again, or show this screen to our staff.');
+  // ลูกค้ากด "ฉันโอนเงินแล้ว" (หรือแจ้งอีกครั้งหลังร้านยังไม่พบยอด)
+  const handleTransferDone = async () => {
+    if (cart.length === 0 || payBusy) return;
+    if (!paySessionRef.current) paySessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const snap = {
+      id: paySessionRef.current,
+      total: cartSubtotal,
+      orderType,
+      tableNo,
+      items: cart.map(item => {
+        const unit = (Number(item.food.price) || 0) + (item.allPopups || []).reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+        return {
+          name: lang === 'th' ? item.food.name : (item.food.nameEn || item.food.name),
+          options: (item.allPopups || []).map(p => p.name).join(', '),
+          qty: item.quantity,
+          amount: unit * item.quantity
+        };
+      })
+    };
+    setPayBusy(true); setPayError('');
+    const dining = orderType === 'takeaway' ? 'ห่อกลับบ้าน' : 'ทานที่ร้าน';
+    const res = onRequestPayment
+      ? await onRequestPayment(tableNo, cart, cartSubtotal, snap.id, dining)
+      : { success: false, error: 'ระบบยังไม่พร้อม' };
+    setPayBusy(false);
+    if (!res || !res.success) {
+      setPayError(lang === 'th'
+        ? `แจ้งร้านไม่สำเร็จ${res && /Unknown action/i.test(res.error || '') ? ' (ระบบร้านยังไม่อัปเดต)' : ''} — กดอีกครั้ง หรือแจ้งพนักงาน`
+        : 'Could not notify the shop — please try again or call our staff.');
       return;
     }
-
-    setOrderNumber(result.orderNumber || '');
-    // ระบบร้านยังบันทึกบิลอัตโนมัติไม่ได้ → ออเดอร์ถึงครัวแล้ว แต่ต้องให้พนักงานยืนยันการชำระให้
-    setNeedStaff(result.needStaff === true);
-    setOrderSentSuccess(true);
-    setTimeout(() => {
+    setPaySnap(snap);
+    savePending(snap);
+    if (res.status === 'approved') {
+      setOrderNumber(res.orderNumber || '');
+      setPayStage('approved');
+      savePending(null);
       setCart([]);
-      setIsCheckoutOpen(false);
-      setIsPaid(false);
-      setOrderSentSuccess(false);
-      setOrderNumber('');
-      setNeedStaff(false);
-      setSlipPreview('');
-      setSlipResult(null);
-      setSlipError('');
-      setSlipServiceDown(false);
-      setTransferConfirmed(false);
-      paySessionRef.current = '';
-    }, 6000);
+    } else {
+      setPayStage('waiting');
+    }
+  };
+
+  // ระหว่างรอ — ถามสถานะทุก 3 วินาที (เก็บฟังก์ชันไว้ใน ref: หน้าหลัก render ใหม่บ่อย ไม่ให้ตัวจับเวลาเริ่มใหม่ทุกครั้ง)
+  const checkPaymentRef = React.useRef(onCheckPayment);
+  checkPaymentRef.current = onCheckPayment;
+  useEffect(() => {
+    if (payStage !== 'waiting' || !paySessionRef.current) return;
+    let alive = true;
+    const tick = async () => {
+      if (!checkPaymentRef.current) return;
+      const st = await checkPaymentRef.current(paySessionRef.current);
+      if (!alive || !st) return;
+      if (st.status === 'approved') {
+        setOrderNumber(st.orderNumber || '');
+        setPayStage('approved');
+        savePending(null);
+        setCart([]);
+      } else if (st.status === 'rejected') {
+        setPayStage('rejected');
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 3000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [payStage]);
+
+  // ชำระสำเร็จ → กลับไปหน้าเมนู พร้อมรับออเดอร์ใหม่ (รหัสรายการใหม่)
+  const finishPayment = () => {
+    setIsCheckoutOpen(false);
+    setPayStage('');
+    setPaySnap(null);
+    setPayError('');
+    setOrderNumber('');
+    paySessionRef.current = '';
+    savePending(null);
   };
 
 
@@ -974,7 +889,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)',
           zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
-        }} onClick={() => !isPaid && setIsCheckoutOpen(false)}>
+        }} onClick={() => { if (payStage !== 'waiting' && payStage !== 'approved') setIsCheckoutOpen(false); }}>
           <div
             onClick={e => e.stopPropagation()}
             style={{
@@ -986,33 +901,53 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               boxShadow: '0 -10px 40px rgba(0,0,0,0.2)', color: '#0f172a'
             }}
           >
-            {orderSentSuccess ? (
-              <div style={{ textAlign: 'center', padding: '2rem 1rem' }}>
-                <CheckCircle size={60} color="#16a34a" style={{ margin: '0 auto 1rem' }} />
-                <h3 style={{ fontSize: '1.4rem', fontWeight: '900', color: '#16a34a', marginBottom: '0.5rem' }}>
-                  {lang === 'th' ? 'ส่งรายการอาหารเรียบร้อย!' : 'Order Sent Successfully!'}
+            {payStage === 'approved' ? (
+              <div style={{ textAlign: 'center', padding: '1.5rem 0.5rem' }}>
+                <CheckCircle size={64} color="#16a34a" style={{ margin: '0 auto 0.75rem' }} />
+                <h3 style={{ fontSize: '1.5rem', fontWeight: '900', color: '#16a34a', marginBottom: '0.4rem' }}>
+                  {lang === 'th' ? 'ชำระเงินสำเร็จ!' : 'Payment confirmed!'}
                 </h3>
-                <p style={{ color: '#475569', fontSize: '0.95rem', fontWeight: '600', marginBottom: '1.5rem' }}>
-                  {lang === 'th' ? 'รายการอาหารของคุณถูกส่งเข้าครัวเรียบร้อยแล้ว พนักงานกำลังจัดเตรียมอาหารให้ครับ' : 'Your order has been sent to the kitchen. We will prepare your meal shortly!'}
+                <p style={{ color: '#475569', fontSize: '0.95rem', fontWeight: '600', marginBottom: '1.25rem' }}>
+                  {lang === 'th' ? 'ร้านได้รับเงินแล้ว กำลังเตรียมอาหารให้ครับ' : 'We received your payment and are preparing your food.'}
                 </p>
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '1rem', color: '#166534', fontWeight: '700' }}>
-                  {orderType === 'takeaway' ? `🛍️ ${lang === 'th' ? 'ห่อกลับบ้าน' : 'Take away'}` : `🍽️ ${lang === 'th' ? 'ทานที่ร้าน' : 'Dine in'}`} · {lang === 'th' ? 'ยอดชำระ' : 'Paid'} ฿{cartSubtotal.toLocaleString()}
-                  {orderNumber && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.95rem', letterSpacing: '0.5px' }}>
-                      🧾 {lang === 'th' ? 'เลขที่บิล' : 'Bill no.'} <strong>{orderNumber}</strong>
-                    </div>
-                  )}
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '12px', padding: '1rem', color: '#166534', fontWeight: '700', textAlign: 'left', lineHeight: 1.8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{lang === 'th' ? 'ประเภท' : 'Type'}</span><span>{(paySnap?.orderType || orderType) === 'takeaway' ? (lang === 'th' ? '🛍️ ห่อกลับบ้าน' : '🛍️ Take away') : (lang === 'th' ? '🍽️ ทานที่ร้าน' : '🍽️ Dine in')}</span></div>
+                  {orderNumber && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{lang === 'th' ? 'เลขที่บิล' : 'Bill no.'}</span><strong>{orderNumber}</strong></div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{lang === 'th' ? 'ยอดชำระ' : 'Paid'}</span><strong>฿{Number(paySnap?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></div>
                   <div style={{ marginTop: '0.35rem', fontSize: '0.78rem', fontWeight: '600', opacity: 0.85 }}>
                     {lang === 'th' ? 'ชำระเรียบร้อยแล้ว ไม่ต้องจ่ายซ้ำที่เคาน์เตอร์' : 'Already paid — no need to pay again at the counter.'}
                   </div>
                 </div>
-                {needStaff && (
-                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', padding: '0.85rem 1rem', color: '#92400e', fontWeight: '700', fontSize: '0.85rem', marginTop: '0.75rem', lineHeight: 1.5 }}>
-                    ⚠️ {lang === 'th'
-                      ? 'กรุณาแจ้งพนักงานว่าชำระผ่าน QR แล้ว พร้อมแสดงสลิปนี้ตอนปิดโต๊ะ'
-                      : 'Please tell our staff you already paid by QR and show this slip when the table is closed.'}
+                <button onClick={finishPayment}
+                  style={{ width: '100%', marginTop: '1.25rem', background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)', color: '#fff', border: 'none', borderRadius: '14px', padding: '1rem', fontWeight: '900', fontSize: '1.05rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  🍽️ {lang === 'th' ? 'สั่งอาหารเพิ่ม' : 'Order more'}
+                </button>
+              </div>
+            ) : payStage === 'waiting' ? (
+              <div style={{ textAlign: 'center', padding: '1.25rem 0.25rem' }}>
+                <div style={{ width: 64, height: 64, margin: '0.5rem auto 0.75rem', borderRadius: '50%', border: '7px solid #fde68a', borderTopColor: '#f59e0b', animation: 'kioskspin 1s linear infinite' }} />
+                <style>{'@keyframes kioskspin { to { transform: rotate(360deg); } }'}</style>
+                <h3 style={{ fontSize: '1.3rem', fontWeight: '900', color: '#b45309', margin: '0 0 0.35rem' }}>
+                  {lang === 'th' ? 'กำลังตรวจสอบการโอน...' : 'Checking your transfer...'}
+                </h3>
+                <p style={{ color: '#64748b', fontSize: '0.88rem', fontWeight: '600', margin: '0 0 1rem', lineHeight: 1.5 }}>
+                  {lang === 'th' ? 'พนักงานกำลังเช็กยอดเงินเข้า กรุณาอย่าปิดหน้านี้' : 'Our staff are confirming the payment. Please keep this page open.'}
+                </p>
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem 0.9rem', textAlign: 'left' }}>
+                  {(paySnap?.items || []).map((it, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.88rem', padding: '0.15rem 0' }}>
+                      <span>{it.qty}× {it.name}{it.options ? <span style={{ color: '#64748b' }}> ({it.options})</span> : null}</span>
+                      <b>฿{Number(it.amount || 0).toLocaleString()}</b>
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #cbd5e1', marginTop: '0.4rem', paddingTop: '0.45rem', fontWeight: '900' }}>
+                    <span>{lang === 'th' ? 'ยอดโอน' : 'Amount'}</span>
+                    <span style={{ color: '#ea580c' }}>฿{Number(paySnap?.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
-                )}
+                </div>
+                <p style={{ color: '#94a3b8', fontSize: '0.78rem', marginTop: '1rem' }}>
+                  {lang === 'th' ? 'รอนานเกิน 5 นาที กรุณาแจ้งพนักงาน' : 'Waiting more than 5 minutes? Please call our staff.'}
+                </p>
               </div>
             ) : (
               <>
@@ -1119,148 +1054,48 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                   )}
                 </div>
 
-                {/* ─── ขั้นตอนบังคับ: แนบสลิปให้ระบบตรวจก่อน ─── */}
-                <div style={{
-                  background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '16px',
-                  padding: '1rem', marginBottom: '1rem'
-                }}>
-                  <div style={{ fontWeight: '900', fontSize: '0.95rem', color: '#0f172a', marginBottom: '0.15rem' }}>
-                    {lang === 'th' ? 'แนบสลิปเพื่อยืนยันการโอน' : 'Attach your transfer slip'}
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: '600', marginBottom: '0.75rem', lineHeight: 1.45 }}>
-                    {lang === 'th'
-                      ? 'สแกน QR แล้วโอนตามยอด (ยอดถูกใส่มาให้ใน QR แล้ว ไม่ต้องพิมพ์เอง) จากนั้นถ่ายรูปหรือเลือกสลิปจากเครื่อง ตรวจผ่านแล้วระบบจะส่งออเดอร์เข้าครัวให้ทันที ไม่ต้องกดอะไรอีก'
-                      : 'Pay with the QR above (the amount is already filled in), then upload the slip. Once it is verified your order goes straight to the kitchen — nothing else to press.'}
-                  </div>
-
-                  {slipPreview && (
-                    <img
-                      src={slipPreview}
-                      alt="slip"
-                      style={{
-                        width: '100%', maxHeight: '200px', objectFit: 'contain',
-                        borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '0.65rem', background: '#f8fafc'
-                      }}
-                    />
-                  )}
-
-                  {!slipResult && (
-                    <label
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                        border: '2px dashed #cbd5e1', borderRadius: '12px',
-                        padding: '0.9rem', cursor: slipChecking ? 'wait' : 'pointer',
-                        color: '#0f172a', fontWeight: '800', fontSize: '0.9rem',
-                        background: slipChecking ? '#f1f5f9' : '#ffffff'
-                      }}
-                    >
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={slipChecking}
-                        onChange={handleSlipFile}
-                        style={{ display: 'none' }}
-                      />
-                      {slipChecking
-                        ? (lang === 'th' ? '⏳ กำลังตรวจสลิป...' : '⏳ Verifying slip...')
-                        : (slipPreview
-                            ? (lang === 'th' ? '🔄 เลือกสลิปใหม่' : '🔄 Choose another slip')
-                            : (lang === 'th' ? '📎 เลือก / ถ่ายรูปสลิป' : '📎 Upload slip photo'))}
-                    </label>
-                  )}
-
-                  {slipError && (
-                    <div style={{
-                      marginTop: '0.65rem', background: '#fef2f2', border: '1px solid #fecaca',
-                      color: '#b91c1c', borderRadius: '10px', padding: '0.65rem 0.75rem',
-                      fontSize: '0.82rem', fontWeight: '700', lineHeight: 1.45
-                    }}>
-                      ❌ {slipError}
-                    </div>
-                  )}
-
-                  {slipResult && (
-                    <div style={{
-                      background: '#f0fdf4', border: '1px solid #86efac', borderRadius: '12px',
-                      padding: '0.75rem 0.85rem', fontSize: '0.82rem', color: '#166534', fontWeight: '700', lineHeight: 1.6
-                    }}>
-                      <div style={{ fontWeight: '900', fontSize: '0.9rem', marginBottom: '0.2rem' }}>
-                        ✅ {lang === 'th'
-                          ? (sendError ? 'ตรวจสลิปผ่านแล้ว' : 'ตรวจสลิปผ่านแล้ว — กำลังส่งออเดอร์เข้าครัวให้')
-                          : (sendError ? 'Slip verified' : 'Slip verified — sending your order to the kitchen')}
-                      </div>
-                      <div>{lang === 'th' ? 'ยอดที่โอน' : 'Amount'}: ฿{Number(slipResult.amount || 0).toLocaleString()}</div>
-                      {slipResult.sendingBank && <div>{lang === 'th' ? 'ธนาคารต้นทาง' : 'From bank'}: {slipResult.sendingBank}</div>}
-                      {slipResult.transDate && <div>{lang === 'th' ? 'เวลาโอน' : 'Time'}: {slipResult.transDate} {slipResult.transTime || ''}</div>}
-                      {slipResult.transRef && <div style={{ fontSize: '0.72rem', opacity: 0.8 }}>Ref: {slipResult.transRef}</div>}
-                    </div>
-                  )}
-                </div>
-
-                {/* ─── ตัวตรวจสลิปใช้ไม่ได้ → ให้ยืนยันเองแทน ไม่งั้นลูกค้าโอนแล้วส่งออเดอร์ไม่ได้เลย ─── */}
-                {slipServiceDown && !slipResult && (
-                  <label style={{
-                    display: 'flex', alignItems: 'flex-start', gap: '0.65rem',
-                    background: transferConfirmed ? '#f0fdf4' : '#fffbeb',
-                    border: `1.5px solid ${transferConfirmed ? '#86efac' : '#fde68a'}`,
-                    borderRadius: '16px', padding: '1rem', marginBottom: '1rem', cursor: 'pointer'
-                  }}>
-                    <input
-                      type="checkbox"
-                      checked={transferConfirmed}
-                      onChange={e => setTransferConfirmed(e.target.checked)}
-                      style={{ width: '22px', height: '22px', marginTop: '2px', accentColor: '#16a34a', flexShrink: 0 }}
-                    />
-                    <span>
-                      <span style={{ display: 'block', fontWeight: '900', fontSize: '0.95rem', color: '#0f172a' }}>
-                        {lang === 'th' ? 'ตรวจสลิปอัตโนมัติไม่ได้ตอนนี้ — ฉันโอนตามยอดนี้แล้ว' : 'Auto-check unavailable — I have completed the transfer'}
-                      </span>
-                      <span style={{ display: 'block', fontSize: '0.78rem', color: '#92400e', fontWeight: '600', lineHeight: 1.45, marginTop: '0.2rem' }}>
-                        {lang === 'th'
-                          ? 'ติ๊กช่องนี้เพื่อส่งออเดอร์ต่อได้ กรุณาเก็บสลิปไว้แสดงพนักงานตอนปิดโต๊ะ'
-                          : 'Tick this to send your order anyway. Please keep the slip to show our staff.'}
-                      </span>
-                    </span>
-                  </label>
-                )}
-
-                {sendError && (
+                {payStage === 'rejected' && (
                   <div style={{
                     background: '#fef2f2', border: '1.5px solid #fecaca', color: '#b91c1c',
                     borderRadius: '12px', padding: '0.85rem 1rem', marginBottom: '0.75rem',
-                    fontSize: '0.85rem', fontWeight: '700', lineHeight: 1.5
+                    fontSize: '0.88rem', fontWeight: '700', lineHeight: 1.5
                   }}>
-                    ⚠️ {sendError}
+                    ⚠️ {lang === 'th'
+                      ? 'ร้านยังไม่พบยอดโอนของรายการนี้ — ตรวจสอบว่าโอนสำเร็จและยอดตรง แล้วกดแจ้งอีกครั้ง หรือแจ้งพนักงานพร้อมแสดงสลิป'
+                      : 'The shop has not received this transfer yet. Check your transfer, then notify again or show your slip to our staff.'}
+                  </div>
+                )}
+
+                {payError && (
+                  <div style={{ background: '#fef2f2', border: '1.5px solid #fecaca', color: '#b91c1c', borderRadius: '12px', padding: '0.75rem 1rem', marginBottom: '0.75rem', fontSize: '0.85rem', fontWeight: '700' }}>
+                    ⚠️ {payError}
                   </div>
                 )}
 
                 <button
-                  onClick={() => handleConfirmSelfPayment()}
-                  disabled={isPaid || !canSendOrder}
+                  onClick={handleTransferDone}
+                  disabled={payBusy || cart.length === 0}
                   style={{
                     width: '100%',
-                    background: (!canSendOrder || isPaid)
-                      ? '#cbd5e1'
-                      : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
+                    background: (payBusy || cart.length === 0) ? '#cbd5e1' : 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
                     color: '#ffffff', border: 'none', borderRadius: '14px',
                     padding: '1rem', fontWeight: '900', fontSize: '1.1rem',
-                    cursor: (isPaid || !canSendOrder) ? 'not-allowed' : 'pointer',
+                    cursor: (payBusy || cart.length === 0) ? 'not-allowed' : 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                    boxShadow: (!canSendOrder || isPaid) ? 'none' : '0 8px 20px rgba(22,163,74,0.35)',
+                    boxShadow: (payBusy || cart.length === 0) ? 'none' : '0 8px 20px rgba(22,163,74,0.35)',
                     fontFamily: 'inherit'
                   }}
                 >
                   <CheckCircle size={22} />
-                  {isPaid
-                    ? (lang === 'th' ? 'กำลังส่งออเดอร์...' : 'Sending order...')
-                    : sendError
-                      ? (lang === 'th' ? 'ส่งออเดอร์อีกครั้ง' : 'Send the order again')
-                      : canSendOrder
-                        ? (lang === 'th' ? 'ส่งออเดอร์เข้าครัว' : 'Send order to kitchen')
-                        : slipServiceDown
-                          ? (lang === 'th' ? 'ติ๊กยืนยันการโอนก่อนจึงจะส่งได้' : 'Tick the confirmation to continue')
-                          : (lang === 'th' ? 'แนบสลิปแล้วระบบจะส่งออเดอร์ให้เอง' : 'Upload your slip — the order is sent automatically')}
+                  {payBusy
+                    ? (lang === 'th' ? 'กำลังแจ้งร้าน...' : 'Notifying the shop...')
+                    : payStage === 'rejected'
+                      ? (lang === 'th' ? 'แจ้งโอนอีกครั้ง' : 'Notify again')
+                      : (lang === 'th' ? 'ฉันโอนเงินแล้ว' : 'I have transferred')}
                 </button>
+                <p style={{ textAlign: 'center', color: '#64748b', fontSize: '0.78rem', margin: '0.6rem 0 0', lineHeight: 1.45 }}>
+                  {lang === 'th' ? 'สแกน QR แล้วโอนตามยอด จากนั้นกดปุ่มด้านบน พนักงานจะตรวจยอดแล้วส่งอาหารเข้าครัวให้' : 'Pay with the QR, then tap the button. Our staff will confirm and send your order to the kitchen.'}
+                </p>
               </>
             )}
           </div>
