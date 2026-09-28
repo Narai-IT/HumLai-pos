@@ -110,7 +110,7 @@
   <tr><td>เครื่องเซิร์ฟเวอร์ 1 เครื่อง</td><td>Windows 10/11 หรือ Windows Server เปิดทิ้งไว้ตลอด ใช้ติดตั้ง SQL Server + API Server + cloudflared</td></tr>
   <tr><td>เครื่อง Print Server สาขาละ 1 เครื่อง</td><td>Windows ในวงแลนเดียวกับปริ้นเตอร์ เปิดตลอดเวลาที่ร้านเปิด (ใช้เครื่องแคชเชียร์ได้)</td></tr>
   <tr><td>ปริ้นเตอร์ความร้อน ESC/POS</td><td>ต่อสาย LAN ตั้ง IP คงที่ รับงานพอร์ต 9100</td></tr>
-  <tr><td>บัญชีและบริการ</td><td>GitHub (เข้า repo <code>Narai-IT/HumLai-pos</code> ได้), Vercel, Cloudflare + โดเมนที่ย้าย DNS มาที่ Cloudflare แล้ว, SlipOK (ถ้ารับโอนผ่าน QR)</td></tr>
+  <tr><td>บัญชีและบริการ</td><td>GitHub (เข้า repo <code>Narai-IT/HumLai-pos</code> ได้), Vercel, Cloudflare + โดเมนที่ย้าย DNS มาที่ Cloudflare แล้ว</td></tr>
   <tr><td>โปรแกรม</td><td>SQL Server (Express ก็ได้) + SQL Server Management Studio, Node.js <b>20 ขึ้นไป</b> (LTS), Git for Windows</td></tr>
 </table>
 
@@ -246,8 +246,6 @@ API_ALLOW_ORIGIN=https://hum-lai-pos.vercel.app</pre>
     <table>
       <tr><th>ชื่อ</th><th>ค่า</th></tr>
       <tr><td><code>VITE_API_URL</code></td><td><code>https://pos-api.&lt;โดเมน&gt;/api/pos</code> (ไม่มี / ปิดท้าย)</td></tr>
-      <tr><td><code>SLIPOK_API_KEY</code></td><td>คีย์จากหน้า SlipOK (ถ้ารับโอนผ่าน QR ที่ตรวจสลิปอัตโนมัติ)</td></tr>
-      <tr><td><code>SLIPOK_BRANCH_ID</code></td><td>Branch ID จาก SlipOK</td></tr>
     </table>
     <span class="small muted">ไม่ต้องตั้ง <code>SQL_*</code> ที่ Vercel — หน้าเว็บคุยกับ API ผ่าน Tunnel ไม่ได้ต่อฐานข้อมูลเอง</span></li>
   <li>กด <b>Deploy</b> (ทุกครั้งที่แก้ Environment Variables ต้อง <b>Redeploy</b> ถึงจะมีผล)</li>
@@ -332,10 +330,10 @@ git clone https://github.com/Narai-IT/HumLai-pos.git humlai-pos</pre>
 <ol>
   <li>ในหน้าปริ้นเตอร์ กด <b>เปิดการพิมพ์อัตโนมัติ</b> (ระบบส่งที่อยู่ API + สาขา + หัวใบเสร็จให้ Print Server)</li>
   <li>ถ้ามีกล่องสีเหลือง "Print Server ยังชี้ไปที่อยู่เดิม" → กด <b>อัปเดตให้ตรงกันเดี๋ยวนี้</b></li>
-  <li>ทดสอบ: สแกน QR โต๊ะด้วยมือถือ สั่ง 1 รายการ → ภายใน 20 วินาทีใบครัวต้องออก</li>
+  <li>ทดสอบ: สแกน QR โต๊ะด้วยมือถือ สั่ง 1 รายการ → กด <b>ฉันโอนเงินแล้ว</b> → หน้าขายต้องเด้งการ์ดแจ้งโอน → กด <b>ได้รับเงินแล้ว · ส่งเข้าครัว</b> → ภายใน 20 วินาทีใบครัวต้องออก</li>
 </ol>
 <div class="box ok"><b class="t">ผ่านแล้วเมื่อ</b>
-ขายที่หน้า POS 1 บิล ใบเสร็จออกพร้อมหัวใบของสาขา และออเดอร์จาก QR ออกใบครัวเอง</div>
+ขายที่หน้า POS 1 บิล ใบเสร็จออกพร้อมหัวใบของสาขา และออเดอร์จาก QR ออกใบครัวเองหลังพนักงานกดยืนยันรับเงิน</div>
 </section>
 
 <!-- ───────────── 8 ───────────── -->
@@ -350,8 +348,8 @@ git clone https://github.com/Narai-IT/HumLai-pos.git humlai-pos</pre>
 </ol>
 <table>
   <tr><th>กลุ่ม</th><th>ทำได้</th></tr>
-  <tr><td>ไม่ต้องล็อกอิน</td><td>ลูกค้าสแกน QR สั่งและจ่าย, Print Server ดึงคิวใบครัว</td></tr>
-  <tr><td>พนักงานทั่วไป</td><td>ขาย จัดการโต๊ะ เช็กบิล — เฉพาะสาขาตัวเอง</td></tr>
+  <tr><td>ไม่ต้องล็อกอิน</td><td>ลูกค้าสแกน QR สั่งและแจ้งโอน (บิลออกเมื่อพนักงานกดยืนยันรับเงินเท่านั้น), Print Server ดึงคิวใบครัว</td></tr>
+  <tr><td>พนักงานทั่วไป</td><td>ขาย จัดการโต๊ะ เช็กบิล ยืนยันยอดโอนจาก QR บันทึกการทิ้ง/เตรียม/นับสต็อก — เฉพาะสาขาตัวเอง</td></tr>
   <tr><td>แคชเชียร์</td><td>+ ผังโต๊ะ รับวัตถุดิบ ดูสต็อก</td></tr>
   <tr><td>ผู้จัดการสาขา</td><td>+ ปริ้นเตอร์และเมนูรายสาขาของสาขาตัวเอง</td></tr>
   <tr><td>แอดมินสำนักงานใหญ่</td><td>ทุกอย่าง: สาขา พนักงาน ตั้งค่าร้าน เมนูกลาง BOM ล้างข้อมูล</td></tr>
@@ -418,7 +416,7 @@ git clone https://github.com/Narai-IT/HumLai-pos.git humlai-pos</pre>
   <tr><td>หน้าเว็บยังเรียก API ที่อยู่เดิม</td><td>ยังไม่ได้ Redeploy หลังตั้ง <code>VITE_API_URL</code> / เบราว์เซอร์จำของเก่า → Ctrl+F5</td></tr>
   <tr><td>หน้าเว็บขึ้น error เรื่อง CORS</td><td><code>API_ALLOW_ORIGIN</code> ไม่ตรงกับโดเมนหน้าเว็บ (ต้องมี <code>https://</code> ไม่มี <code>/</code> ท้าย)</td></tr>
   <tr><td>ใบเสร็จไม่ออก</td><td>Print Server ปิด (<code>http://127.0.0.1:3001/health</code>) / ปริ้นเตอร์ดับหรือกระดาษหมด / IP ปริ้นเตอร์เปลี่ยน</td></tr>
-  <tr><td>ออเดอร์ QR ไม่ออกใบครัว</td><td>ยังไม่เปิดพิมพ์อัตโนมัติ / มีกล่องเหลือง "ยังชี้ที่อยู่เดิม" → กดอัปเดต (ข้อ 7.3)</td></tr>
+  <tr><td>ออเดอร์ QR ไม่ออกใบครัว</td><td>พนักงานยังไม่ได้กด "ได้รับเงินแล้ว" ที่การ์ดแจ้งโอน / ยังไม่เปิดพิมพ์อัตโนมัติ / มีกล่องเหลือง "ยังชี้ที่อยู่เดิม" → กดอัปเดต (ข้อ 7.3)</td></tr>
   <tr><td>หัวใบเสร็จยังเป็นข้อความเดิม</td><td>Print Server รุ่นเก่า → <code>update-printer.bat</code> แล้วกดบันทึกการพิมพ์อัตโนมัติอีกครั้ง</td></tr>
   <tr><td>ล็อกอินไม่ได้ "ใส่รหัสผิดหลายครั้ง"</td><td>รอ 5 นาที หรือให้แอดมินเช็กรหัสในหน้าพนักงาน</td></tr>
   <tr><td>ล็อกอินแล้วเด้งกลับหน้าล็อกอินเรื่อย ๆ</td><td>API ยังเป็นรุ่นเก่า → <code>update-api.bat</code> · หรือเวลาเครื่องเพี้ยนมาก</td></tr>
