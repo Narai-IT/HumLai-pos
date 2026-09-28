@@ -305,7 +305,8 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     printer.cut();
 
     // เปิดลิ้นชักเฉพาะใบเสร็จจริงเท่านั้น — ใบแจ้งยอดยังไม่ได้รับเงิน
-    if (printerType === 'receipt') {
+    // ใบเสร็จของบิลที่จ่ายด้วยการโอน (ลูกค้าสแกน QR) ส่ง noDrawer มา — ไม่ต้องเปิดลิ้นชัก
+    if (printerType === 'receipt' && !orderData.noDrawer) {
       printer.openCashDrawer();
     }
 

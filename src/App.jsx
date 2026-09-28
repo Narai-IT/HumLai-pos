@@ -964,10 +964,56 @@ function App() {
     }
   };
 
-  // ปิดโต๊ะที่ลูกค้าสั่งเองและจ่ายครบแล้ว — ไม่ต้องออกบิลใหม่ (บิลถูกออกตอนลูกค้าจ่ายไปแล้ว)
-  // แค่ล้างรายการของโต๊ะให้กลับมาว่างสำหรับลูกค้าคนถัดไป
+  // ใบเสร็จของรายการที่ลูกค้าสแกน QR จ่ายเองแล้ว — แยกใบตามเลขบิล (ในหมายเหตุ "💳 ชำระแล้ว SELF-#008")
+  // จ่ายด้วยการโอน จึงไม่เปิดลิ้นชักเก็บเงิน (noDrawer)
+  const printSettledReceipts = async (tbl) => {
+    const receiptPrinter = getPrinterByType('receipt');
+    if (!receiptPrinter || !receiptPrinter.ip) return { success: false, error: 'ยังไม่ได้ตั้งเครื่องพิมพ์ใบเสร็จ' };
+    const rows = tableOrders.filter(o => String(o.TableNumber) === tbl && o.Status === 'paid');
+    const bills = new Map();
+    rows.forEach(o => {
+      const opts = String(o.Options || '');
+      const m = /ชำระแล้ว\s+(\S+)/.exec(opts);
+      const billNo = m ? m[1] : `โต๊ะ ${tbl}`;
+      if (!bills.has(billNo)) bills.set(billNo, []);
+      bills.get(billNo).push(o);
+    });
+    const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    let failed = '';
+    for (const [billNo, items] of bills) {
+      const total = items.reduce((s, o) => s + (Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1), 0);
+      const orderData = {
+        id: billNo,
+        orderNumber: billNo,
+        noDrawer: true,
+        customerDetails: { name: `โต๊ะ ${tbl}` },
+        items: items.map(o => {
+          const qty = Number(o.Quantity) || 1;
+          const opt = String(o.Options || '').split('|')[0].replace(/💳.*$/, '').trim();
+          return {
+            isFlattened: true,
+            name: qty > 1 ? `${o.ItemName} (x${qty})` : o.ItemName,
+            amount: (Number(o.ItemPrice) || 0) * qty,
+            subItems: opt ? opt.split(', ').filter(Boolean) : []
+          };
+        }),
+        summary: [{ label: 'ชำระโดย', value: 'เงินโอน (QR)' }],
+        total: money2(total)
+      };
+      const res = await sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData }).catch(e => ({ success: false, error: e.message }));
+      if (!res || !res.success) failed = (res && res.error) || 'พิมพ์ไม่สำเร็จ';
+    }
+    return failed ? { success: false, error: failed } : { success: true };
+  };
+
+  // ปิดโต๊ะที่ลูกค้าสั่งเองและจ่ายครบแล้ว — ไม่ต้องออกบิลใหม่ (บิลถูกออกตอนพนักงานยืนยันการโอน)
+  // พิมพ์ใบเสร็จให้ลูกค้า แล้วล้างรายการของโต๊ะให้กลับมาว่างสำหรับลูกค้าคนถัดไป
   const handleCloseSettledTable = async (targetTable) => {
     const tbl = String(targetTable || tableNumber);
+    // พิมพ์ใบเสร็จก่อนล้างโต๊ะ (ข้อมูลรายการอยู่ในโต๊ะนี้) — พิมพ์ไม่ออกก็ยังคืนโต๊ะได้ แต่แจ้งให้รู้
+    printSettledReceipts(tbl).then(res => {
+      if (!res.success) setSaveAlert({ type: 'error', msg: `⚠️ คืนโต๊ะ ${tbl} แล้ว แต่พิมพ์ใบเสร็จไม่สำเร็จ: ${res.error}` });
+    });
     setTableOrders(prev => prev.filter(o => String(o.TableNumber) !== tbl));
     localStorage.removeItem('customer_count_' + tbl);
     setTableNumber('');
