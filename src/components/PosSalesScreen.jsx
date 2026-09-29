@@ -186,8 +186,8 @@ const PosSalesScreen = ({
   const handleCloseSettled = () => {
     if (!onCloseTable || !tableNumber) return;
     if (!window.confirm(t(
-      `ลูกค้าโต๊ะ ${tableNumber} จ่ายเงินมาครบแล้ว ต้องการปิดโต๊ะและคืนเป็นโต๊ะว่างหรือไม่?`,
-      `Table ${tableNumber} is fully paid. Close it and free the table?`
+      `ลูกค้าโต๊ะ ${tableNumber} จ่ายเงินมาครบแล้ว — พิมพ์ใบเสร็จแล้วคืนเป็นโต๊ะว่าง?`,
+      `Table ${tableNumber} is fully paid. Print the receipt and free the table?`
     ))) return;
     onCloseTable(tableNumber);
   };
@@ -744,7 +744,7 @@ const PosSalesScreen = ({
             <div className="pos2-actions">
               {settledOnly ? (
                 <button className="pos2-close-table" onClick={handleCloseSettled}>
-                  ✅ {t('เรียบร้อย — คืนโต๊ะให้ว่าง', 'Done — free the table')}
+                  ✅ {t('เรียบร้อย — พิมพ์ใบเสร็จ แล้วคืนโต๊ะ', 'Done — print receipt & free table')}
                 </button>
               ) : (
                 <>
