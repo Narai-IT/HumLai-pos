@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { X, RefreshCw, Download, Calendar, TrendingUp, BarChart2, CheckCircle, Search, ArrowLeft, ChevronRight, Receipt, CreditCard, FileSpreadsheet } from 'lucide-react';
+import { X, RefreshCw, Download, Calendar, TrendingUp, BarChart2, CheckCircle, Search, ArrowLeft, ChevronRight, Receipt, CreditCard, FileSpreadsheet, Printer } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { API_URL } from '../utils/api';
+import { getReceiptHeader } from '../utils/printServer';
+import { printDailyClose, billRange, vatSplit } from '../utils/dailyClosePrint';
 
 // Time helpers in Thai Timezone
 const getThaiTodayStr = () => {
@@ -57,7 +59,7 @@ const parseSplitDetail = (sd) => {
   try { return JSON.parse(sd); } catch { return null; }
 };
 
-const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], categories = [], isAdmin = false, branch = '', users = [], onClose }) => {
+const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], categories = [], isAdmin = false, branch = '', users = [], userName = '', onClose }) => {
   const todayStr = getThaiTodayStr();
 
   // ฟิลเตอร์สาขา: admin เลือกได้ทุกสาขา (ค่าว่าง = ทุกสาขา), สาขาทั่วไปล็อกเฉพาะของตัวเอง
@@ -799,6 +801,54 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
     }
   };
 
+  // ── รายงานปิดยอดประจำวัน (พิมพ์ออกเครื่องใบเสร็จ) — ใช้ยอดชุดเดียวกับที่แสดงบนจอ ──
+  const [closePrintStatus, setClosePrintStatus] = useState('');
+  const buildDailyClose = () => {
+    const h = getReceiptHeader() || {};
+    // ส่วนลด / ค่าบริการที่บวกตอนชำระ = ยอดบิล − ราคารายการ (วิธีเดียวกับบรรทัดปรับยอดในใบกำกับภาษี)
+    let discount = 0, charges = 0;
+    bills.forEach(b => {
+      const diff = Math.round((b.total - b.items.reduce((s, it) => s + it.price, 0)) * 100) / 100;
+      if (diff < 0) discount += -diff; else charges += diff;
+    });
+    const cancelled = new Map();
+    (data?.orders || []).forEach(r => {
+      if (r.Status !== 'cancelled' || !r.OrderNumber || String(r.ItemDetail || '').trim().startsWith('↳')) return;
+      if (branchFilter && String(r.RecordedBy || '').trim() !== branchFilter) return;
+      if (!cancelled.has(r.OrderNumber)) cancelled.set(r.OrderNumber, Number(r.TotalAmount) || 0);
+    });
+    const range = billRange([...bills.map(b => b.orderNumber), ...cancelled.keys()]);
+    return {
+      shopName: h.name || 'ข้าวมันไก่หำไหล',
+      taxId: h.taxId || '',
+      posId: h.posId || '',
+      dateLabel: from === to ? formatDateThai(from) : `${formatDateThai(from)} - ${formatDateThai(to)}`,
+      branchLabel: branchFilter || 'ทุกสาขา',
+      printedAt: new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      printedBy: userName,
+      billCount: totalBills,
+      total: totalSales,
+      discount,
+      charges,
+      ...vatSplit(totalSales, h.vatRate),
+      cash: totalCash,
+      transfer: totalXfer,
+      card: totalCard,
+      firstBill: range.first,
+      lastBill: range.last,
+      cancelCount: cancelled.size,
+      cancelTotal: [...cancelled.values()].reduce((s, v) => s + v, 0),
+      menu: menuRows.filter(r => !r.isSubItem).map(r => ({ name: r.name, qty: r.qty, revenue: r.revenue }))
+    };
+  };
+  const handlePrintDailyClose = async () => {
+    setClosePrintStatus(lang === 'th' ? 'กำลังส่งไปเครื่องพิมพ์...' : 'Printing...');
+    const res = await printDailyClose(buildDailyClose());
+    setClosePrintStatus(res.success
+      ? (lang === 'th' ? '🖨️ ส่งรายงานปิดยอดไปที่เครื่องพิมพ์แล้ว' : '🖨️ Sent to printer')
+      : `❌ ${lang === 'th' ? 'พิมพ์ไม่สำเร็จ' : 'Print failed'}: ${res.error || ''}`);
+  };
+
   const formatTimeThai = (ts) => {
     if (!ts) return '—';
     try {
@@ -1364,6 +1414,10 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
           )}
         </div>
 
+        {closePrintStatus && (
+          <div style={{ padding: '0.5rem 1.5rem 0', fontSize: '0.85rem', color: closePrintStatus.startsWith('❌') ? '#f87171' : '#5eead4' }}>{closePrintStatus}</div>
+        )}
+
         {/* Footer actions */}
         <div style={{ padding: '1.25rem 1.5rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.75rem', background: 'rgba(255,255,255,0.01)' }}>
           <button onClick={onClose} style={{ flex: 1, padding: '0.7rem', background: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: 'white', borderRadius: '10px', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', fontFamily: 'inherit', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)'} onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'}>
@@ -1375,6 +1429,11 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
               {view === 'summary' && (
                 <button id="capture-btn" onClick={handleDownloadImage} style={{ flex: 1.2, padding: '0.7rem', background: '#7c3aed', border: 'none', color: 'white', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontFamily: 'inherit', boxShadow: '0 4px 15px rgba(124,58,237,0.3)', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#6d28d9'} onMouseLeave={e => e.currentTarget.style.background = '#7c3aed'}>
                   <Download size={16} /> {lang === 'th' ? 'รูปภาพ (PNG)' : 'Save as PNG'}
+                </button>
+              )}
+              {view === 'summary' && (
+                <button onClick={handlePrintDailyClose} title={closePrintStatus} style={{ flex: 1.5, padding: '0.7rem', background: '#0f766e', border: 'none', color: 'white', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontFamily: 'inherit', boxShadow: '0 4px 15px rgba(15,118,110,0.3)', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#115e59'} onMouseLeave={e => e.currentTarget.style.background = '#0f766e'}>
+                  <Printer size={16} /> {lang === 'th' ? 'พิมพ์ปิดยอดประจำวัน' : 'Print daily close'}
                 </button>
               )}
               <button onClick={handleExportExcel} style={{ flex: 1.5, padding: '0.7rem', background: '#10b981', border: 'none', color: 'white', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', fontFamily: 'inherit', boxShadow: '0 4px 15px rgba(16,185,129,0.3)', transition: 'all 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#059669'} onMouseLeave={e => e.currentTarget.style.background = '#10b981'}>

@@ -163,6 +163,59 @@ const printTaxInvoice = (printer, inv, copy) => {
   }
 };
 
+// รายงานปิดยอดประจำวัน — หน้าเว็บคำนวณยอดมาให้ (src/utils/dailyClosePrint.js) ฝั่งนี้จัดหน้าอย่างเดียว
+const printDailyClose = (printer, r) => {
+  const rule = () => printer.println('-'.repeat(LINE));
+  const row = (k, v) => printer.println(leftRight(k, v));
+
+  printer.alignCenter();
+  if (r.shopName) { printer.bold(true); wrap(r.shopName).forEach(l => printer.println(l)); printer.bold(false); }
+  if (r.taxId) printer.println(`เลขผู้เสียภาษี ${r.taxId}`);
+  if (r.posId) printer.println(`POS ID: ${r.posId}`);
+  rule();
+  printer.bold(true);
+  printer.println('รายงานปิดยอดประจำวัน');
+  printer.bold(false);
+  printer.println('DAILY CLOSE REPORT');
+  rule();
+
+  printer.alignLeft();
+  row('วันที่ขาย', r.dateLabel || '-');
+  row('สาขา', r.branchLabel || '-');
+  row('พิมพ์เมื่อ', r.printedAt || '-');
+  if (r.printedBy) row('ผู้พิมพ์', r.printedBy);
+  rule();
+  row('จำนวนบิล', `${r.billCount || 0} บิล`);
+  printer.bold(true);
+  row('ยอดขายรวม', money2(r.total));
+  printer.bold(false);
+  row('ส่วนลด', money2(r.discount));
+  if (Number(r.charges)) row('ค่าบริการ/ภาษีบวกเพิ่ม', money2(r.charges));
+  row('มูลค่าสินค้าเสียภาษี', money2(r.vatable));
+  row(`ภาษีมูลค่าเพิ่ม ${r.vatRate}%`, money2(r.vat));
+  rule();
+  printer.println('ช่องทางชำระเงิน');
+  row('เงินสด', money2(r.cash));
+  row('เงินโอน / QR', money2(r.transfer));
+  row('บัตรเครดิต', money2(r.card));
+  rule();
+  printer.println('เลขที่ใบกำกับภาษีอย่างย่อ');
+  row('ใบแรก', r.firstBill || '-');
+  row('ใบสุดท้าย', r.lastBill || '-');
+  rule();
+  row(`บิลยกเลิก ${r.cancelCount || 0} บิล`, money2(r.cancelTotal));
+  rule();
+  printer.println('ยอดขายตามเมนู');
+  (r.menu || []).forEach(m => {
+    const amount = money2(m.revenue);
+    const lines = wrap(`${m.qty}x ${m.name}`, LINE - widthOf(amount) - 1);
+    lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+  });
+  rule();
+  printer.println('');
+  printer.println('ผู้ตรวจนับเงิน ________________');
+};
+
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
 // ให้ผู้เรียกตัดสินใจเองว่าจะตอบ HTTP อะไรหรือจะลองใหม่ไหม
 export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' }) => {
@@ -192,6 +245,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       printer.cut();
       await printer.execute();
       console.log(`Tax invoice ${orderData.taxInvoice.invoiceNo} sent to ${ip}`);
+      return { success: true };
+    }
+
+    // รายงานปิดยอดประจำวัน — ไม่เปิดลิ้นชัก
+    if (printerType === 'closeday') {
+      if (!orderData.closeDay) return { success: false, error: 'ไม่มีข้อมูลรายงานปิดยอด' };
+      printDailyClose(printer, orderData.closeDay);
+      printer.cut();
+      await printer.execute();
+      console.log(`Daily close report sent to ${ip}`);
       return { success: true };
     }
 

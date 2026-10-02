@@ -1754,6 +1754,7 @@ function App() {
             isAdmin={isAdmin}
             branch={branch}
             users={users}
+            userName={currentUser?.username || ''}
             onClose={() => setShowSalesSummaryModal(false)}
           />
         </Suspense>
