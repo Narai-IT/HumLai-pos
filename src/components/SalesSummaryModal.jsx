@@ -3,7 +3,7 @@ import { X, RefreshCw, Download, Calendar, TrendingUp, BarChart2, CheckCircle, S
 import html2canvas from 'html2canvas';
 import { API_URL } from '../utils/api';
 import { getReceiptHeader } from '../utils/printServer';
-import { printDailyClose, billRange, vatSplit } from '../utils/dailyClosePrint';
+import { printDailyClose, billRanges, vatSplit } from '../utils/dailyClosePrint';
 
 // Time helpers in Thai Timezone
 const getThaiTodayStr = () => {
@@ -58,6 +58,11 @@ const parseSplitDetail = (sd) => {
   if (typeof sd === 'object') return sd;
   try { return JSON.parse(sd); } catch { return null; }
 };
+
+// สาขาของแถวบิล = BranchId (บันทึกถูกทุกบิล รวมบิลที่ลูกค้าสแกน QR ที่ RecordedBy เป็น 'Self-Order')
+// แถวเก่ามากที่ยังไม่มี BranchId ใช้ RecordedBy แทน
+const rowBranch = (r) => String(r.BranchId || (r.RecordedBy === 'Self-Order' ? '' : r.RecordedBy) || '').trim();
+const sameBranch = (r, b) => rowBranch(r).toLowerCase() === String(b || '').trim().toLowerCase();
 
 const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], categories = [], isAdmin = false, branch = '', users = [], userName = '', onClose }) => {
   const todayStr = getThaiTodayStr();
@@ -143,11 +148,11 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
     return catNameBySlug[slug] || slug || '—';
   };
 
-  // รายชื่อสาขาสำหรับฟิลเตอร์ (admin) — รวมจากชีต Users + ค่า RecordedBy ที่พบจริง
+  // รายชื่อสาขาสำหรับฟิลเตอร์ (admin) — รวมจากชีต Users + สาขาของบิลที่พบจริง
   const branchOptions = useMemo(() => {
     const set = new Set();
     (users || []).forEach(u => { const b = branchOf(u); if (b && b !== '*') set.add(b); }); // '*' = พนักงานทุกสาขา ไม่ใช่สาขา
-    (data?.orders || []).forEach(r => { const b = String(r.RecordedBy || '').trim(); if (b) set.add(b); });
+    (data?.orders || []).forEach(r => { const b = rowBranch(r); if (b) set.add(b); });
     return Array.from(set).sort();
   }, [users, data]);
 
@@ -163,8 +168,8 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
     const billMap = {};
     (data?.orders || []).forEach(r => {
       if (!r.OrderNumber || r.Status === 'cancelled') return;
-      // กรองตามสาขา (RecordedBy) — ค่าว่าง = ทุกสาขา
-      if (branchFilter && String(r.RecordedBy || '').trim() !== branchFilter) return;
+      // กรองตามสาขาของบิล (BranchId) — ค่าว่าง = ทุกสาขา
+      if (branchFilter && !sameBranch(r, branchFilter)) return;
 
       if (!billMap[r.OrderNumber]) {
         billMap[r.OrderNumber] = {
@@ -244,7 +249,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
   const ordersGroupedByNum = {};
   (data?.orders || []).forEach(r => {
     if (!r.OrderNumber || r.Status === 'cancelled') return;
-    if (branchFilter && String(r.RecordedBy || '').trim() !== branchFilter) return;
+    if (branchFilter && !sameBranch(r, branchFilter)) return;
     if (!ordersGroupedByNum[r.OrderNumber]) ordersGroupedByNum[r.OrderNumber] = [];
     ordersGroupedByNum[r.OrderNumber].push(r);
   });
@@ -814,10 +819,10 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
     const cancelled = new Map();
     (data?.orders || []).forEach(r => {
       if (r.Status !== 'cancelled' || !r.OrderNumber || String(r.ItemDetail || '').trim().startsWith('↳')) return;
-      if (branchFilter && String(r.RecordedBy || '').trim() !== branchFilter) return;
+      if (branchFilter && !sameBranch(r, branchFilter)) return;
       if (!cancelled.has(r.OrderNumber)) cancelled.set(r.OrderNumber, Number(r.TotalAmount) || 0);
     });
-    const range = billRange([...bills.map(b => b.orderNumber), ...cancelled.keys()]);
+    const ranges = billRanges([...bills.map(b => b.orderNumber), ...cancelled.keys()]);
     return {
       shopName: h.name || 'ข้าวมันไก่หำไหล',
       taxId: h.taxId || '',
@@ -834,8 +839,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
       cash: totalCash,
       transfer: totalXfer,
       card: totalCard,
-      firstBill: range.first,
-      lastBill: range.last,
+      ranges,
       cancelCount: cancelled.size,
       cancelTotal: [...cancelled.values()].reduce((s, v) => s + v, 0),
       menu: menuRows.filter(r => !r.isSubItem).map(r => ({ name: r.name, qty: r.qty, revenue: r.revenue }))

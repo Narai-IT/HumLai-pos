@@ -96,6 +96,11 @@ const td_    = { padding: '0.65rem 0.9rem', fontSize: '0.875rem', borderBottom: 
 
 const branchOf = (u) => String(u?.branch || u?.id || u?.username || '').trim();
 
+// สาขาของแถวบิล = BranchId (บันทึกถูกทุกบิล รวมบิลที่ลูกค้าสแกน QR ที่ RecordedBy เป็น 'Self-Order')
+// แถวเก่ามากที่ยังไม่มี BranchId ใช้ RecordedBy แทน
+const rowBranch = (r) => String(r.BranchId || (r.RecordedBy === 'Self-Order' ? '' : r.RecordedBy) || '').trim();
+const sameBranch = (r, b) => rowBranch(r).toLowerCase() === String(b || '').trim().toLowerCase();
+
 export default function Reports({ allMenu = [], isAdmin = false, branch = '', users = [], userName = '' }) {
   const [tab,     setTab]     = useState('daily');
   const [from,    setFrom]    = useState(TODAY);
@@ -109,11 +114,11 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   const [detailSearch, setDetailSearch] = useState('');
   // ฟิลเตอร์สาขา: admin เลือกได้ทุกสาขา (ค่าว่าง=ทุกสาขา), ไม่ใช่ admin ล็อกเฉพาะสาขาตัวเอง
   const [branchFilter, setBranchFilter] = useState(isAdmin ? '' : branch);
-  const inBranch = (r) => !branchFilter || String(r.RecordedBy || '').trim() === branchFilter;
+  const inBranch = (r) => !branchFilter || sameBranch(r, branchFilter);
   const branchOptions = (() => {
     const set = new Set();
     (users || []).forEach(u => { const b = branchOf(u); if (b && b !== '*') set.add(b); }); // '*' = พนักงานทุกสาขา ไม่ใช่สาขา
-    (data?.orders || []).forEach(r => { const b = String(r.RecordedBy || '').trim(); if (b) set.add(b); });
+    (data?.orders || []).forEach(r => { const b = rowBranch(r); if (b) set.add(b); });
     return Array.from(set).sort();
   })();
   // กรองรอบกะตามสาขา (เทียบกับพนักงานเปิด/ปิดกะ) — ค่าว่าง=ทุกสาขา

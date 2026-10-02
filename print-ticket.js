@@ -200,8 +200,9 @@ const printDailyClose = (printer, r) => {
   row('บัตรเครดิต', money2(r.card));
   rule();
   printer.println('เลขที่ใบกำกับภาษีอย่างย่อ');
-  row('ใบแรก', r.firstBill || '-');
-  row('ใบสุดท้าย', r.lastBill || '-');
+  // แยกตามตัวนำหน้าเลขบิล — รายงานทุกสาขามีหลายชุด
+  const ranges = Array.isArray(r.ranges) && r.ranges.length ? r.ranges : [{ first: r.firstBill || '-', last: r.lastBill || '-' }];
+  ranges.forEach(g => { row('ใบแรก', g.first || '-'); row('ใบสุดท้าย', g.last || '-'); });
   rule();
   row(`บิลยกเลิก ${r.cancelCount || 0} บิล`, money2(r.cancelTotal));
   rule();

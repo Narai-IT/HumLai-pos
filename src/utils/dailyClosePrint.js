@@ -4,18 +4,26 @@ import { getPrinters, getPrinterByType } from './printerRouting';
 import { sendPrintJob } from './printServer';
 import { print80mm } from './print80mm';
 
-// เลขลำดับท้ายเลขบิล (XXX-#031 → 31) — ใช้เรียงหาใบแรก/ใบสุดท้าย
-const billSeq = (no) => {
-  const m = /#?(\d+)\s*$/.exec(String(no || ''));
-  return m ? parseInt(m[1], 10) : NaN;
+// เลขบิล → ตัวนำหน้า + ลำดับ (XXX-#031 → { prefix: 'XXX', seq: 31 })
+const splitBillNo = (no) => {
+  const m = /^(.*?)-?#?(\d+)\s*$/.exec(String(no || '').trim());
+  return m ? { prefix: m[1], seq: parseInt(m[2], 10) } : { prefix: String(no || ''), seq: NaN };
 };
 
-// ใบแรก/ใบสุดท้ายของช่วง — นับทั้งบิลปกติและบิลที่ยกเลิก เพราะเลขที่ถูกใช้ไปแล้วทั้งคู่
-export const billRange = (numbers) => {
-  const list = [...new Set(numbers.filter(Boolean))]
-    .map(no => ({ no, seq: billSeq(no) }))
-    .sort((a, b) => (isNaN(a.seq) ? Infinity : a.seq) - (isNaN(b.seq) ? Infinity : b.seq));
-  return list.length ? { first: list[0].no, last: list[list.length - 1].no } : { first: '-', last: '-' };
+// ใบแรก/ใบสุดท้ายแยกตามตัวนำหน้าเลขบิล (หลายสาขา หรือบิลเก่าชุด SELF ในช่วงที่เลือก) — นับทั้งบิลปกติและบิลที่ยกเลิก
+// เพราะเลขที่ถูกใช้ไปแล้วทั้งคู่
+export const billRanges = (numbers) => {
+  const groups = new Map();
+  [...new Set(numbers.filter(Boolean))].forEach(no => {
+    const { prefix, seq } = splitBillNo(no);
+    const g = groups.get(prefix) || [];
+    g.push({ no, seq });
+    groups.set(prefix, g);
+  });
+  return [...groups.values()].map(list => {
+    list.sort((a, b) => (isNaN(a.seq) ? Infinity : a.seq) - (isNaN(b.seq) ? Infinity : b.seq));
+    return { first: list[0].no, last: list[list.length - 1].no, count: list.length };
+  });
 };
 
 // ยอดขายถือว่ารวม VAT แล้ว — สูตรเดียวกับใบกำกับภาษี (api/_lib/taxInvoice.js)
@@ -57,8 +65,7 @@ export const dailyCloseHtml = (r) => {
     ${line('บัตรเครดิต', money2(r.card))}
     <div class="hr"></div>
     <div class="b">เลขที่ใบกำกับภาษีอย่างย่อ</div>
-    ${line('ใบแรก', r.firstBill)}
-    ${line('ใบสุดท้าย', r.lastBill)}
+    ${(r.ranges && r.ranges.length ? r.ranges : [{ first: '-', last: '-' }]).map(g => line('ใบแรก', g.first) + line('ใบสุดท้าย', g.last)).join('')}
     <div class="hr"></div>
     ${line(`บิลยกเลิก ${r.cancelCount} บิล`, money2(r.cancelTotal))}
     <div class="hr"></div>

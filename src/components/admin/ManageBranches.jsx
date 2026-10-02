@@ -235,6 +235,11 @@ export default function ManageBranches() {
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '-0.4rem' }}>
                   ใส่เลขผู้เสียภาษีแล้ว ใบเสร็จจะพิมพ์เป็น "ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)" พร้อม POS ID และยอดแยก VAT
                 </div>
+                {String(b.taxId || '').trim() && !String(b.posId || '').trim() && (
+                  <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '-0.4rem' }}>
+                    ⚠️ ยังไม่ได้ใส่ POS ID — ใบกำกับภาษีอย่างย่อตามแบบสรรพากรต้องมีเลขรหัสประจำเครื่อง
+                  </div>
+                )}
                 {!locked && (
                   <div style={{ fontSize: '0.75rem', color: '#b45309' }}>สาขาใหม่ — ยังไม่ได้บันทึก กด "บันทึกทั้งหมด"</div>
                 )}

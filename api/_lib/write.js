@@ -41,6 +41,30 @@ async function nextOrderNumber(runner, prefix) {
   return `${prefix}-#${String(max + 1).padStart(3, '0')}`;
 }
 
+// ตัวนำหน้าเลขบิลของสาขา (หลังบ้าน > สาขา) — ไม่ได้ตั้งใช้รหัสสาขา ตรงกับ branchPrefix() ฝั่งหน้าเว็บ
+// เลขบิล = เลขที่ใบกำกับภาษีอย่างย่อ ต้องเรียงต่อเนื่องชุดเดียวต่อสาขา ทั้งบิลหน้าร้านและบิลที่ลูกค้าสแกน QR
+const cleanPrefix = (v) => String(v || '').trim().toUpperCase().replace(/\s+/g, '').replace(/[^0-9A-Zก-๙]/g, '');
+async function branchBillPrefix(runner, branchId) {
+  let set = '';
+  try {
+    const res = await runner(`SELECT billPrefix FROM dbo.Branches WHERE id = @id`, { id: String(branchId || '') });
+    set = res.recordset.length ? res.recordset[0].billPrefix : '';
+  } catch { /* ยังไม่มีตารางสาขา */ }
+  return cleanPrefix(set) || cleanPrefix(branchId) || 'POS';
+}
+
+// PaymentSummary.ClientRef (กันบิลซ้ำตอนหน้าเว็บส่งซ้ำ) — ฐานข้อมูลที่ยังไม่ได้รัน sql:init ไม่มีคอลัมน์นี้
+// จำเฉพาะตอนเจอแล้ว — รัน sql:init ทีหลังก็ใช้ได้ทันทีโดยไม่ต้องเปิด API ใหม่
+let clientRefReady = false;
+async function hasClientRef() {
+  if (clientRefReady) return true;
+  try {
+    const res = await query(`SELECT COL_LENGTH('dbo.PaymentSummary', 'ClientRef') AS n`);
+    clientRefReady = !!(res.recordset[0] && res.recordset[0].n);
+  } catch { /* ถือว่ายังไม่มี */ }
+  return clientRefReady;
+}
+
 // id ของกะที่เปิดค้างอยู่ — คีออสไม่รู้จักกะ จึงต้องให้ฝั่งเซิร์ฟเวอร์ผูกให้ตอนบันทึกยอด
 async function openShiftId(runner) {
   const res = await runner(`SELECT TOP (1) id FROM dbo.Shifts WHERE LOWER(ISNULL([status], '')) = 'open' ORDER BY Seq DESC`);
@@ -67,7 +91,6 @@ export async function handleKioskPaidOrder(data) {
   const total   = Number(data.total) || 0;
   const method  = data.paymentMethod || 'เงินโอน (QR)';
   const time    = data.timestamp || thaiTimeISO();
-  const prefix  = (String(data.prefix || 'SELF').toUpperCase().replace(/[^0-9A-Zก-๙]/g, '') || 'SELF');
   const by      = 'Self-Order';
   const session = String(data.sessionId || Date.now());
   if (items.length === 0) return { success: false, error: 'ไม่มีรายการอาหารในออเดอร์' };
@@ -79,7 +102,7 @@ export async function handleKioskPaidOrder(data) {
     const dup = await findKioskOrderBySession(runner, session);
     if (dup) return { success: true, orderNumber: dup, duplicate: true };
 
-    const orderNo = await nextOrderNumber(runner, prefix);
+    const orderNo = await nextOrderNumber(runner, await branchBillPrefix(runner, branchId));
     const name    = table ? `โต๊ะ ${table} (สั่งเอง)` : 'สั่งเอง';
     const addr    = table ? `โต๊ะ ${table}` : 'สั่งเอง';
     const tsLocal = toThaiClock(time);
@@ -225,11 +248,28 @@ export async function insertOrder(data) {
   const rows = Array.isArray(data.rows) ? data.rows : [];
   // บิลค้างในเครื่องที่ส่งซ้ำจากหน้าเว็บรุ่นเก่าไม่มี branchId → ลงสาขาหลัก
   const branchId = await branchForWrite(data);
-  await withTransaction(async (runner) => {
+  // หน้าเว็บรุ่นใหม่ให้เซิร์ฟเวอร์ออกเลขบิล (assignNumber) — เลขเดียวต่อสาขา ออกในทรานแซกชันที่ล็อกอยู่ จึงไม่ซ้ำแม้มีหลายเครื่อง
+  // หน้าเว็บรุ่นเก่า / บิลค้างเก่าที่มีเลขมาแล้ว ใช้เลขที่ส่งมาเหมือนเดิม
+  const assign = !!data.assignNumber;
+  const clientRef = toText(data.clientRef);
+  const useRef = assign && !!clientRef && await hasClientRef();
+  const result = await withTransaction(async (runner) => {
+    if (useRef) {
+      // ส่งซ้ำ (เน็ตหลุดหลังเซิร์ฟเวอร์บันทึกแล้ว) → คืนเลขบิลเดิม ไม่บันทึกซ้ำ
+      const dup = await runner(
+        `SELECT TOP (1) orderNumber FROM dbo.PaymentSummary WITH (UPDLOCK, HOLDLOCK) WHERE ClientRef = @ref`,
+        { ref: clientRef }
+      );
+      if (dup.recordset.length) return { success: true, orderNumber: dup.recordset[0].orderNumber, duplicate: true };
+    }
+    const orderNo = assign
+      ? await nextOrderNumber(runner, await branchBillPrefix(runner, branchId))
+      : toText(data.payment && data.payment.orderNumber) || toText(rows[0] && rows[0][1]);
     if (rows.length > 0) {
       const values = rows.map(r => {
         const row = Array.isArray(r) ? r : [];
         const cells = Array.from({ length: 13 }, (_, i) => (row[i] === undefined ? null : row[i]));
+        if (assign) cells[1] = orderNo;
         // ช่องว่างในชีทคือ '' — ในตารางเก็บเป็น NULL เพื่อให้คอลัมน์ตัวเลขรับได้
         return [
           toText(cells[0]), toText(cells[1]), toText(cells[2]), toText(cells[3]), toText(cells[4]),
@@ -242,13 +282,16 @@ export async function insertOrder(data) {
     // บันทึกข้อมูลการชำระเงินในคำขอเดียวกัน — กันกรณีบิลถูกบันทึกแต่ payment หาย
     if (data.payment) {
       const p = data.payment;
-      await insertRows('PaymentSummary', PAYMENT_COLS, [[
-        thaiTimeISO(), toText(p.orderNumber), toText(p.tableNo), toText(p.paymentMethod),
+      const row = [
+        thaiTimeISO(), assign ? orderNo : toText(p.orderNumber), toText(p.tableNo), toText(p.paymentMethod),
         Number(p.grandTotal) || 0, toText(p.staff), toText(p.shiftId), toText(p.splitDetail), branchId
-      ]], runner);
+      ];
+      if (useRef) await insertRows('PaymentSummary', [...PAYMENT_COLS, 'ClientRef'], [[...row, clientRef]], runner);
+      else await insertRows('PaymentSummary', PAYMENT_COLS, [row], runner);
     }
+    return { success: true, orderNumber: orderNo };
   });
-  return { success: true };
+  return result;
 }
 
 export async function updateStatus(data) {

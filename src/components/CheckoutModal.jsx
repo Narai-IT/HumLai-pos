@@ -2,10 +2,9 @@ import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer } from 'lucide-react';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
-import { print80mm, scopedSlipCss } from '../utils/print80mm';
+import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
-import { getPrinters, getPrinterByType } from '../utils/printerRouting';
-import { sendPrintJob, getReceiptHeader } from '../utils/printServer';
+import { getReceiptHeader } from '../utils/printServer';
 
 const calcCharges = (subtotal, settings = {}, discount = null) => {
   let discountAmount = 0;
@@ -178,12 +177,13 @@ const CheckoutModal = ({
   };
 
   const paidMethod = pendingComplete?.method || '';
-  const buildReceiptHtml = () => {
+  // no = เลขที่บิล (เซิร์ฟเวอร์ออกตอนบันทึก) · abb=false = ใบเสร็จธรรมดา ใช้ตอนยังบันทึกบิลไม่สำเร็จ
+  const buildReceiptHtml = (no = orderNumber, abb = true) => {
     const now = new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     // หัวใบตามสาขา (หลังบ้าน > สาขา) — มีเลขผู้เสียภาษี = ใบกำกับภาษีอย่างย่อ เหมือนที่ Print Server พิมพ์
     const esc = (v) => String(v || '').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const h = getReceiptHeader() || {};
-    const isAbb = !!esc(h.taxId);
+    const isAbb = abb && !!esc(h.taxId);
     const rows = (tableOrderItems || []).map(it => {
       const qty = Number(it.Quantity) || 1;
       const price = (Number(it.ItemPrice) || 0) * qty;
@@ -206,7 +206,7 @@ const CheckoutModal = ({
       ${headLines}
       <div class="c sm">${isAbb ? 'ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)' : 'ใบเสร็จรับเงิน / RECEIPT'}</div>
       <div class="hr"></div>
-      ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', orderNumber || '-')}
+      ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', no || '-')}
       ${tableNo ? line('โต๊ะ', tableNo) : ''}
       ${line('วันที่', now)}
       ${paidMethod ? line('ชำระโดย', paidMethod) : ''}
@@ -227,7 +227,7 @@ const CheckoutModal = ({
 
   // ── ใบเสร็จสำหรับเครื่องพิมพ์ความร้อน (Print Server) — ข้อมูลชุดเดียวกับพรีวิว ──
   const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const buildReceiptOrder = () => {
+  const buildReceiptOrder = (no = orderNumber) => {
     const summary = [];
     if (hasDiscount || hasCharges) summary.push({ label: 'ยอดอาหาร', value: money2(subtotal) });
     if (hasDiscount) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-${money2(discountAmount)}` });
@@ -235,8 +235,8 @@ const CheckoutModal = ({
     if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(vat) });
     if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
     return {
-      id: orderNumber,
-      orderNumber: orderNumber || '-',
+      id: no,
+      orderNumber: no || '-',
       customerDetails: { name: tableNo ? `โต๊ะ ${tableNo}` : '' },
       items: (tableOrderItems || []).map(it => {
         const qty = Number(it.Quantity) || 1;
@@ -253,23 +253,11 @@ const CheckoutModal = ({
     };
   };
 
-  // พิมพ์ออกเครื่องใบเสร็จผ่าน Print Server — เครื่องนี้ยังไม่ได้ตั้งเครื่องพิมพ์ ค่อยใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
-  const [receiptPrinted, setReceiptPrinted] = useState(false);
-  const [printStatus, setPrintStatus] = useState('');
-  const printReceipt = async () => {
-    const printers = getPrinters();
-    const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
-    if (!printer || !printer.ip) { print80mm(buildReceiptHtml()); return; }
-    setPrintStatus('กำลังส่งไปเครื่องพิมพ์...');
-    const res = await sendPrintJob({ ip: printer.ip, printerType: 'receipt', orderData: buildReceiptOrder() });
-    if (res.success) { setReceiptPrinted(true); setPrintStatus('🖨️ ส่งใบเสร็จไปที่เครื่องพิมพ์แล้ว'); }
-    else setPrintStatus(`❌ พิมพ์ไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}`);
-  };
-
-  const finalizeComplete = () => {
+  // ปิดบิล — เลขที่บิล (= เลขที่ใบกำกับภาษีอย่างย่อ) ออกโดยเซิร์ฟเวอร์ตอนบันทึก หน้าหลักจึงเป็นคนพิมพ์ใบเสร็จหลังได้เลข
+  // print = กดปุ่มพิมพ์ใบเสร็จ: เครื่องที่ยังไม่ได้ตั้งเครื่องพิมพ์ใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
+  const finalizeComplete = (print = false) => {
     const pc = pendingComplete || { method: 'เงินสด' };
-    // กดพิมพ์ใบเสร็จไปแล้ว → บอกหน้าหลักไม่ต้องพิมพ์ซ้ำตอนปิดบิล
-    onComplete(grand, pc.method, pc.details, { receiptPrinted, receiptOrder: buildReceiptOrder() });
+    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml });
   };
 
   const PriceBreakdown = ({ compact = false }) => (
@@ -942,18 +930,18 @@ const CheckoutModal = ({
 
             <div style={{ background: 'white', borderRadius: '8px', width: '302px', maxWidth: '100%', margin: '0 auto 1.25rem', boxShadow: '0 8px 30px rgba(0,0,0,0.15)', textAlign: 'left', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
               <style>{scopedSlipCss('.slip-body')}</style>
-              <div className="slip-body" dangerouslySetInnerHTML={{ __html: buildReceiptHtml() }} />
+              <div className="slip-body" dangerouslySetInnerHTML={{ __html: buildReceiptHtml('(ออกเลขเมื่อบันทึกบิล)') }} />
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button
-                onClick={printReceipt}
+                onClick={() => finalizeComplete(true)}
                 style={{ flex: 1, padding: '0.85rem', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '12px', color: '#2563eb', fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}
               >
                 <Printer size={18} /> {lang === 'th' ? 'พิมพ์ใบเสร็จ' : 'Print'}
               </button>
               <button
-                onClick={finalizeComplete}
+                onClick={() => finalizeComplete(false)}
                 className="confirm-btn"
                 style={{ flex: 1.4, background: '#16a34a', color: '#ffffff', fontWeight: '800' }}
               >
@@ -961,9 +949,6 @@ const CheckoutModal = ({
                 {lang === 'th' ? 'เสร็จสิ้น' : 'Done'}
               </button>
             </div>
-            {printStatus && (
-              <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', fontWeight: 700, color: printStatus.startsWith('❌') ? '#dc2626' : '#15803d' }}>{printStatus}</div>
-            )}
           </div>
         )}
 
