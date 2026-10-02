@@ -26,63 +26,42 @@
   .side td,.side th{border:1px solid #999;padding:3px 6px;vertical-align:top}
   .side th{background:#f2f2f2;text-align:left}
   .ok{text-align:center;font-weight:700}
+  .slip{width:270px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:12px 14px 14px;font-size:11.5px;line-height:1.5}
+  .c{text-align:center}.b{font-weight:700}
+  .hr{overflow:hidden;white-space:nowrap;letter-spacing:1px}
   .cert{position:absolute;right:48px;bottom:60px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
   .cert b{display:block;text-align:center;font-size:17px}
   .note{position:absolute;left:56px;bottom:66px;width:440px;font-size:12px;line-height:1.75}
 </style></head><body>
 <div class="pg">หน้า ....</div>
-<h1>ตัวอย่างรายงานสรุปยอดขายประจำวัน</h1>
-<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; เพิ่มเติม &gt; สรุปยอดขายวันนี้</div>
+<h1>ตัวอย่างรายงานปิดยอดประจำวัน</h1>
+<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; เพิ่มเติม &gt; สรุปยอดขายวันนี้ &gt; ปุ่ม "พิมพ์ปิดยอดประจำวัน"</div>
 
 <div class="wrap">
-  <div class="col"><div class="cap">รายงานที่ระบบแสดงในปัจจุบัน (บันทึกเป็นภาพ PNG / Excel)</div>
-    <div class="card">
-      <div class="ttl">ข้าวมันไก่หำไหล</div>
-      <div class="date">วันที่ 01/10/2569</div>
-      <div class="two">
-        <div class="box"><div class="k">ยอดขายทั้งหมด</div><div class="v">฿1,496</div></div>
-        <div class="box"><div class="k">จำนวนบิลทั้งหมด</div><div class="v">5 บิล</div></div>
-      </div>
-      <div class="sec"><h4>ช่องทางการชำระเงิน</h4>
-        <div class="row"><span>เงินสด (Cash)</span><b>฿906</b></div>
-        <div class="row"><span>เงินโอน / QR (Transfer)</span><b>฿590</b></div>
-        <div class="row"><span>บัตรเครดิต (Card)</span><b>฿0</b></div>
-      </div>
-      <div class="sec"><h4>ยอดขายรวมตามเมนู (รวมของในเซ็ต &amp; ป๊อปอัป)</h4>
-        <div class="row"><span>1. ข้าวมันไก่หำไหล</span><span>10 รายการ &nbsp; ฿690</span></div>
-        <div class="row"><span>2. ข้าวมันไก่ทอด</span><span>6 รายการ &nbsp; ฿450</span></div>
-        <div class="row"><span>3. ชุดข้าวมันไก่สิงคโปร์</span><span>4 รายการ &nbsp; ฿356</span></div>
-        <div class="row tot"><span>รวมยอดขายสุทธิ (Grand Total)</span><span>฿1,496</span></div>
-      </div>
-      <div class="sec" style="margin-bottom:0"><h4>รายการที่ทิ้ง (Waste)</h4>
-        <div class="row"><span style="color:#555">ไม่มีรายการทิ้งในช่วงเวลานี้</span></div>
-      </div>
-    </div>
-  </div>
+  <div class="col"><div class="cap">ใบปิดยอดที่ระบบพิมพ์ (กระดาษ 80 มม.)</div><div class="slip" id="slip"></div></div>
   <div class="side">
-    <h3>เทียบกับรายงานปิดยอดที่ควรมี (แบบ ค.ก.๔ ก ข้อ 5.1)</h3>
+    <h3>รายการในรายงาน (แบบ ค.ก.๔ ก ข้อ 5.1)</h3>
     <table>
-      <tr><th>รายการ</th><th style="width:58px">ปัจจุบัน</th></tr>
-      <tr><td>วันที่ ชื่อร้าน/สาขา</td><td class="ok">มี</td></tr>
-      <tr><td>ยอดขายรวม และจำนวนบิล</td><td class="ok">มี</td></tr>
-      <tr><td>ยอดแยกตามช่องทางชำระเงิน</td><td class="ok">มี</td></tr>
-      <tr><td>ยอดขายแยกตามเมนู</td><td class="ok">มี</td></tr>
-      <tr><td>มูลค่าก่อนภาษี และภาษีมูลค่าเพิ่ม</td><td class="ok">ไม่มี</td></tr>
-      <tr><td>เลขที่ใบกำกับภาษีอย่างย่อ ใบแรก - ใบสุดท้าย</td><td class="ok">ไม่มี</td></tr>
-      <tr><td>จำนวนและยอดบิลที่ยกเลิก</td><td class="ok">ไม่มี</td></tr>
-      <tr><td>ยอดส่วนลดรวม</td><td class="ok">ไม่มี<br><small>(รวมใน "ส่วนต่าง")</small></td></tr>
-      <tr><td>POS ID / เลขผู้เสียภาษี</td><td class="ok">ไม่มี</td></tr>
-      <tr><td>พิมพ์ออกเครื่องพิมพ์ใบเสร็จ (ปิดยอดสิ้นวัน)</td><td class="ok">ไม่มี</td></tr>
+      <tr><th>รายการ</th><th style="width:96px">บนใบ</th></tr>
+      <tr><td>ชื่อร้าน เลขผู้เสียภาษี POS ID</td><td>หัวใบ</td></tr>
+      <tr><td>วันที่ขาย สาขา เวลาพิมพ์ ผู้พิมพ์</td><td>ส่วนที่ 1</td></tr>
+      <tr><td>จำนวนบิล ยอดขายรวม ส่วนลด</td><td>ส่วนที่ 2</td></tr>
+      <tr><td>มูลค่าสินค้าเสียภาษี และภาษีมูลค่าเพิ่ม</td><td>ส่วนที่ 2</td></tr>
+      <tr><td>ยอดแยกตามช่องทางชำระเงิน</td><td>ส่วนที่ 3</td></tr>
+      <tr><td>เลขที่ใบกำกับภาษีอย่างย่อ ใบแรก - ใบสุดท้าย</td><td>ส่วนที่ 4</td></tr>
+      <tr><td>จำนวนและยอดบิลที่ยกเลิก</td><td>ส่วนที่ 5</td></tr>
+      <tr><td>ยอดขายแยกตามเมนู</td><td>ส่วนที่ 6</td></tr>
+      <tr><td>ลายมือชื่อผู้ตรวจนับเงิน</td><td>ท้ายใบ</td></tr>
     </table>
-    <p style="margin:8px 0 0">ระบบไม่มีคำสั่งปิดรอบ/ปิดวัน (เลิกใช้ระบบกะแล้ว) ข้อมูลทุกบิลบันทึกที่เครื่องควบคุมกลางทันทีที่ชำระเงิน</p>
+    <p style="margin:8px 0 0">ข้อมูลทุกบิลบันทึกที่เครื่องควบคุมกลางทันทีที่ชำระเงิน รายงานดึงยอดจากเครื่องควบคุมกลาง พิมพ์ย้อนหลังได้ตามช่วงวันที่ที่เลือก</p>
   </div>
 </div>
 
 <div class="note">
   <b>หมายเหตุ</b><br>
   เลือกช่วงวันที่ย้อนหลังได้ (รายวัน / รายเดือน) และแยกตามสาขาได้<br>
-  กด "จำนวนบิลทั้งหมด" เพื่อดูรายละเอียดทุกบิล<br>
-  บิลที่ยกเลิกไม่นับรวมในยอดขาย<br>
+  บิลที่ยกเลิกไม่นับรวมในยอดขาย แต่นับในช่วงเลขที่ใบ<br>
+  ยอดขายถือว่ารวม VAT แล้ว (สูตรเดียวกับใบกำกับภาษี)<br>
   ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
 </div>
 <div class="cert"><b>รับรองสำเนาถูกต้อง</b>
@@ -92,4 +71,37 @@
 <span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
 ..................................................
 </div>
+<script>
+// เลียนแบบ printDailyClose() ใน print-ticket.js
+const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dash = '<div class="hr">' + '-'.repeat(32) + '</div>';
+const row = (k, v, cls = '') => `<div class="row ${cls}"><span>${k}</span><span>${v}</span></div>`;
+const total = 1496, vatable = Math.round(total * 100 / 107 * 100) / 100;
+const menu = [['ข้าวมันไก่หำไหล', 10, 690], ['ข้าวมันไก่ทอด', 6, 450], ['ชุดข้าวมันไก่สิงคโปร์', 4, 356]];
+document.getElementById('slip').innerHTML = `
+  <div class="c b" style="font-size:13px">ข้าวมันไก่หำไหล</div>
+  <div class="c">เลขผู้เสียภาษี XXXXXXXXXXXXX</div>
+  <div class="c">POS ID: XXXXXXXXXXXXXX</div>
+  ${dash}
+  <div class="c b">รายงานปิดยอดประจำวัน</div>
+  <div class="c">DAILY CLOSE REPORT</div>
+  ${dash}
+  ${row('วันที่ขาย', '01/10/2569')}${row('สาขา', '..........')}${row('พิมพ์เมื่อ', '01/10/2569 22:05')}${row('ผู้พิมพ์', '..........')}
+  ${dash}
+  ${row('จำนวนบิล', '5 บิล')}${row('ยอดขายรวม', m(total), 'b')}${row('ส่วนลด', m(0))}
+  ${row('มูลค่าสินค้าเสียภาษี', m(vatable))}${row('ภาษีมูลค่าเพิ่ม 7%', m(Math.round((total - vatable) * 100) / 100))}
+  ${dash}
+  <div>ช่องทางชำระเงิน</div>
+  ${row('เงินสด', m(906))}${row('เงินโอน / QR', m(590))}${row('บัตรเครดิต', m(0))}
+  ${dash}
+  <div>เลขที่ใบกำกับภาษีอย่างย่อ</div>
+  ${row('ใบแรก', 'XXXX-#027')}${row('ใบสุดท้าย', 'XXXX-#031')}
+  ${dash}
+  ${row('บิลยกเลิก 0 บิล', m(0))}
+  ${dash}
+  <div>ยอดขายตามเมนู</div>
+  ${menu.map(([n, q, a]) => row(`${q}x ${n}`, m(a))).join('')}
+  ${dash}
+  <div style="margin-top:12px">ผู้ตรวจนับเงิน ________________</div>`;
+</script>
 </body></html>
