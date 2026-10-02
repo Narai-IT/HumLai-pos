@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:36px;right:48px;font-size:14px}
+  h1{font-size:22px;text-align:center;margin:0;padding-top:70px}
+  .sub{text-align:center;font-size:14px;color:#333;margin-top:6px}
+  .wrap{position:absolute;top:140px;left:0;right:0;display:flex;justify-content:center;gap:36px}
+  .col{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .cap{font-size:13px;font-weight:700}
+  .slip{width:270px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:12px 14px 14px;font-size:11.5px;line-height:1.5}
+  .c{text-align:center}.b{font-weight:700}
+  .row{display:flex;justify-content:space-between;gap:8px}
+  .hr{overflow:hidden;white-space:nowrap;letter-spacing:1px}
+  .ind{padding-left:22px}
+  .cert{position:absolute;right:48px;bottom:60px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
+  .cert b{display:block;text-align:center;font-size:17px}
+  .note{position:absolute;left:56px;bottom:66px;width:440px;font-size:12px;line-height:1.75}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<h1>ตัวอย่างใบกำกับภาษีเต็มรูปแบบ</h1>
+<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; ออกจากบิลที่ชำระแล้ว พิมพ์ออกเครื่องพิมพ์ความร้อน 80 มม.</div>
+
+<div class="wrap">
+  <div class="col"><div class="cap">ต้นฉบับ (ให้ลูกค้า)</div><div class="slip" id="orig"></div></div>
+  <div class="col"><div class="cap">สำเนา (เก็บที่ร้าน)</div><div class="slip" id="copy"></div></div>
+</div>
+
+<div class="note">
+  <b>ขั้นตอนการออก</b> (แคชเชียร์/แอดมิน): เพิ่มเติม &gt; ใบกำกับภาษี &gt; เลือกบิล<br>
+  &gt; กรอกหรือค้นหาข้อมูลผู้ซื้อ &gt; ออกใบกำกับภาษี<br>
+  ต้องเรียกใบกำกับภาษีอย่างย่อคืนจากลูกค้า และอ้างอิงเลขที่บิลเดิม<br>
+  เลขที่ใบ = รหัสบิลสาขา-TX ปีเดือน (ค.ศ.)-ลำดับ เรียงต่อเนื่อง ไม่ซ้ำ<br>
+  บิลหนึ่งออกใบที่ใช้งานได้ครั้งเดียว ยกเลิกแล้วออกใหม่ได้เลขใหม่<br>
+  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
+</div>
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ.........................................<br>
+ลงชื่อ.........................................<br>
+วันที่..........................................<br>
+<span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
+..................................................
+</div>
+
+<script>
+// เลียนแบบ printTaxInvoice() ใน print-ticket.js และ issueTaxInvoice() ใน api/_lib/taxInvoice.js
+const items = [
+  { qty: 2, name: 'ข้าวมันไก่หำไหล', unit: 69, amount: 138 },
+  { qty: 1, name: 'ข้าวมันไก่ทอด', unit: 75, amount: 75 },
+  { qty: 1, name: 'ชุดข้าวมันไก่สิงคโปร์', unit: 89, amount: 89 },
+];
+const total = items.reduce((s, i) => s + i.amount, 0);
+const subtotal = Math.round(total * 100 / 107 * 100) / 100;
+const vat = Math.round((total - subtotal) * 100) / 100;
+const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dash = '<div class="hr">' + '-'.repeat(32) + '</div>';
+const slip = copy => `
+  <div class="c b" style="font-size:13px">ข้าวมันไก่หำไหล</div>
+  <div class="c">.......................... <small>(ที่อยู่สาขา)</small></div>
+  <div class="c">โทร ...................</div>
+  <div class="c">เลขผู้เสียภาษี X-XXXX-XXXXX-XX-X</div>
+  <div class="c">(สำนักงานใหญ่ / สาขา ..........)</div>
+  ${dash}
+  <div class="c b">ใบกำกับภาษี/ใบเสร็จรับเงิน</div>
+  <div class="c">TAX INVOICE / RECEIPT</div>
+  <div class="c">${copy ? '(สำเนา)' : '(ต้นฉบับ)'}</div>
+  ${dash}
+  <div>เลขที่ XXXX-TX2610-0001</div>
+  <div>วันที่ 01/10/2569 12:40</div>
+  <div>อ้างอิงบิล XXXX-#031</div>
+  ${dash}
+  <div>ผู้ซื้อ</div>
+  <div>บริษัท ตัวอย่าง จำกัด</div>
+  <div>เลขผู้เสียภาษี X-XXXX-XXXXX-XX-X</div>
+  <div>สำนักงานใหญ่</div>
+  <div>.......................... <small>(ที่อยู่ผู้ซื้อ)</small></div>
+  ${dash}
+  ${items.map(i => `<div class="row"><span>${i.qty}x ${i.name}</span><span>${m(i.amount)}</span></div>${i.qty > 1 ? `<div class="ind">@ ${m(i.unit)}</div>` : ''}`).join('')}
+  ${dash}
+  <div class="row"><span>มูลค่าก่อนภาษี</span><span>${m(subtotal)}</span></div>
+  <div class="row"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${m(vat)}</span></div>
+  <div class="row b"><span>รวมทั้งสิ้น</span><span>${m(total)}</span></div>
+  <div class="c">(สามร้อยสองบาทถ้วน)</div>
+  ${dash}
+  <div style="margin-top:10px">ผู้รับเงิน ______________________</div>`;
+document.getElementById('orig').innerHTML = slip(false);
+document.getElementById('copy').innerHTML = slip(true);
+</script>
+</body></html>
