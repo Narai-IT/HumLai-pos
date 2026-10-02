@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { ShoppingBag, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu, Download } from 'lucide-react';
+import { ShoppingBag, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu, Download, ZoomIn } from 'lucide-react';
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
@@ -65,6 +65,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const [activeCategory, setActiveCategory] = useState(categories[0]?.slug || 'food');
   const [cart, setCart] = useState([]);
   const [selectedFood, setSelectedFood] = useState(null);
+  // เมนูที่กำลังเปิดดูรูปขยายเต็มจอ (แตะที่รูปในการ์ด)
+  const [previewFood, setPreviewFood] = useState(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [orderNumber, setOrderNumber] = useState('');   // เลขบิลที่ระบบออกให้ ใช้อ้างอิงกับพนักงาน
@@ -176,6 +178,24 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       handleAddToCartDirect(food);
     }
   };
+
+  // รูปขยาย: ดันประวัติไว้ 1 ขั้น ให้ปุ่มย้อนกลับของมือถือปิดรูปแทนการออกจากหน้า
+  // (คง state เดิมของ router ไว้ เพื่อไม่ให้ router มองว่าเปลี่ยนหน้า)
+  const isPreviewOpen = !!previewFood;
+  useEffect(() => {
+    if (!isPreviewOpen) return;
+    window.history.pushState({ ...(window.history.state || {}), kioskImgPreview: true }, '');
+    const onPop = () => setPreviewFood(null);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [isPreviewOpen]);
+
+  const closePreview = () => {
+    if (window.history.state?.kioskImgPreview) window.history.back();
+    else setPreviewFood(null);
+  };
+
+  const foodImageSrc = (food) => food.image || `/images/menu/${food.id}.png`;
 
   // หมายเหตุฝั่งลูกค้าสั่งเอง — สวิตช์พิมพ์เองแยกจากหน้าขาย (ค่าเริ่มต้นคือเลือกได้เฉพาะปุ่ม)
   const kioskNoteConfig = useMemo(() => resolveNoteConfig(settings, { kiosk: true }), [settings]);
@@ -466,9 +486,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
         }}
       >
         {/* Image Container with high visual impact */}
-        <div style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative', background: '#f1f5f9' }}>
+        {/* แตะรูป = เปิดดูรูปขยาย (ไม่เพิ่มลงตะกร้า) */}
+        <div
+          onClick={() => setPreviewFood(food)}
+          style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative', background: '#f1f5f9', cursor: 'zoom-in' }}
+        >
           <img
-            src={food.image || `/images/menu/${food.id}.png`}
+            src={foodImageSrc(food)}
             alt={food.name}
             loading="lazy"
             referrerPolicy="no-referrer"
@@ -476,6 +500,15 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
           
+          <div style={{
+            position: 'absolute', top: '8px', left: '8px',
+            width: '28px', height: '28px', borderRadius: '50%',
+            background: 'rgba(15,23,42,0.55)', color: '#ffffff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none'
+          }}>
+            <ZoomIn size={15} />
+          </div>
+
           {/* Badge & Price tag overlay */}
           <div style={{
             position: 'absolute', bottom: '8px', right: '8px',
@@ -797,6 +830,81 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               <ChevronRight size={18} />
             </div>
           </button>
+        </div>
+      )}
+
+      {/* ─── รูปเมนูขยายเต็มจอ ─── */}
+      {previewFood && (
+        <div
+          onClick={closePreview}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 950,
+            background: 'rgba(2,6,23,0.92)',
+            display: 'flex', flexDirection: 'column'
+          }}
+        >
+          <button
+            onClick={(e) => { e.stopPropagation(); closePreview(); }}
+            aria-label={lang === 'th' ? 'ปิด' : 'Close'}
+            style={{
+              position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', right: '12px', zIndex: 1,
+              width: '42px', height: '42px', borderRadius: '50%', border: 'none',
+              background: 'rgba(255,255,255,0.15)', color: '#ffffff', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+          >
+            <X size={22} />
+          </button>
+
+          <div style={{
+            flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 'calc(60px + env(safe-area-inset-top)) 12px 12px'
+          }}>
+            <img
+              src={foodImageSrc(previewFood)}
+              alt={previewFood.name}
+              referrerPolicy="no-referrer"
+              onClick={e => e.stopPropagation()}
+              onError={(e) => { e.target.src = '/images/menu/default.png'; }}
+              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '16px' }}
+            />
+          </div>
+
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#ffffff', width: '100%', maxWidth: '480px', margin: '0 auto',
+              borderTopLeftRadius: '22px', borderTopRightRadius: '22px',
+              padding: '1rem', paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))',
+              display: 'flex', flexDirection: 'column', gap: '0.5rem'
+            }}
+          >
+            <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: '900', color: '#0f172a', lineHeight: 1.3 }}>
+              {lang === 'th' ? previewFood.name : (previewFood.nameEn || previewFood.name)}
+            </h3>
+            {previewFood.description && (
+              <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b', lineHeight: 1.45, maxHeight: '20dvh', overflowY: 'auto' }}>
+                {previewFood.description}
+              </p>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginTop: '0.25rem' }}>
+              <div style={{ fontSize: '1.35rem', fontWeight: '900', color: '#ea580c' }}>
+                ฿{(Number(previewFood.price) || 0).toLocaleString()}
+              </div>
+              <button
+                onClick={() => { const food = previewFood; closePreview(); handleFoodClick(food); }}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                  color: '#ffffff', border: 'none', borderRadius: '11px',
+                  padding: '0.75rem 1.4rem', fontWeight: '800', fontSize: '1rem',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                  boxShadow: '0 4px 12px rgba(217,119,6,0.3)', fontFamily: 'inherit'
+                }}
+              >
+                <Plus size={18} /> {lang === 'th' ? 'สั่ง' : 'Add'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
