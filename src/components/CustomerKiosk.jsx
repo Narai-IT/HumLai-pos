@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShoppingBag, CheckCircle, Smartphone, Globe, Plus, Minus, X, ChevronRight, QrCode, Sparkles, Utensils, Menu, Download, ZoomIn } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -12,6 +12,155 @@ const TAKEAWAY_DINING = { id: 'takeaway', name: 'ห่อกลับบ้า�
 const DINE_IN_DINING = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
 // ทานที่ร้านโดยไม่ได้สแกน QR โต๊ะ (เข้าจากหน้าแรกของเว็บ) → ไม่ถามโต๊ะ ลงชื่อนี้แทน
 const DINE_IN_LABEL = 'ทานที่ร้าน';
+
+// รูปเมนูขยาย: ใช้สองนิ้วซูม/ลากดู, แตะสองครั้งที่รูปเพื่อซูมเข้า-ออก
+// ตอนซูมอยู่ แตะพื้นที่ว่างจะคืนขนาดเดิม (ยังไม่ปิด) — ตอนไม่ซูม แตะพื้นที่ว่างจะปิดรูป
+const MAX_ZOOM = 4;
+const DOUBLE_TAP_ZOOM = 2.5;
+const ZoomableImage = ({ src, alt, onBackdropTap, hint }) => {
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  // ระหว่างนิ้วแตะจอ ปิด transition ให้รูปตามนิ้วทันที
+  const [touching, setTouching] = useState(false);
+  const viewRef = useRef(view);
+  const areaRef = useRef(null);
+  const imgRef = useRef(null);
+  const gesture = useRef(null);
+  const lastTap = useRef(0);
+
+  const apply = (scale, x, y) => {
+    const img = imgRef.current;
+    let next;
+    if (scale <= 1.01 || !img) {
+      next = { scale: 1, x: 0, y: 0 };
+    } else {
+      // ไม่ให้ลากรูปหลุดออกนอกกรอบ
+      const maxX = (img.offsetWidth * (scale - 1)) / 2;
+      const maxY = (img.offsetHeight * (scale - 1)) / 2;
+      next = { scale, x: Math.max(-maxX, Math.min(maxX, x)), y: Math.max(-maxY, Math.min(maxY, y)) };
+    }
+    viewRef.current = next;
+    setView(next);
+  };
+
+  // ตำแหน่งนิ้ว เทียบกับจุดกึ่งกลางของรูป (ก่อนซูม)
+  const fromCenter = (clientX, clientY) => {
+    const r = areaRef.current.getBoundingClientRect();
+    return { x: clientX - (r.left + r.width / 2), y: clientY - (r.top + r.height / 2) };
+  };
+
+  const startPinch = (touches) => {
+    const [a, b] = [touches[0], touches[1]];
+    const mid = fromCenter((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
+    const { scale, x, y } = viewRef.current;
+    gesture.current = {
+      type: 'pinch',
+      dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1,
+      scale,
+      // จุดบนรูปที่อยู่ใต้กึ่งกลางสองนิ้ว — ให้คงอยู่ใต้นิ้วตลอดการซูม
+      px: (mid.x - x) / scale,
+      py: (mid.y - y) / scale
+    };
+  };
+
+  const startPan = (t) => {
+    const { x, y } = viewRef.current;
+    gesture.current = { type: 'pan', sx: t.clientX, sy: t.clientY, x, y, moved: false };
+  };
+
+  const onTouchStart = (e) => {
+    setTouching(true);
+    if (e.touches.length >= 2) startPinch(e.touches);
+    else if (e.touches.length === 1) startPan(e.touches[0]);
+  };
+
+  const onTouchMove = (e) => {
+    const g = gesture.current;
+    if (!g) return;
+    if (g.type === 'pinch' && e.touches.length >= 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const scale = Math.max(1, Math.min(MAX_ZOOM, g.scale * (dist / g.dist)));
+      const mid = fromCenter((a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2);
+      apply(scale, mid.x - scale * g.px, mid.y - scale * g.py);
+    } else if (g.type === 'pan' && e.touches.length === 1) {
+      const t = e.touches[0];
+      const dx = t.clientX - g.sx;
+      const dy = t.clientY - g.sy;
+      if (Math.abs(dx) > 6 || Math.abs(dy) > 6) g.moved = true;
+      if (viewRef.current.scale > 1) apply(viewRef.current.scale, g.x + dx, g.y + dy);
+    }
+  };
+
+  const onTouchEnd = (e) => {
+    const g = gesture.current;
+    if (e.touches.length === 1) { startPan(e.touches[0]); gesture.current.moved = true; return; }
+    if (e.touches.length >= 2) { startPinch(e.touches); return; }
+    gesture.current = null;
+    setTouching(false);
+    // แตะสองครั้งที่รูป = ซูมเข้าตรงจุดที่แตะ / ซูมออก
+    if (g && g.type === 'pan' && !g.moved && e.target === imgRef.current) {
+      const now = Date.now();
+      if (now - lastTap.current < 300) {
+        lastTap.current = 0;
+        if (viewRef.current.scale > 1) apply(1, 0, 0);
+        else {
+          const p = fromCenter(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+          apply(DOUBLE_TAP_ZOOM, p.x * (1 - DOUBLE_TAP_ZOOM), p.y * (1 - DOUBLE_TAP_ZOOM));
+        }
+      } else {
+        lastTap.current = now;
+      }
+    }
+  };
+
+  const zoomed = view.scale > 1;
+
+  return (
+    <div
+      ref={areaRef}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={() => { gesture.current = null; setTouching(false); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (e.target === imgRef.current) return;
+        if (viewRef.current.scale > 1) apply(1, 0, 0);
+        else onBackdropTap();
+      }}
+      style={{
+        flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 'calc(60px + env(safe-area-inset-top)) 12px 12px',
+        overflow: 'hidden', position: 'relative', touchAction: 'none'
+      }}
+    >
+      <img
+        ref={imgRef}
+        src={src}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        draggable={false}
+        onError={(e) => { e.target.src = '/images/menu/default.png'; }}
+        style={{
+          maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
+          borderRadius: zoomed ? 0 : '16px', userSelect: 'none', WebkitUserSelect: 'none',
+          transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+          transition: touching ? 'none' : 'transform 0.2s ease',
+          willChange: 'transform'
+        }}
+      />
+      {!zoomed && (
+        <div style={{
+          position: 'absolute', bottom: '18px', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(15,23,42,0.7)', color: '#e2e8f0', fontSize: '0.75rem', fontWeight: '600',
+          padding: '0.3rem 0.75rem', borderRadius: '20px', whiteSpace: 'nowrap', pointerEvents: 'none'
+        }}>
+          {hint}
+        </div>
+      )}
+    </div>
+  );
+};
 
 // tables = ผังโต๊ะของสาขานี้ (ใช้ตอนเข้าหน้าลูกค้าจากหน้าแรกของเว็บ ที่ไม่มีเลขโต๊ะติดมากับลิงก์)
 const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [] }) => {
@@ -856,19 +1005,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             <X size={22} />
           </button>
 
-          <div style={{
-            flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            padding: 'calc(60px + env(safe-area-inset-top)) 12px 12px'
-          }}>
-            <img
-              src={foodImageSrc(previewFood)}
-              alt={previewFood.name}
-              referrerPolicy="no-referrer"
-              onClick={e => e.stopPropagation()}
-              onError={(e) => { e.target.src = '/images/menu/default.png'; }}
-              style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '16px' }}
-            />
-          </div>
+          <ZoomableImage
+            key={previewFood.id}
+            src={foodImageSrc(previewFood)}
+            alt={previewFood.name}
+            onBackdropTap={closePreview}
+            hint={lang === 'th' ? 'ใช้สองนิ้วซูม หรือแตะสองครั้ง' : 'Pinch or double-tap to zoom'}
+          />
 
           <div
             onClick={e => e.stopPropagation()}
