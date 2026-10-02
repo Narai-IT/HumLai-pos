@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:36px;right:48px;font-size:14px}
+  h1{font-size:22px;text-align:center;margin:0;padding-top:70px}
+  .sub{text-align:center;font-size:14px;color:#333;margin-top:6px}
+  .wrap{position:absolute;top:150px;left:56px;right:56px;display:flex;gap:36px;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .cap{font-size:13px;font-weight:700}
+  .slip{width:270px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:14px 14px 18px;font-size:12.5px;line-height:1.6}
+  .c{text-align:center}.r{text-align:right}
+  .row{display:flex;justify-content:space-between;gap:8px}
+  .hr{overflow:hidden;white-space:nowrap;letter-spacing:1px}
+  .side{flex:1;font-size:12.5px;line-height:1.6}
+  .side h3{font-size:14.5px;margin:0 0 6px}
+  .side table{border-collapse:collapse;width:100%;font-size:12px}
+  .side td,.side th{border:1px solid #999;padding:3px 6px;vertical-align:top}
+  .side th{background:#f2f2f2;text-align:left}
+  .ok{text-align:center;font-weight:700}
+  .cert{position:absolute;right:48px;bottom:60px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
+  .cert b{display:block;text-align:center;font-size:17px}
+  .note{position:absolute;left:56px;bottom:66px;width:430px;font-size:12px;line-height:1.75}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<h1>ตัวอย่างใบกำกับภาษีอย่างย่อ</h1>
+<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; พิมพ์ผ่าน Print Server ออกเครื่องพิมพ์ความร้อน 80 มม. (32 ตัวอักษรต่อบรรทัด)</div>
+
+<div class="wrap">
+  <div class="col"><div class="cap">ใบกำกับภาษีอย่างย่อที่ระบบพิมพ์</div><div class="slip" id="slip"></div></div>
+  <div class="side">
+    <h3>เทียบกับรายการที่ต้องแสดง (แบบ ค.ก.๔ ก ข้อ 2.4)</h3>
+    <table>
+      <tr><th>รายการที่ต้องแสดง</th><th style="width:90px">บนใบ</th></tr>
+      <tr><td>ชื่อผู้ประกอบการ และเลขผู้เสียภาษี</td><td>หัวใบ</td></tr>
+      <tr><td>คำว่า "ใบกำกับภาษีอย่างย่อ" / TAX INV (ABB)</td><td>หัวใบ</td></tr>
+      <tr><td>เลขรหัสประจำเครื่อง (POS ID) ที่สรรพากรกำหนด</td><td>หัวใบ</td></tr>
+      <tr><td>เลขที่ใบเรียงต่อเนื่อง</td><td>เลขที่</td></tr>
+      <tr><td>วัน เดือน ปี และเวลา</td><td>Date</td></tr>
+      <tr><td>ชื่อ ชนิด จำนวน และมูลค่าสินค้า</td><td>รายการอาหาร</td></tr>
+      <tr><td>รหัสแยกสินค้าเสียภาษี (V)</td><td>ท้ายราคา</td></tr>
+      <tr><td>ข้อความ "ราคารวมภาษีมูลค่าเพิ่มแล้ว" (VAT Included)</td><td>ท้ายใบ</td></tr>
+    </table>
+    <p style="margin:8px 0 0">ระบบพิมพ์แบบนี้เมื่อสาขาตั้งเลขผู้เสียภาษีไว้ที่ หลังบ้าน &gt; สาขา และพิมพ์ POS ID ตามที่กรอกในช่อง "เลขรหัสประจำเครื่อง POS"</p>
+  </div>
+</div>
+
+<div class="note">
+  <b>หมายเหตุ</b><br>
+  ข้อความหัวใบ (ชื่อร้าน ที่อยู่ โทร เลขผู้เสียภาษี ข้อความท้ายใบ) ตั้งที่ หลังบ้าน &gt; สาขา<br>
+  เลขที่ = รหัสบิลของสาขา-#ลำดับ เรียงต่อเนื่องตามสาขา<br>
+  สำเนาไม่พิมพ์เป็นม้วน เก็บเป็นข้อมูลอิเล็กทรอนิกส์ที่เครื่องควบคุมกลาง<br>
+  V = สินค้าที่เสียภาษีมูลค่าเพิ่ม &nbsp; ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
+</div>
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ.........................................<br>
+ลงชื่อ.........................................<br>
+วันที่..........................................<br>
+<span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
+..................................................
+</div>
+
+<script>
+// เลียนแบบ print-ticket.js (printerType = 'receipt', paid) และ buildReceiptOrder() ใน CheckoutModal.jsx
+const items = [
+  { q: 2, n: 'ข้าวมันไก่หำไหล', a: 138 },
+  { q: 1, n: 'ข้าวมันไก่ทอด', a: 75 },
+  { q: 1, n: 'ชุดข้าวมันไก่สิงคโปร์', a: 89 },
+];
+const subtotal = items.reduce((s, i) => s + i.a, 0);
+const vatRate = 7;
+const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dash = '<div class="hr">' + '-'.repeat(32) + '</div>';
+const total = subtotal;                                     // ยอดบิล (รวม VAT แล้ว)
+const vatable = Math.round(total * 100 / (100 + vatRate) * 100) / 100;
+document.getElementById('slip').innerHTML = `
+  <div class="c" style="font-weight:700;font-size:14px">ข้าวมันไก่หำไหล</div>
+  <div class="c">.......................... <small>(ที่อยู่สาขา)</small></div>
+  <div class="c">โทร ...................</div>
+  <div class="c">เลขผู้เสียภาษี XXXXXXXXXXXXX</div>
+  <div class="c">POS ID: XXXXXXXXXXXXXX</div>
+  ${dash}
+  <div class="c">ใบกำกับภาษีอย่างย่อ</div>
+  <div class="c">TAX INV (ABB)</div>
+  ${dash}
+  <div>เลขที่: XXXX-#031</div>
+  <div>Date: 1/10/2569 12:35:10</div>
+  <div>Customer: โต๊ะ 5</div>
+  ${dash}
+  ${items.map(i => `<div class="row"><span>${i.q}x ${i.n}</span><span>${m(i.a)} V</span></div>`).join('')}
+  ${dash}
+  <div class="r">ชำระโดย: เงินสด</div>
+  <div class="r">TOTAL: B ${m(total)}</div>
+  ${dash}
+  <div class="row"><span>มูลค่าสินค้าเสียภาษี (V)</span><span>${m(vatable)}</span></div>
+  <div class="row"><span>ภาษีมูลค่าเพิ่ม ${vatRate}%</span><span>${m(Math.round((total - vatable) * 100) / 100)}</span></div>
+  <div class="c">ราคารวมภาษีมูลค่าเพิ่มแล้ว</div>
+  <div class="c">(VAT Included)</div>
+  ${dash}
+  <div class="c">.......................... <small>(ข้อความท้ายใบ)</small></div>`;
+</script>
+</body></html>

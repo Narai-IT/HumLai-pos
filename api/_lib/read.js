@@ -21,7 +21,8 @@ const CATEGORY_COLS= cols(Object.keys(CATEGORY_SPEC));
 const CATEGORY_BASE= cols(Object.keys(CATEGORY_SPEC).filter(k => k !== 'visibility'));
 const PROMO_COLS   = cols(['id','name','nameEn','price','origPrice']);
 const USER_COLS    = cols(['id','username','pin','canCheckout','isAdmin','isCashier','branch']);
-const BRANCH_COLS  = cols(['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive']);
+const BRANCH_BASE  = ['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive'];
+const BRANCH_COLS  = cols([...BRANCH_BASE, 'posId']);
 // branchId = คอลัมน์ BranchId (SQL ไม่สนตัวพิมพ์เล็ก/ใหญ่ ส่วนชื่อคีย์ที่ได้ตามที่เขียนใน SELECT)
 const PRINTER_COLS = cols(['id','name','ip','type','printMode','branchId','categories']);
 const DISCOUNT_COLS= cols(['id','name','type','value','categories']);
@@ -76,7 +77,9 @@ const getCategoryRows = () => allRows('Categories', CATEGORY_COLS, mapCategory)
 
 // ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
 // ต้องไม่ทำให้ getStatic ทั้งก้อนพัง ไม่งั้นหน้าร้านโหลดเมนูไม่ขึ้น
-const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch).catch(() => []);
+const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch)
+  .catch(() => allRows('Branches', cols(BRANCH_BASE), mapBranch))
+  .catch(() => []);
 
 // ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน
 // branchId = ส่งเมนูที่ปรับตามสาขานั้นแล้ว ('' = เมนูกลาง ใช้ในหน้าหลังบ้าน)

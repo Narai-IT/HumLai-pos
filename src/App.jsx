@@ -39,6 +39,7 @@ import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
 import { sendPrintJob, setReceiptHeader } from './utils/printServer';
+import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
 
@@ -223,7 +224,13 @@ function App() {
     let lastReason = '';
     for (const entry of pending) {
       try {
-        await postOrderPayload(entry.payload);
+        const json = await postOrderPayload(entry.payload);
+        // บิลที่ตอนชำระบันทึกไม่ได้ ลูกค้าได้ใบเสร็จธรรมดาไปก่อน — ได้เลขแล้วพิมพ์ใบกำกับภาษีอย่างย่อตามให้
+        const receiptPrinter = entry.receiptOrder ? getPrinterByType('receipt') : null;
+        if (receiptPrinter && json && json.orderNumber && !json.duplicate) {
+          sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: { ...entry.receiptOrder, id: json.orderNumber, orderNumber: json.orderNumber, paid: true, noDrawer: true } })
+            .catch(err => console.error('Late receipt print failed:', err));
+        }
       } catch (err) {
         lastReason = err.message;
         stillPending.push({ ...entry, error: err.message }); // ยังส่งไม่ได้ เก็บไว้รอบหน้า
@@ -375,9 +382,11 @@ function App() {
     const b = branches.find(x => String(x.id) === String(tablesBranch));
     setReceiptHeader(b ? {
       name: b.name || b.id, address: b.address || '', phone: b.phone || '',
-      taxId: b.taxId || '', footer: b.receiptFooter || ''
+      taxId: b.taxId || '', posId: b.posId || '', footer: b.receiptFooter || '',
+      // อัตรา VAT สำหรับแยกยอดในใบกำกับภาษีอย่างย่อ — ใช้ค่าเดียวกับใบกำกับเต็มรูป (ไม่ได้ตั้ง = 7)
+      vatRate: Number(posSettings?.vat?.rate) > 0 ? Number(posSettings.vat.rate) : 7
     } : null);
-  }, [branches, tablesBranch]);
+  }, [branches, tablesBranch, posSettings]);
 
   // ผังโต๊ะของสาขานี้จากเซิร์ฟเวอร์ → เขียนลงที่เดิม (pos_tables_config) ที่หน้าขายอ่านอยู่แล้ว
   // สาขาที่ยังไม่เคยบันทึกผังขึ้นระบบ → ใช้ผังเดิมในเครื่องไปก่อน
@@ -490,7 +499,8 @@ function App() {
       data.orders.forEach(row => {
         if (!row.OrderNumber) return;
         const by = String(row.RecordedBy || '').trim();
-        const val = parseInt(String(row.OrderNumber).replace(/\D/g, ''), 10);
+        // เลขลำดับท้ายเลขบิลเท่านั้น (XXX-#031 → 31) — ตัวนำหน้าที่มีตัวเลขไม่ทำให้เลขกระโดด
+        const val = parseInt((/#(\d+)\s*$/.exec(String(row.OrderNumber)) || [])[1], 10);
         if (!isNaN(val)) branchMaxes[by] = Math.max(branchMaxes[by] || 0, val);
       });
       setBranchMaxMap(prev => {
@@ -986,6 +996,7 @@ function App() {
         id: billNo,
         orderNumber: billNo,
         noDrawer: true,
+        paid: true,
         customerDetails: { name: `โต๊ะ ${tbl}` },
         items: items.map(o => {
           const qty = Number(o.Quantity) || 1;
@@ -1117,21 +1128,6 @@ function App() {
       timestamp
     };
 
-    // ── สั่งพิมพ์ใบเสร็จก่อนเป็นอย่างแรก ──
-    // ใบเสร็จไม่ต้องรอผลบันทึกลงชีต ข้อมูลที่ต้องใช้ครบตั้งแต่ตรงนี้แล้ว
-    // เดิมสั่งพิมพ์เป็นขั้นสุดท้าย จึงต้องรอเซิร์ฟเวอร์ตอบครบ 3 รอบ (บันทึกบิล → ล้างโต๊ะ → ตัดสต็อก)
-    // ใบเสร็จเลยออกช้าหลายวินาที ทั้งที่เครื่องพิมพ์ว่างรออยู่
-    try {
-      // กดพิมพ์ใบเสร็จจากหน้าชำระเงินไปแล้ว → ไม่พิมพ์ซ้ำ
-      const receiptPrinter = printInfo.receiptPrinted ? null : getPrinterByType('receipt');
-      if (receiptPrinter) {
-        // ใช้ใบเสร็จแบบเต็มจากหน้าชำระเงิน (จำนวน ตัวเลือก ส่วนลด VAT) — ไม่มีค่อยใช้แบบย่อ
-        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: printInfo.receiptOrder ? { ...printInfo.receiptOrder, orderNumber: newOrderNumber, id: newOrderNumber } : newOrder })
-          .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
-          .catch(err => console.error('Silent print failed:', err));
-      }
-    } catch (e) { }
-
     // Optimistic clear table orders
     setTableOrders(prev => prev.filter(o => String(o.TableNumber) !== String(tableNumber)));
     setOrders(prev => [...prev, newOrder]);
@@ -1143,8 +1139,15 @@ function App() {
 
     // Save to Orders sheet + payment record ในคำขอเดียว (atomic) — กันบิลขึ้นแต่ payment หาย
     // ใช้ fetch แบบอ่าน response ได้ (ไม่ใช้ no-cors) เพื่อ "ตรวจจับ" ว่าบันทึกสำเร็จจริงหรือไม่
+    // เซิร์ฟเวอร์เป็นคนออกเลขบิล (assignNumber) — เลขที่ใบกำกับภาษีอย่างย่อเรียงต่อเนื่องชุดเดียวต่อสาขา
+    // แม้สาขามีหลายเครื่อง · clientRef กันบิลซ้ำเมื่อส่งซ้ำ · newOrderNumber เป็นแค่เลขชั่วคราวบนจอ
+    const clientRef = (window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const orderPayload = {
       action: 'insertOrder',
+      assignNumber: true,
+      clientRef,
       branchId: branchKey,
       rows: rowsToSend,
       payment: {
@@ -1157,18 +1160,44 @@ function App() {
         splitDetail: paymentDetails ? JSON.stringify(paymentDetails) : ''
       }
     };
+    let finalNo = '';
     try {
-      await postOrderPayload(orderPayload);
+      const json = await postOrderPayload(orderPayload);
+      finalNo = (json && json.orderNumber) || newOrderNumber;
     } catch (error) {
       console.error('Error saving order:', error);
       // เก็บบิลที่บันทึกไม่สำเร็จไว้ในเครื่อง เพื่อไม่ให้ข้อมูลหาย + ให้ retry/ตรวจสอบภายหลังได้
       try {
         const pending = JSON.parse(localStorage.getItem('pending_orders') || '[]');
-        pending.push({ payload: orderPayload, at: new Date().toISOString(), error: String(error.message || error) });
+        pending.push({ payload: orderPayload, receiptOrder: printInfo.receiptOrder || null, at: new Date().toISOString(), error: String(error.message || error) });
         localStorage.setItem('pending_orders', JSON.stringify(pending));
       } catch {}
-      setSaveAlert({ type: 'error', msg: `⚠️ บันทึกบิล ${newOrderNumber} (${paymentMethod}) ขึ้นระบบไม่สำเร็จ! สาเหตุ: ${error.message} — ข้อมูลถูกสำรองไว้ในเครื่องแล้ว ระบบจะลองส่งซ้ำเองทุก ${PENDING_RETRY_MS / 60000} นาที` });
+      setSaveAlert({ type: 'error', msg: `⚠️ บันทึกบิลโต๊ะ ${tableNumber || '-'} (${paymentMethod}) ขึ้นระบบไม่สำเร็จ! สาเหตุ: ${error.message} — ข้อมูลถูกสำรองไว้ในเครื่องแล้ว ระบบจะลองส่งซ้ำเองทุก ${PENDING_RETRY_MS / 60000} นาที และพิมพ์ใบกำกับภาษีอย่างย่อตามให้เมื่อบันทึกได้` });
     }
+
+    // เลขจริงจากเซิร์ฟเวอร์ → แก้เลขชั่วคราวบนจอ
+    if (finalNo && finalNo !== newOrderNumber) {
+      setOrders(prev => prev.map(o => (o.id === newOrderNumber ? { ...o, id: finalNo, orderNumber: finalNo } : o)));
+      const seq = parseInt((/#(\d+)\s*$/.exec(finalNo) || [])[1], 10);
+      if (!isNaN(seq)) setBranchMaxMap(prev => ({ ...prev, [branch]: Math.max(prev[branch] || 0, seq) }));
+    }
+
+    // ── พิมพ์ใบเสร็จหลังได้เลขบิลจากเซิร์ฟเวอร์ ──
+    // ได้เลขแล้ว = ใบกำกับภาษีอย่างย่อ · บันทึกไม่สำเร็จ = ใบเสร็จรับเงินธรรมดา (ยังไม่มีเลขที่ใบกำกับ) ใบกำกับพิมพ์ตามเมื่อส่งซ้ำสำเร็จ
+    try {
+      const receiptPrinter = getPrinterByType('receipt');
+      const receiptNo = finalNo || 'รอบันทึกบิล';
+      const base = printInfo.receiptOrder
+        ? { ...printInfo.receiptOrder, id: receiptNo, orderNumber: receiptNo }
+        : { ...newOrder, id: receiptNo, orderNumber: receiptNo };
+      if (receiptPrinter) {
+        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: { ...base, paid: !!finalNo } })
+          .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
+          .catch(err => console.error('Silent print failed:', err));
+      } else if (printInfo.print && printInfo.buildReceiptHtml) {
+        print80mm(printInfo.buildReceiptHtml(receiptNo, !!finalNo));
+      }
+    } catch (e) { console.error('Receipt print failed:', e); }
 
     // ล้างโต๊ะกับตัดสต็อกไม่ขึ้นต่อกัน ยิงพร้อมกันได้ ไม่ต้องรอทีละรอบ
     // (ยังต้องยิงหลังบันทึกบิลสำเร็จ ไม่งั้นบิลพังแล้วรายการในโต๊ะหายไปด้วย)
@@ -1196,7 +1225,7 @@ function App() {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify({ action: 'deductStock', branchId: branchKey, orderNumber: newOrderNumber, tableNo: String(tableNumber), items: deductItems })
+          body: JSON.stringify({ action: 'deductStock', branchId: branchKey, orderNumber: finalNo || newOrderNumber, tableNo: String(tableNumber), items: deductItems })
         }).catch(error => console.error('Error deducting stock:', error))
       );
     }
@@ -1751,6 +1780,7 @@ function App() {
             isAdmin={isAdmin}
             branch={branch}
             users={users}
+            userName={currentUser?.username || ''}
             onClose={() => setShowSalesSummaryModal(false)}
           />
         </Suspense>

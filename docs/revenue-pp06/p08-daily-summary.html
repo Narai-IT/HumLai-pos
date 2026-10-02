@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:36px;right:48px;font-size:14px}
+  h1{font-size:22px;text-align:center;margin:0;padding-top:70px}
+  .sub{text-align:center;font-size:14px;color:#333;margin-top:6px}
+  .wrap{position:absolute;top:140px;left:48px;right:48px;display:flex;gap:28px;align-items:flex-start}
+  .col{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .cap{font-size:13px;font-weight:700}
+  .card{width:330px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:14px;font-size:12px;line-height:1.5}
+  .ttl{text-align:center;font-size:16px;font-weight:700}
+  .date{text-align:center;color:#444;margin-bottom:10px}
+  .two{display:flex;gap:8px;margin-bottom:10px}
+  .box{flex:1;border:1px solid #ccc;border-radius:8px;padding:8px}
+  .box .k{color:#444}.box .v{font-size:17px;font-weight:700}
+  .sec{border:1px solid #ccc;border-radius:8px;padding:8px 10px;margin-bottom:10px}
+  .sec h4{margin:0 0 6px;font-size:12.5px}
+  .row{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+  .tot{border-top:1px solid #999;margin-top:4px;padding-top:4px;font-weight:700}
+  .side{flex:1;font-size:12.5px;line-height:1.6}
+  .side h3{font-size:14.5px;margin:0 0 6px}
+  .side table{border-collapse:collapse;width:100%;font-size:12px}
+  .side td,.side th{border:1px solid #999;padding:3px 6px;vertical-align:top}
+  .side th{background:#f2f2f2;text-align:left}
+  .ok{text-align:center;font-weight:700}
+  .slip{width:270px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:12px 14px 14px;font-size:11.5px;line-height:1.5}
+  .c{text-align:center}.b{font-weight:700}
+  .hr{overflow:hidden;white-space:nowrap;letter-spacing:1px}
+  .cert{position:absolute;right:48px;bottom:60px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
+  .cert b{display:block;text-align:center;font-size:17px}
+  .note{position:absolute;left:56px;bottom:66px;width:440px;font-size:12px;line-height:1.75}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<h1>ตัวอย่างรายงานปิดยอดประจำวัน</h1>
+<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; เพิ่มเติม &gt; สรุปยอดขายวันนี้ &gt; ปุ่ม "พิมพ์ปิดยอดประจำวัน"</div>
+
+<div class="wrap">
+  <div class="col"><div class="cap">ใบปิดยอดที่ระบบพิมพ์ (กระดาษ 80 มม.)</div><div class="slip" id="slip"></div></div>
+  <div class="side">
+    <h3>รายการในรายงาน (แบบ ค.ก.๔ ก ข้อ 5.1)</h3>
+    <table>
+      <tr><th>รายการ</th><th style="width:96px">บนใบ</th></tr>
+      <tr><td>ชื่อร้าน เลขผู้เสียภาษี POS ID</td><td>หัวใบ</td></tr>
+      <tr><td>วันที่ขาย สาขา เวลาพิมพ์ ผู้พิมพ์</td><td>ส่วนที่ 1</td></tr>
+      <tr><td>จำนวนบิล ยอดขายรวม ส่วนลด</td><td>ส่วนที่ 2</td></tr>
+      <tr><td>มูลค่าสินค้าเสียภาษี และภาษีมูลค่าเพิ่ม</td><td>ส่วนที่ 2</td></tr>
+      <tr><td>ยอดแยกตามช่องทางชำระเงิน</td><td>ส่วนที่ 3</td></tr>
+      <tr><td>เลขที่ใบกำกับภาษีอย่างย่อ ใบแรก - ใบสุดท้าย</td><td>ส่วนที่ 4</td></tr>
+      <tr><td>จำนวนและยอดบิลที่ยกเลิก</td><td>ส่วนที่ 5</td></tr>
+      <tr><td>ยอดขายแยกตามเมนู</td><td>ส่วนที่ 6</td></tr>
+      <tr><td>ลายมือชื่อผู้ตรวจนับเงิน</td><td>ท้ายใบ</td></tr>
+    </table>
+    <p style="margin:8px 0 0">ข้อมูลทุกบิลบันทึกที่เครื่องควบคุมกลางทันทีที่ชำระเงิน รายงานดึงยอดจากเครื่องควบคุมกลาง พิมพ์ย้อนหลังได้ตามช่วงวันที่ที่เลือก</p>
+  </div>
+</div>
+
+<div class="note">
+  <b>หมายเหตุ</b><br>
+  เลือกช่วงวันที่ย้อนหลังได้ (รายวัน / รายเดือน) และแยกตามสาขาได้<br>
+  บิลที่ยกเลิกไม่นับรวมในยอดขาย แต่นับในช่วงเลขที่ใบ<br>
+  ยอดขายถือว่ารวม VAT แล้ว (สูตรเดียวกับใบกำกับภาษี)<br>
+  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
+</div>
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ.........................................<br>
+ลงชื่อ.........................................<br>
+วันที่..........................................<br>
+<span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
+..................................................
+</div>
+<script>
+// เลียนแบบ printDailyClose() ใน print-ticket.js
+const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const dash = '<div class="hr">' + '-'.repeat(32) + '</div>';
+const row = (k, v, cls = '') => `<div class="row ${cls}"><span>${k}</span><span>${v}</span></div>`;
+const total = 1496, vatable = Math.round(total * 100 / 107 * 100) / 100;
+const menu = [['ข้าวมันไก่หำไหล', 10, 690], ['ข้าวมันไก่ทอด', 6, 450], ['ชุดข้าวมันไก่สิงคโปร์', 4, 356]];
+document.getElementById('slip').innerHTML = `
+  <div class="c b" style="font-size:13px">ข้าวมันไก่หำไหล</div>
+  <div class="c">เลขผู้เสียภาษี XXXXXXXXXXXXX</div>
+  <div class="c">POS ID: XXXXXXXXXXXXXX</div>
+  ${dash}
+  <div class="c b">รายงานปิดยอดประจำวัน</div>
+  <div class="c">DAILY CLOSE REPORT</div>
+  ${dash}
+  ${row('วันที่ขาย', '01/10/2569')}${row('สาขา', '..........')}${row('พิมพ์เมื่อ', '01/10/2569 22:05')}${row('ผู้พิมพ์', '..........')}
+  ${dash}
+  ${row('จำนวนบิล', '5 บิล')}${row('ยอดขายรวม', m(total), 'b')}${row('ส่วนลด', m(0))}
+  ${row('มูลค่าสินค้าเสียภาษี', m(vatable))}${row('ภาษีมูลค่าเพิ่ม 7%', m(Math.round((total - vatable) * 100) / 100))}
+  ${dash}
+  <div>ช่องทางชำระเงิน</div>
+  ${row('เงินสด', m(906))}${row('เงินโอน / QR', m(590))}${row('บัตรเครดิต', m(0))}
+  ${dash}
+  <div>เลขที่ใบกำกับภาษีอย่างย่อ</div>
+  ${row('ใบแรก', 'XXXX-#027')}${row('ใบสุดท้าย', 'XXXX-#031')}
+  ${dash}
+  ${row('บิลยกเลิก 0 บิล', m(0))}
+  ${dash}
+  <div>ยอดขายตามเมนู</div>
+  ${menu.map(([n, q, a]) => row(`${q}x ${n}`, m(a))).join('')}
+  ${dash}
+  <div style="margin-top:12px">ผู้ตรวจนับเงิน ________________</div>`;
+</script>
+</body></html>

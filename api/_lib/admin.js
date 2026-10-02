@@ -162,14 +162,21 @@ export const saveBranches = async (data) => {
     seen.add(id.toLowerCase());
   }
   clearBranchCache(); // สาขาหลัก (ตัวแรกในรายการ) อาจเปลี่ยน
-  return replaceAll('Branches',
-    ['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive'],
-    list.map(b => ([
-      String(b.id).trim(), toText(b.name), toText(String(b.billPrefix || '').trim().toUpperCase()),
-      toText(b.phone), toText(b.address), toText(b.taxId), toText(b.receiptFooter),
-      b.isActive === false ? 0 : 1
-    ]))
-  );
+  const base = ['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive'];
+  const baseRow = (b) => ([
+    String(b.id).trim(), toText(b.name), toText(String(b.billPrefix || '').trim().toUpperCase()),
+    toText(b.phone), toText(b.address), toText(b.taxId), toText(b.receiptFooter),
+    b.isActive === false ? 0 : 1
+  ]);
+  try {
+    return await replaceAll('Branches', [...base, 'posId'], list.map(b => [...baseRow(b), toText(b.posId)]));
+  } catch {
+    // ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ยังไม่มีคอลัมน์ posId) — บันทึกแบบเดิมได้ถ้าไม่มีใครกรอก POS ID
+    if (list.some(b => String(b.posId || '').trim())) {
+      return { success: false, error: 'ฐานข้อมูลยังไม่มีช่อง POS ID — รัน npm run sql:init ก่อน แล้วบันทึกใหม่' };
+    }
+    return replaceAll('Branches', base, list.map(baseRow));
+  }
 };
 
 // ผังโต๊ะของสาขาหนึ่ง — เขียนทับเฉพาะของสาขานั้น สาขาอื่นไม่ถูกแตะ

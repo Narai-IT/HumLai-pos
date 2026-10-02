@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:30px;right:48px;font-size:14px}
+  .banner{position:absolute;top:56px;left:150px;width:494px;border:1.5px solid #111;box-shadow:6px 6px 0 #111;padding:14px 0;text-align:center;font-size:16px;font-weight:700;background:#fff}
+  .step{position:absolute;left:40px;width:714px;height:200px}
+  .lbl{position:absolute;left:0;top:50px;width:120px;height:90px;border:1.5px solid #111;box-shadow:4px 4px 0 #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px;font-weight:700;background:#fff;line-height:1.4}
+  .txt{position:absolute;left:150px;top:0;width:330px;min-height:180px;border:1.2px solid #111;padding:8px 10px;font-size:11.5px;line-height:1.55;box-sizing:border-box}
+  .txt ol{margin:0;padding-left:18px}
+  .txt .tip{margin-top:4px;color:#333}
+  .shot{position:absolute;left:500px;top:0;width:214px;height:150px;border:1.2px solid #111;background:#f5f5f5;box-sizing:border-box;padding:6px;font-size:8.5px;overflow:hidden}
+  .cap{position:absolute;left:500px;top:154px;width:214px;text-align:center;font-size:11px}
+  .h1line{position:absolute;height:0;border-top:1.2px solid #111}
+  .vline{position:absolute;width:0;border-left:1.2px dashed #111}
+  /* wireframes */
+  .bar{background:#fff;border:1px solid #bbb;border-radius:3px;padding:2px 4px;margin-bottom:4px;display:flex;justify-content:space-between}
+  .grid{display:grid;gap:3px}
+  .tile{background:#fff;border:1px solid #bbb;border-radius:3px;padding:3px;text-align:center}
+  .g{background:#d9f2df;border-color:#7cc68b}
+  .btn{background:#16a34a;color:#fff;border-radius:3px;padding:3px;text-align:center;font-weight:700}
+  .cert{position:absolute;right:48px;bottom:30px;width:200px;border:1.5px solid #111;padding:4px 10px;font-size:12.5px;line-height:1.75}
+  .cert b{display:block;text-align:center;font-size:15px}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<div class="banner">Flowchart Point Of Sales System — HumLai-POS</div>
+
+<!-- 1 Login -->
+<div class="step" style="top:140px">
+  <div class="lbl">(1) เข้าสู่ระบบ<br>(Log In)</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt"><ol>
+    <li>เปิดโปรแกรม HumLai-POS บนเครื่องขาย</li>
+    <li>เลือกสาขาของเครื่อง (ตั้งครั้งแรกครั้งเดียว)</li>
+    <li>เลือกชื่อพนักงานที่กำหนดไว้ในระบบ</li>
+    <li>ใส่รหัสผ่านประจำตัว แล้วกดเข้าสู่ระบบ</li>
+  </ol><div class="tip">*** ใส่รหัสผิด 5 ครั้งติดกัน ระบบล็อกผู้ใช้นั้น 5 นาที<br>*** สิทธิ์ใช้งานแยกตามพนักงาน / แคชเชียร์ / แอดมิน</div></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot">
+    <div style="text-align:center;font-weight:700;font-size:10px;margin:2px 0">เข้าสู่ระบบ</div>
+    <div style="text-align:center;margin-bottom:5px">สาขา .......... — เลือกชื่อของคุณ</div>
+    <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="tile">👤<br>พนักงาน 1</div><div class="tile g">👤<br>พนักงาน 2</div><div class="tile">👤<br>แคชเชียร์</div>
+    </div>
+    <div class="bar" style="margin-top:6px;color:#888">รหัสผ่าน ••••</div>
+    <div class="btn">เข้าสู่ระบบ</div>
+  </div>
+  <div class="cap">หน้าเข้าสู่ระบบ</div>
+</div>
+
+<!-- 2 Order -->
+<div class="step" style="top:380px">
+  <div class="lbl">(2) เปิดโต๊ะ<br>เพื่อสั่งอาหาร</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt"><ol>
+    <li>เลือกโซน ทานที่ร้าน / ห่อกลับบ้าน / Delivery</li>
+    <li>กดเลขโต๊ะ ระบุจำนวนลูกค้า</li>
+    <li>เลือกเมนูตามรายการที่ลูกค้าสั่ง (เลือกตัวเลือก/หมายเหตุได้)</li>
+    <li>กด "ส่งรายการอาหาร" ระบบบันทึกเข้าบิลของโต๊ะ และพิมพ์ใบสั่งอาหารเข้าครัว/บาร์อัตโนมัติ</li>
+  </ol><div class="tip">*** สั่งเพิ่ม ย้าย/รวมโต๊ะ และแยกบิลได้<br>*** ลูกค้าสแกน QR สั่งเองได้ ใบครัวพิมพ์อัตโนมัติ</div></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot">
+    <div class="bar"><b>ข้าวมันไก่หำไหล · โต๊ะ 5</b><span>⚙ ⋯</span></div>
+    <div style="display:flex;gap:4px">
+      <div style="flex:1">
+        <div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:4px">
+          <div class="tile">1</div><div class="tile">2</div><div class="tile g">3</div><div class="tile">4</div><div class="tile g">5</div>
+        </div>
+        <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+          <div class="tile">หำไหล ฿69</div><div class="tile">ไก่ทอด ฿75</div><div class="tile">สิงคโปร์ ฿89</div>
+          <div class="tile">สองใจ ฿79</div><div class="tile">สามเซียน ฿79</div><div class="tile">เครื่องดื่ม</div>
+        </div>
+      </div>
+      <div style="width:70px;background:#fff;border:1px solid #bbb;border-radius:3px;padding:3px">
+        <div>2× ข้าวมันไก่</div><div>1× ไก่ทอด</div>
+        <div style="border-top:1px dashed #999;margin:3px 0;font-weight:700">฿213</div>
+        <div class="btn" style="font-size:7.5px">ส่งรายการอาหาร</div>
+      </div>
+    </div>
+  </div>
+  <div class="cap">หน้าขาย (เลือกโต๊ะ / สั่งอาหาร)</div>
+</div>
+
+<!-- 3 Payment -->
+<div class="step" style="top:620px">
+  <div class="lbl">(3) ชำระเงิน<br>และปิดบิล<br>ได้ใบกำกับภาษี<br>อย่างย่อ</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt"><ol>
+    <li>เลือกโต๊ะที่ต้องการเช็คบิล กด "ใบแจ้งยอด" เพื่อพิมพ์ยอดรวมให้ลูกค้าตรวจ (ถ้าลูกค้าขอ)</li>
+    <li>กด "ชำระเงิน" เลือกเงินสด / โอน (QR) / บัตร / แยกจ่าย</li>
+    <li>รับเงิน ระบบออกเลขที่บิลเรียงต่อเนื่อง บันทึกเข้าเครื่องควบคุมกลาง และพิมพ์ใบกำกับภาษีอย่างย่อ (TAX INV ABB)</li>
+    <li>กด "เสร็จสิ้น" ระบบปิดบิลและคืนโต๊ะเป็นว่างทันที</li>
+  </ol></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot" style="display:flex;gap:5px">
+    <div style="flex:1">
+      <div style="font-weight:700;margin-bottom:3px">ชำระเงิน · ฿213.00</div>
+      <div class="tile" style="margin-bottom:3px">💵 เงินสด</div>
+      <div class="tile" style="margin-bottom:3px">📱 โอน / QR</div>
+      <div class="tile" style="margin-bottom:3px">💳 บัตรเครดิต</div>
+      <div class="tile">✂ แยกจ่าย</div>
+    </div>
+    <div style="width:78px;background:#fff;border:1px solid #bbb;padding:3px;font-size:7px;line-height:1.35">
+      <div style="text-align:center;font-weight:700">ข้าวมันไก่หำไหล</div>
+      <div style="text-align:center">POS ID: XXXX</div>
+      <div style="text-align:center;font-weight:700">TAX INV (ABB)</div>
+      <div>เลขที่: XXXX-#031</div>
+      <div>2x ข้าวมันไก่ 138.00 V</div>
+      <div>1x ไก่ทอด 75.00 V</div>
+      <div style="text-align:right">TOTAL: B 213.00</div>
+      <div style="text-align:center">VAT Included</div>
+    </div>
+  </div>
+  <div class="cap">หน้าชำระเงิน / ใบกำกับภาษีอย่างย่อ</div>
+</div>
+
+<!-- 4 Full tax invoice -->
+<div class="step" style="top:860px">
+  <div class="lbl">(4) การออก<br>ใบกำกับภาษี<br>เต็มรูปแบบ</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt" style="min-height:150px"><ol>
+    <li>เรียกใบกำกับภาษีอย่างย่อคืนจากลูกค้า</li>
+    <li>เพิ่มเติม &gt; ใบกำกับภาษี ค้นหาเลขที่บิลตามใบอย่างย่อ</li>
+    <li>กรอกหรือค้นหาชื่อ เลขผู้เสียภาษี ที่อยู่ สาขาของผู้ซื้อ</li>
+    <li>กด "ออกใบกำกับภาษี" ระบบออกเลขที่ใบ และพิมพ์ต้นฉบับ/สำเนา</li>
+  </ol></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot" style="height:120px">
+    <div style="font-weight:700;font-size:10px;margin-bottom:3px">🧾 ใบกำกับภาษี</div>
+    <div class="bar" style="color:#888">ค้นหาเลขบิล / โต๊ะ / ชื่อลูกค้า</div>
+    <div class="bar"><span>XXXX-#031 · ฿213</span><span class="btn" style="padding:0 4px">ออกใบกำกับภาษี</span></div>
+    <div class="bar"><span>XXXX-#030 · ฿89</span><span style="color:#15803d">✓ XXXX-TX2610-0001</span></div>
+  </div>
+  <div class="cap" style="top:124px">หน้าใบกำกับภาษี</div>
+</div>
+
+<!-- down arrows between steps -->
+<div class="vline" style="left:100px;top:330px;height:100px"></div>
+<div class="vline" style="left:100px;top:570px;height:100px"></div>
+<div class="vline" style="left:100px;top:810px;height:100px"></div>
+
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ...................................<br>
+วันที่....................................
+</div>
+</body></html>

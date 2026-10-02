@@ -89,6 +89,13 @@ const buyerBranchText = (b) => {
   if (!s || s === 'สำนักงานใหญ่' || /^0+$/.test(s)) return 'สำนักงานใหญ่';
   return /^\d+$/.test(s) ? `สาขาที่ ${s.padStart(5, '0')}` : s;
 };
+// ใบกำกับภาษีอย่างย่อ: ยอดบิลถือว่ารวม VAT แล้ว (สูตรเดียวกับใบกำกับเต็มรูปใน api/_lib/taxInvoice.js)
+const parseMoney = (v) => Number(String(v ?? '').replace(/[^0-9.-]/g, '')) || 0;
+const vatBreakdown = (total, rate) => {
+  const r = Number(rate) > 0 ? Number(rate) : 7;
+  const vatable = Math.round(total * 100 / (100 + r) * 100) / 100;
+  return { rate: r, vatable, vat: Math.round((total - vatable) * 100) / 100 };
+};
 const thaiDateTime = (iso) => {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return String(iso || '');
@@ -156,6 +163,60 @@ const printTaxInvoice = (printer, inv, copy) => {
   }
 };
 
+// รายงานปิดยอดประจำวัน — หน้าเว็บคำนวณยอดมาให้ (src/utils/dailyClosePrint.js) ฝั่งนี้จัดหน้าอย่างเดียว
+const printDailyClose = (printer, r) => {
+  const rule = () => printer.println('-'.repeat(LINE));
+  const row = (k, v) => printer.println(leftRight(k, v));
+
+  printer.alignCenter();
+  if (r.shopName) { printer.bold(true); wrap(r.shopName).forEach(l => printer.println(l)); printer.bold(false); }
+  if (r.taxId) printer.println(`เลขผู้เสียภาษี ${r.taxId}`);
+  if (r.posId) printer.println(`POS ID: ${r.posId}`);
+  rule();
+  printer.bold(true);
+  printer.println('รายงานปิดยอดประจำวัน');
+  printer.bold(false);
+  printer.println('DAILY CLOSE REPORT');
+  rule();
+
+  printer.alignLeft();
+  row('วันที่ขาย', r.dateLabel || '-');
+  row('สาขา', r.branchLabel || '-');
+  row('พิมพ์เมื่อ', r.printedAt || '-');
+  if (r.printedBy) row('ผู้พิมพ์', r.printedBy);
+  rule();
+  row('จำนวนบิล', `${r.billCount || 0} บิล`);
+  printer.bold(true);
+  row('ยอดขายรวม', money2(r.total));
+  printer.bold(false);
+  row('ส่วนลด', money2(r.discount));
+  if (Number(r.charges)) row('ค่าบริการ/ภาษีบวกเพิ่ม', money2(r.charges));
+  row('มูลค่าสินค้าเสียภาษี', money2(r.vatable));
+  row(`ภาษีมูลค่าเพิ่ม ${r.vatRate}%`, money2(r.vat));
+  rule();
+  printer.println('ช่องทางชำระเงิน');
+  row('เงินสด', money2(r.cash));
+  row('เงินโอน / QR', money2(r.transfer));
+  row('บัตรเครดิต', money2(r.card));
+  rule();
+  printer.println('เลขที่ใบกำกับภาษีอย่างย่อ');
+  // แยกตามตัวนำหน้าเลขบิล — รายงานทุกสาขามีหลายชุด
+  const ranges = Array.isArray(r.ranges) && r.ranges.length ? r.ranges : [{ first: r.firstBill || '-', last: r.lastBill || '-' }];
+  ranges.forEach(g => { row('ใบแรก', g.first || '-'); row('ใบสุดท้าย', g.last || '-'); });
+  rule();
+  row(`บิลยกเลิก ${r.cancelCount || 0} บิล`, money2(r.cancelTotal));
+  rule();
+  printer.println('ยอดขายตามเมนู');
+  (r.menu || []).forEach(m => {
+    const amount = money2(m.revenue);
+    const lines = wrap(`${m.qty}x ${m.name}`, LINE - widthOf(amount) - 1);
+    lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+  });
+  rule();
+  printer.println('');
+  printer.println('ผู้ตรวจนับเงิน ________________');
+};
+
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
 // ให้ผู้เรียกตัดสินใจเองว่าจะตอบ HTTP อะไรหรือจะลองใหม่ไหม
 export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' }) => {
@@ -188,6 +249,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       return { success: true };
     }
 
+    // รายงานปิดยอดประจำวัน — ไม่เปิดลิ้นชัก
+    if (printerType === 'closeday') {
+      if (!orderData.closeDay) return { success: false, error: 'ไม่มีข้อมูลรายงานปิดยอด' };
+      printDailyClose(printer, orderData.closeDay);
+      printer.cut();
+      await printer.execute();
+      console.log(`Daily close report sent to ${ip}`);
+      return { success: true };
+    }
+
     // ใบแจ้งยอด = ให้ลูกค้าตรวจก่อนจ่าย หน้าตาเหมือนใบเสร็จแต่ยังไม่ใช่ใบเสร็จ
     // และต้องไม่เปิดลิ้นชักเก็บเงิน เพราะยังไม่ได้รับเงิน
     const isPreBill = printerType === 'prebill';
@@ -197,6 +268,9 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     // ไม่ได้ส่งมา (หน้าเว็บรุ่นเก่า) ใช้ข้อความเดิม
     const header = orderData.header && typeof orderData.header === 'object' ? orderData.header : {};
     const clean = (v) => String(v || '').trim();
+    // ใบเสร็จของบิลที่ชำระแล้ว + สาขามีเลขผู้เสียภาษี → ใบกำกับภาษีอย่างย่อ ตามแบบสรรพากร (ม.86/6)
+    // ใบที่ส่งไปเครื่องใบเสร็จตามหมวดเมนู (ไม่มี paid) ยังเป็นใบรายการแบบเดิม
+    const isAbb = printerType === 'receipt' && !!orderData.paid && !!clean(header.taxId);
 
     // ====== Format Receipt ======
     // ชื่อร้านพิมพ์เฉพาะที่ตั้งไว้ในหน้าสาขา — ใบครัวไม่พิมพ์ชื่อร้าน (ครัวไม่ต้องใช้ ประหยัดกระดาษ)
@@ -206,6 +280,7 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       clean(header.address).split(/\r?\n/).map(clean).filter(Boolean).forEach(line => printer.println(line));
       if (clean(header.phone)) printer.println(`โทร ${clean(header.phone)}`);
       if (clean(header.taxId)) printer.println(`เลขผู้เสียภาษี ${clean(header.taxId)}`);
+      if (isAbb && clean(header.posId)) printer.println(`POS ID: ${clean(header.posId)}`);
     }
     printer.println("--------------------------------");
 
@@ -222,13 +297,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     } else if (isPreBill) {
       printer.println("ใบแจ้งยอด (CHECK BILL)");
       printer.println("*** ยังไม่ชำระเงิน ***");
+    } else if (isAbb) {
+      printer.println("ใบกำกับภาษีอย่างย่อ");
+      printer.println("TAX INV (ABB)");
     } else {
       printer.println("ใบเสร็จรับเงิน (RECEIPT)");
     }
 
     printer.println("--------------------------------");
     printer.alignLeft();
-    printer.println(`Order No: ${orderData.orderNumber || '-'}`);
+    printer.println(`${isAbb ? 'เลขที่' : 'Order No'}: ${orderData.orderNumber || '-'}`);
     printer.println(`Date: ${new Date().toLocaleString('th-TH')}`);
     // ใบครัว: หัวใบบอกโต๊ะแล้ว ไม่พิมพ์ "โต๊ะ ..." ซ้ำ (เดลิเวอรียังพิมพ์ชื่อลูกค้า)
     if (orderData.customerDetails?.name && !(isKitchen && /^โต๊ะ/.test(String(orderData.customerDetails.name)))) {
@@ -253,7 +331,8 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
 
         // ใบเสร็จ/ใบแจ้งยอดที่หน้าเว็บส่งราคาบรรทัดมาด้วย (amount) → พิมพ์ราคาชิดขวา
         if (isCustomerCopy && item.amount !== undefined && item.amount !== null && item.amount !== '') {
-          const amount = money2(item.amount);
+          // V = สินค้าที่เสียภาษีมูลค่าเพิ่ม (ร้านไม่มีสินค้ายกเว้นภาษี)
+          const amount = money2(item.amount) + (isAbb ? ' V' : '');
           const lines = wrap(`${qty}x ${itemName}`, LINE - widthOf(amount) - 1);
           lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
         } else {
@@ -295,6 +374,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       printer.alignRight();
       printer.println(`TOTAL: B ${orderData.total || 0}`);
       printer.println("--------------------------------");
+      if (isAbb) {
+        const { rate, vatable, vat } = vatBreakdown(parseMoney(orderData.total), header.vatRate);
+        printer.alignLeft();
+        printer.println(leftRight('มูลค่าสินค้าเสียภาษี (V)', money2(vatable)));
+        printer.println(leftRight(`ภาษีมูลค่าเพิ่ม ${rate}%`, money2(vat)));
+        printer.alignCenter();
+        printer.println('ราคารวมภาษีมูลค่าเพิ่มแล้ว');
+        printer.println('(VAT Included)');
+        printer.println("--------------------------------");
+      }
       printer.alignCenter();
       printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "Thank you!"));
     } else {

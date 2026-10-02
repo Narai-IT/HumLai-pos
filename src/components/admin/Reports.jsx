@@ -2,10 +2,13 @@ import React, { useState, useCallback } from 'react';
 import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download, FileText, List } from 'lucide-react';
 import { API_URL } from '../../utils/api';
 import TaxInvoiceModal from './TaxInvoiceModal';
+import { getReceiptHeader } from '../../utils/printServer';
+import { vatSplit } from '../../utils/dailyClosePrint';
 
 const TABS = [
   { key: 'daily',   label: 'สรุปประจำวัน',       icon: <TrendingUp size={15} /> },
   { key: 'history', label: 'รายงานยอดขาย',       icon: <Receipt   size={15} /> },
+  { key: 'vat',     label: 'รายงานภาษีขาย',      icon: <FileText  size={15} /> },
   { key: 'detail',  label: 'รายละเอียดการขาย',   icon: <List      size={15} /> },
   { key: 'income',  label: 'รายรับ-รายจ่าย',   icon: <TrendingUp size={15} /> },
   { key: 'menu',    label: 'ยอดขายตามเมนู',      icon: <BarChart2  size={15} /> },
@@ -93,6 +96,11 @@ const td_    = { padding: '0.65rem 0.9rem', fontSize: '0.875rem', borderBottom: 
 
 const branchOf = (u) => String(u?.branch || u?.id || u?.username || '').trim();
 
+// สาขาของแถวบิล = BranchId (บันทึกถูกทุกบิล รวมบิลที่ลูกค้าสแกน QR ที่ RecordedBy เป็น 'Self-Order')
+// แถวเก่ามากที่ยังไม่มี BranchId ใช้ RecordedBy แทน
+const rowBranch = (r) => String(r.BranchId || (r.RecordedBy === 'Self-Order' ? '' : r.RecordedBy) || '').trim();
+const sameBranch = (r, b) => rowBranch(r).toLowerCase() === String(b || '').trim().toLowerCase();
+
 export default function Reports({ allMenu = [], isAdmin = false, branch = '', users = [], userName = '' }) {
   const [tab,     setTab]     = useState('daily');
   const [from,    setFrom]    = useState(TODAY);
@@ -106,11 +114,11 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   const [detailSearch, setDetailSearch] = useState('');
   // ฟิลเตอร์สาขา: admin เลือกได้ทุกสาขา (ค่าว่าง=ทุกสาขา), ไม่ใช่ admin ล็อกเฉพาะสาขาตัวเอง
   const [branchFilter, setBranchFilter] = useState(isAdmin ? '' : branch);
-  const inBranch = (r) => !branchFilter || String(r.RecordedBy || '').trim() === branchFilter;
+  const inBranch = (r) => !branchFilter || sameBranch(r, branchFilter);
   const branchOptions = (() => {
     const set = new Set();
     (users || []).forEach(u => { const b = branchOf(u); if (b && b !== '*') set.add(b); }); // '*' = พนักงานทุกสาขา ไม่ใช่สาขา
-    (data?.orders || []).forEach(r => { const b = String(r.RecordedBy || '').trim(); if (b) set.add(b); });
+    (data?.orders || []).forEach(r => { const b = rowBranch(r); if (b) set.add(b); });
     return Array.from(set).sort();
   })();
   // กรองรอบกะตามสาขา (เทียบกับพนักงานเปิด/ปิดกะ) — ค่าว่าง=ทุกสาขา
@@ -164,6 +172,22 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   });
   const salesTotal = completedOrders.reduce((sum, o) => sum + o.total, 0);
   const invoicedCount = completedOrders.filter(o => invoiceByOrder[o.orderNumber] && !invoiceByOrder[o.orderNumber].cancelled).length;
+  // รายงานภาษีขาย: บิลที่ขายสำเร็จเรียงตามเวลา — ยอดบิลถือว่ารวม VAT แล้ว (สูตรเดียวกับใบกำกับภาษี)
+  // บิลที่ออกใบกำกับเต็มรูปแล้ว ใช้ชื่อ/เลขผู้เสียภาษีผู้ซื้อและยอดที่บันทึกในใบนั้น
+  const vatRateSetting = (getReceiptHeader() || {}).vatRate;
+  const vatRows = [...completedOrders].reverse().map(o => {
+    const inv = invoiceByOrder[o.orderNumber];
+    const active = inv && !inv.cancelled ? inv : null;
+    const split = active ? { vatable: active.subtotal, vat: active.vatAmount } : vatSplit(o.total, vatRateSetting);
+    return {
+      timestamp: o.timestamp, abbNo: o.orderNumber, invoiceNo: active ? active.invoiceNo : '',
+      buyerName: active ? active.buyer?.name || '' : '', buyerTaxId: active ? active.buyer?.taxId || '' : '',
+      buyerBranch: active ? active.buyer?.branch || '' : '',
+      vatable: split.vatable, vat: split.vat, total: o.total
+    };
+  });
+  const vatTotals = vatRows.reduce((t, r) => ({ vatable: t.vatable + r.vatable, vat: t.vat + r.vat, total: t.total + r.total }), { vatable: 0, vat: 0, total: 0 });
+  const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const updateInvoice = (inv) => setInvoices(prev => [inv, ...prev.filter(x => x.invoiceNo !== inv.invoiceNo)]);
 
   // รายละเอียดการขาย: ทุกรายการอาหารของบิลที่ขายสำเร็จ (ตัวเลือก ↳ ต่อท้ายรายการก่อนหน้า)
@@ -330,6 +354,11 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     });
     exportXLSX([{ name: 'รายงานยอดขาย', headers: ['วันเวลา','เลขบิล','โต๊ะ','ยอดรวม','ชำระด้วย','พนักงาน','ใบกำกับภาษี'], rows }], `รายงานยอดขาย_${from}_${to}`);
   };
+  const exportVat = () => {
+    const rows = vatRows.map((r, i) => [i + 1, dayStr(r.timestamp), r.abbNo, r.invoiceNo, r.buyerName, r.buyerTaxId, r.buyerBranch, r.vatable.toFixed(2), r.vat.toFixed(2), r.total.toFixed(2)]);
+    rows.push(['', '', '', '', 'รวม', '', '', vatTotals.vatable.toFixed(2), vatTotals.vat.toFixed(2), vatTotals.total.toFixed(2)]);
+    exportXLSX([{ name: 'รายงานภาษีขาย', headers: ['ลำดับ','วันที่','เลขที่ใบกำกับภาษีอย่างย่อ','เลขที่ใบกำกับภาษีเต็มรูป','ชื่อผู้ซื้อ','เลขผู้เสียภาษีผู้ซื้อ','สถานประกอบการ','มูลค่าสินค้า/บริการ','จำนวนเงินภาษี','รวม'], rows }], `รายงานภาษีขาย_${from}_${to}`);
+  };
   const exportDetail = () => {
     const rows = detailShown.map(d => [fmtD(d.timestamp), d.orderNumber, d.customerName, d.name, d.options.join(', '), d.dining, d.qty, d.amount, d.paymentMethod]);
     exportXLSX([{ name: 'รายละเอียดการขาย', headers: ['วันเวลา','เลขบิล','โต๊ะ','รายการ','ตัวเลือก','ประเภท','จำนวน','ยอดเงิน','ชำระด้วย'], rows }], `รายละเอียดการขาย_${from}_${to}`);
@@ -361,7 +390,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     ], `รายงานทั้งหมด_${from}_${to}`);
   };
 
-  const TAB_EXPORT = { daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, detail: exportDetail, cancel: exportCancel, shift: exportShift };
+  const TAB_EXPORT = { daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, vat: exportVat, detail: exportDetail, cancel: exportCancel, shift: exportShift };
 
   return (
     <div style={{ color: 'var(--text-main)', fontFamily: 'inherit' }}>
@@ -598,6 +627,49 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                     </tr>
                   );
                 })}
+              </TableWrap>
+            </>
+          )}
+
+          {/* ── Tab: รายงานภาษีขาย ── */}
+          {tab === 'vat' && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+                {[
+                  ['จำนวนใบ', fmt(vatRows.length)],
+                  ['มูลค่าสินค้า/บริการ', `฿${money2(vatTotals.vatable)}`],
+                  ['ภาษีขาย', `฿${money2(vatTotals.vat)}`],
+                  ['รวม', `฿${money2(vatTotals.total)}`],
+                ].map(([k, v]) => (
+                  <div key={k} style={card}>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{k}</div>
+                    <div style={{ fontSize: '1.3rem', fontWeight: 800, marginTop: 4 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <TableWrap empty={vatRows.length === 0} headers={['ลำดับ','วันที่','ใบกำกับอย่างย่อ','ใบกำกับเต็มรูป','ชื่อผู้ซื้อ','เลขผู้เสียภาษีผู้ซื้อ','สถานประกอบการ','มูลค่าสินค้า','ภาษี','รวม']}>
+                {vatRows.map((r, i) => (
+                  <tr key={r.abbNo}>
+                    <Td muted>{i + 1}</Td>
+                    <Td muted nowrap>{dayStr(r.timestamp)}</Td>
+                    <Td bold color="var(--text-main)">{r.abbNo}</Td>
+                    <Td>{r.invoiceNo || '—'}</Td>
+                    <Td>{r.buyerName || '—'}</Td>
+                    <Td muted>{r.buyerTaxId || '—'}</Td>
+                    <Td muted>{r.buyerBranch || '—'}</Td>
+                    <Td nowrap>{money2(r.vatable)}</Td>
+                    <Td nowrap>{money2(r.vat)}</Td>
+                    <Td bold nowrap>{money2(r.total)}</Td>
+                  </tr>
+                ))}
+                {vatRows.length > 0 && (
+                  <tr>
+                    <Td bold>รวม</Td><Td /><Td /><Td /><Td /><Td /><Td />
+                    <Td bold nowrap>{money2(vatTotals.vatable)}</Td>
+                    <Td bold nowrap>{money2(vatTotals.vat)}</Td>
+                    <Td bold nowrap>{money2(vatTotals.total)}</Td>
+                  </tr>
+                )}
               </TableWrap>
             </>
           )}

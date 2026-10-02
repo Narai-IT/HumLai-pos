@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:30px;right:48px;font-size:14px}
+  .banner{position:absolute;top:56px;left:150px;width:494px;border:1.5px solid #111;box-shadow:6px 6px 0 #111;padding:14px 0;text-align:center;font-size:16px;font-weight:700;background:#fff}
+  .step{position:absolute;left:40px;width:714px;height:200px}
+  .lbl{position:absolute;left:0;top:50px;width:120px;height:90px;border:1.5px solid #111;box-shadow:4px 4px 0 #111;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px;font-weight:700;background:#fff;line-height:1.4}
+  .txt{position:absolute;left:150px;top:0;width:330px;min-height:180px;border:1.2px solid #111;padding:8px 10px;font-size:11.5px;line-height:1.55;box-sizing:border-box}
+  .txt ol{margin:0;padding-left:18px}
+  .txt .tip{margin-top:4px;color:#333}
+  .shot{position:absolute;left:500px;top:0;width:214px;height:150px;border:1.2px solid #111;background:#f5f5f5;box-sizing:border-box;padding:6px;font-size:8.5px;overflow:hidden}
+  .cap{position:absolute;left:500px;top:154px;width:214px;text-align:center;font-size:11px}
+  .h1line{position:absolute;height:0;border-top:1.2px solid #111}
+  .vline{position:absolute;width:0;border-left:1.2px dashed #111}
+  /* wireframes */
+  .bar{background:#fff;border:1px solid #bbb;border-radius:3px;padding:2px 4px;margin-bottom:4px;display:flex;justify-content:space-between}
+  .grid{display:grid;gap:3px}
+  .tile{background:#fff;border:1px solid #bbb;border-radius:3px;padding:3px;text-align:center}
+  .g{background:#d9f2df;border-color:#7cc68b}
+  .btn{background:#16a34a;color:#fff;border-radius:3px;padding:3px;text-align:center;font-weight:700}
+  .cert{position:absolute;right:48px;bottom:30px;width:200px;border:1.5px solid #111;padding:4px 10px;font-size:12.5px;line-height:1.75}
+  .cert b{display:block;text-align:center;font-size:15px}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<div class="banner">Flowchart Point Of Sales System — HumLai-POS</div>
+
+<!-- 5 Daily close -->
+<div class="step" style="top:150px">
+  <div class="lbl">(5) สรุปยอดขาย<br>และพิมพ์<br>ปิดยอดประจำวัน</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt" style="min-height:210px"><ol>
+    <li>ปิดบิลทุกโต๊ะให้เรียบร้อย (ไม่มีโต๊ะค้างชำระ)</li>
+    <li>เพิ่มเติม &gt; สรุปยอดขายวันนี้ โปรแกรมแสดงยอดขายรวม จำนวนบิล และยอดแยกตามช่องทาง เงินสด / โอน / บัตร</li>
+    <li>ตรวจนับเงินสดในลิ้นชักและยอดโอน/บัตร ให้ตรงกับยอดในโปรแกรม</li>
+    <li>กด "พิมพ์ปิดยอดประจำวัน" โปรแกรมพิมพ์รายงานปิดยอด (ยอดขาย ภาษี ช่วงเลขที่ใบกำกับภาษีอย่างย่อ บิลยกเลิก ยอดตามเมนู) ผู้ตรวจนับเงินลงชื่อ</li>
+  </ol></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot" style="display:flex;gap:5px;height:170px">
+    <div style="flex:1">
+      <div style="font-weight:700;text-align:center">สรุปยอดขายร้าน</div>
+      <div class="bar"><span>ยอดขายทั้งหมด</span><b>฿1,496</b></div>
+      <div class="bar"><span>จำนวนบิล</span><b>5 บิล</b></div>
+      <div class="bar"><span>เงินสด</span><span>฿906</span></div>
+      <div class="bar"><span>โอน / QR</span><span>฿590</span></div>
+      <div class="btn" style="background:#0f766e;font-size:7.5px">🖨 พิมพ์ปิดยอดประจำวัน</div>
+    </div>
+    <div style="width:74px;background:#fff;border:1px solid #bbb;padding:3px;font-size:6.8px;line-height:1.35">
+      <div style="text-align:center;font-weight:700">รายงานปิดยอดประจำวัน</div>
+      <div>จำนวนบิล 5</div><div>ยอดขายรวม 1,496.00</div><div>VAT 7% 97.87</div>
+      <div>เงินสด 906.00</div><div>โอน 590.00</div><div>ใบแรก #027</div><div>ใบสุดท้าย #031</div>
+      <div>บิลยกเลิก 0</div><div style="margin-top:3px">ผู้ตรวจนับ ____</div>
+    </div>
+  </div>
+  <div class="cap" style="top:174px">สรุปยอดขาย / ใบปิดยอดประจำวัน</div>
+</div>
+
+<!-- 6 Reports -->
+<div class="step" style="top:430px">
+  <div class="lbl">(6) เรียกดู<br>และพิมพ์รายงาน</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt" style="min-height:210px"><ol>
+    <li>หลังบ้าน &gt; รายงาน (แคชเชียร์ / แอดมิน)</li>
+    <li>เลือกช่วงวันที่และสาขา แล้วเลือกรายงาน
+      <div>- สรุปประจำวัน / รายงานยอดขาย</div>
+      <div>- รายงานภาษีขาย</div>
+      <div>- รายละเอียดการขาย / ยอดขายตามเมนู</div>
+      <div>- รายรับ / ประวัติการยกเลิก</div></li>
+    <li>กด "Export แท็บนี้" เพื่อบันทึกเป็นไฟล์ แล้วเปิดด้วย Excel เพื่อตรวจหรือสั่งพิมพ์</li>
+  </ol><div class="tip">*** รายงานเรียกดูย้อนหลังได้ทุกช่วงวันที่ เช่น รายวัน รายเดือน</div></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot" style="height:170px">
+    <div style="font-weight:700;font-size:10px;margin-bottom:3px">รายงาน</div>
+    <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:4px">
+      <span class="tile">สรุปประจำวัน</span><span class="tile">ยอดขาย</span><span class="tile g">ภาษีขาย</span><span class="tile">ตามเมนู</span><span class="tile">ยกเลิก</span>
+    </div>
+    <div style="background:#fff;border:1px solid #bbb">
+      <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr 0.8fr;font-weight:700;border-bottom:1px solid #bbb;padding:1px 3px"><span>วันที่</span><span>ใบอย่างย่อ</span><span>มูลค่า</span><span>ภาษี</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr 0.8fr;padding:1px 3px"><span>01/10/69</span><span>XXXX-#027</span><span>282.24</span><span>19.76</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr 0.8fr;padding:1px 3px"><span>01/10/69</span><span>XXXX-#028</span><span>134.58</span><span>9.42</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr 0.8fr;padding:1px 3px"><span>01/10/69</span><span>XXXX-#029</span><span>83.18</span><span>5.82</span></div>
+    </div>
+    <div style="text-align:right;margin-top:4px"><span class="tile" style="color:#15803d">⬇ Export แท็บนี้ (.csv)</span></div>
+  </div>
+  <div class="cap" style="top:174px">หลังบ้าน &gt; รายงาน</div>
+</div>
+
+<!-- 7 Data storage -->
+<div class="step" style="top:710px">
+  <div class="lbl">(7) การจัดเก็บ<br>และสำรองข้อมูล</div>
+  <div class="h1line" style="left:124px;top:95px;width:26px"></div>
+  <div class="txt" style="min-height:190px"><ol>
+    <li>ทุกบิลที่ชำระเงินถูกบันทึกเข้าฐานข้อมูล SQL Server ที่เครื่องควบคุมกลางทันที (เลขที่บิล วันเวลา รายการ ยอดเงิน ผู้บันทึก)</li>
+    <li>ไม่ต้องสั่งปิดวันในโปรแกรม วันที่ของบิลอิงเวลาประเทศไทย ระบบขึ้นวันใหม่เอง และเลขที่บิลนับต่อเนื่อง</li>
+    <li>สำเนาใบกำกับภาษีเก็บในรูปข้อมูลอิเล็กทรอนิกส์ ไม่มีม้วนสำเนา</li>
+    <li>ผู้ดูแลระบบสำรองฐานข้อมูล (SQL Server Backup) ทุก ............ เก็บไว้ที่ ............................</li>
+  </ol></div>
+  <div class="h1line" style="left:480px;top:75px;width:20px"></div>
+  <div class="shot" style="height:150px;background:#fff">
+    <svg viewBox="0 0 200 135" width="200" height="135" font-family="Loma" font-size="8">
+      <rect x="4" y="10" width="60" height="34" fill="#f5f5f5" stroke="#111"/><text x="34" y="25" text-anchor="middle">เครื่อง POS</text><text x="34" y="36" text-anchor="middle">สาขา</text>
+      <rect x="120" y="10" width="76" height="34" fill="#f5f5f5" stroke="#111"/><text x="158" y="25" text-anchor="middle">เครื่องควบคุมกลาง</text><text x="158" y="36" text-anchor="middle">SQL Server</text>
+      <line x1="64" y1="27" x2="118" y2="27" stroke="#111"/><path d="M114 24 L120 27 L114 30z"/>
+      <text x="91" y="21" text-anchor="middle" font-size="7">ทุกบิล (HTTPS)</text>
+      <rect x="120" y="88" width="76" height="34" fill="#f5f5f5" stroke="#111"/><text x="158" y="103" text-anchor="middle">ไฟล์สำรองข้อมูล</text><text x="158" y="114" text-anchor="middle">(Backup)</text>
+      <line x1="158" y1="44" x2="158" y2="86" stroke="#111" stroke-dasharray="3 2"/><path d="M155 82 L158 88 L161 82z"/>
+      <rect x="4" y="88" width="60" height="34" fill="#f5f5f5" stroke="#111"/><text x="34" y="103" text-anchor="middle">รายงาน /</text><text x="34" y="114" text-anchor="middle">ใบกำกับภาษี</text>
+      <line x1="120" y1="40" x2="66" y2="94" stroke="#111"/><path d="M68 88 L64 96 L72 93z"/>
+    </svg>
+  </div>
+  <div class="cap" style="top:154px">การไหลของข้อมูล</div>
+</div>
+
+<div class="vline" style="left:100px;top:370px;height:100px"></div>
+<div class="vline" style="left:100px;top:650px;height:100px"></div>
+
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ...................................<br>
+วันที่....................................
+</div>
+</body></html>

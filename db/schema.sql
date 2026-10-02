@@ -408,6 +408,20 @@ FROM (
 WHERE b NOT IN ('Self-Order', '*');  -- ช่องทางลูกค้าสั่งเอง / พนักงานทุกสาขา ไม่ใช่สาขา
 GO
 
+-- รหัสอ้างอิงจากหน้าเว็บ (หนึ่งค่าต่อการชำระเงิน) — เซิร์ฟเวอร์ใช้กันบิลซ้ำเมื่อหน้าเว็บส่งบิลเดิมซ้ำ
+IF COL_LENGTH('dbo.PaymentSummary', 'ClientRef') IS NULL
+  ALTER TABLE dbo.PaymentSummary ADD ClientRef NVARCHAR(60) NULL;
+GO
+IF COL_LENGTH('dbo.PaymentSummary', 'ClientRef') IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PaymentSummary_ClientRef' AND object_id = OBJECT_ID('dbo.PaymentSummary'))
+  EXEC('CREATE INDEX IX_PaymentSummary_ClientRef ON dbo.PaymentSummary (ClientRef)');
+GO
+
+-- เลขรหัสประจำเครื่อง POS ที่สรรพากรกำหนด (พิมพ์บนใบกำกับภาษีอย่างย่อ)
+IF COL_LENGTH('dbo.Branches', 'posId') IS NULL
+  ALTER TABLE dbo.Branches ADD posId NVARCHAR(40) NULL;
+GO
+
 -- ─────────────────────────────────────────
 -- แยกข้อมูลขายตามสาขา (เฟส 2)
 -- BranchId = Branches.id ของร้านที่เกิดรายการ — แยกจาก RecordedBy ที่ยังเป็น "ใครบันทึก" แบบเดิม
