@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:36px;right:48px;font-size:14px}
+  h1{font-size:22px;text-align:center;margin:0;padding-top:70px}
+  .sub{text-align:center;font-size:14px;color:#333;margin-top:6px}
+  .wrap{position:absolute;top:150px;left:0;right:0;display:flex;justify-content:center;gap:40px}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .cap{font-size:13px;font-weight:700}
+  .slip{width:290px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:14px 14px 18px;font-size:12px;line-height:1.55}
+  .c{text-align:center}.b{font-weight:700}.lg{font-size:14px;font-weight:700}
+  .row{display:flex;justify-content:space-between;gap:8px}
+  .hr{border-top:1px dashed #000;margin:6px 0}
+  .it .q{width:22px;display:inline-block}
+  .tot{font-size:15px;font-weight:700}
+  .sm{font-size:10.5px;color:#333}
+  .copy{border:1.5px solid #111;display:inline-block;padding:0 8px;font-weight:700;letter-spacing:1px}
+  .cert{position:absolute;right:48px;bottom:60px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
+  .cert b{display:block;text-align:center;font-size:17px}
+  .note{position:absolute;left:56px;bottom:66px;width:430px;font-size:12px;line-height:1.75}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<h1>ตัวอย่างใบกำกับภาษีอย่างย่อและสำเนา</h1>
+<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; กระดาษความร้อน 80 มม.</div>
+
+<div class="wrap">
+  <div class="col"><div class="cap">ต้นฉบับ (ให้ลูกค้า)</div><div class="slip" id="orig"></div></div>
+  <div class="col"><div class="cap">สำเนา (จัดเก็บแบบข้อมูลอิเล็กทรอนิกส์)</div><div class="slip" id="copy"></div></div>
+</div>
+
+<div class="note">
+  <b>หมายเหตุ</b><br>
+  V = สินค้า/บริการที่เสียภาษีมูลค่าเพิ่ม &nbsp; E = สินค้าที่ได้รับยกเว้นภาษี<br>
+  เลขที่ใบกำกับภาษีอย่างย่อเรียงต่อเนื่องตามเครื่อง ไม่ซ้ำ ไม่ข้าม<br>
+  สำเนาไม่พิมพ์เป็นม้วน แต่เก็บเป็นข้อมูลอิเล็กทรอนิกส์ที่เครื่องควบคุมกลาง<br>
+  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
+</div>
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ.........................................<br>
+ลงชื่อ.........................................<br>
+วันที่..........................................<br>
+<span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
+..................................................
+</div>
+
+<script>
+const items = [
+  { q: 2, n: 'ข้าวมันไก่หำไหล', a: 138 },
+  { q: 1, n: 'ข้าวมันไก่ทอด', a: 75 },
+  { q: 1, n: 'ชุดข้าวมันไก่สิงคโปร์', a: 89 },
+];
+const total = items.reduce((s, i) => s + i.a, 0);
+const vatable = Math.round(total / 1.07 * 100) / 100;
+const vat = Math.round((total - vatable) * 100) / 100;
+const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const slip = isCopy => `
+  <div class="c lg">.................................</div>
+  <div class="c">(ชื่อร้าน / ชื่อผู้ประกอบการ)</div>
+  <div class="c">สาขา ............ &nbsp; (สาขาที่ .....)</div>
+  <div class="c">TAX ID: XXXXXXXXXXXXX</div>
+  <div class="c">POS ID: XXXXXXXXXXXXXX</div>
+  <div class="hr"></div>
+  <div class="c b">ใบกำกับภาษีอย่างย่อ</div>
+  <div class="c b">TAX INV (ABB)</div>
+  ${isCopy ? '<div class="c" style="margin-top:3px"><span class="copy">สำเนา / COPY</span></div>' : ''}
+  <div class="hr"></div>
+  <div class="row"><span>เลขที่ ABB</span><span>XXXXXX-000031</span></div>
+  <div class="row"><span>บิล# 000123</span><span>โต๊ะ 5 · ทานที่ร้าน</span></div>
+  <div class="row"><span>วันที่ 01/10/2569</span><span>เวลา 12:35:10</span></div>
+  <div class="row"><span>พนักงาน: ............</span><span>ลูกค้า 3 ท่าน</span></div>
+  <div class="hr"></div>
+  <div class="row b"><span>จำนวน &nbsp;รายการ</span><span>จำนวนเงิน</span></div>
+  ${items.map(i => `<div class="row it"><span><span class="q">${i.q}</span>${i.n}</span><span>${m(i.a)} V</span></div>`).join('')}
+  <div class="hr"></div>
+  <div class="row"><span>รวม ${items.reduce((s, i) => s + i.q, 0)} รายการ</span><span>${m(total)}</span></div>
+  <div class="row"><span>ส่วนลด</span><span>0.00</span></div>
+  <div class="row tot"><span>ยอดสุทธิ</span><span>${m(total)}</span></div>
+  <div class="row"><span>เงินสด</span><span>${m(500)}</span></div>
+  <div class="row"><span>เงินทอน</span><span>${m(500 - total)}</span></div>
+  <div class="hr"></div>
+  <div class="row"><span>มูลค่าสินค้าที่เสียภาษี (V)</span><span>${m(vatable)}</span></div>
+  <div class="row"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${m(vat)}</span></div>
+  <div class="row"><span>มูลค่าสินค้าที่ยกเว้นภาษี (E)</span><span>0.00</span></div>
+  <div class="c b" style="margin-top:4px">ราคารวมภาษีมูลค่าเพิ่มแล้ว (VAT Included)</div>
+  <div class="hr"></div>
+  <div class="c sm">ขอบคุณที่ใช้บริการ</div>`;
+document.getElementById('orig').innerHTML = slip(false);
+document.getElementById('copy').innerHTML = slip(true);
+</script>
+</body></html>
