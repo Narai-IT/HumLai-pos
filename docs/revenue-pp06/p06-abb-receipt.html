@@ -7,36 +7,52 @@
   .pg{position:absolute;top:36px;right:48px;font-size:14px}
   h1{font-size:22px;text-align:center;margin:0;padding-top:70px}
   .sub{text-align:center;font-size:14px;color:#333;margin-top:6px}
-  .wrap{position:absolute;top:150px;left:0;right:0;display:flex;justify-content:center;gap:40px}
+  .wrap{position:absolute;top:150px;left:56px;right:56px;display:flex;gap:36px;align-items:flex-start}
   .col{display:flex;flex-direction:column;align-items:center;gap:10px}
   .cap{font-size:13px;font-weight:700}
-  .slip{width:290px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:14px 14px 18px;font-size:12px;line-height:1.55}
-  .c{text-align:center}.b{font-weight:700}.lg{font-size:14px;font-weight:700}
+  .slip{width:270px;border:1px solid #bbb;box-shadow:2px 2px 0 #ddd;padding:14px 14px 18px;font-size:12.5px;line-height:1.6}
+  .c{text-align:center}.r{text-align:right}
   .row{display:flex;justify-content:space-between;gap:8px}
-  .hr{border-top:1px dashed #000;margin:6px 0}
-  .it .q{width:22px;display:inline-block}
-  .tot{font-size:15px;font-weight:700}
-  .sm{font-size:10.5px;color:#333}
-  .copy{border:1.5px solid #111;display:inline-block;padding:0 8px;font-weight:700;letter-spacing:1px}
+  .hr{overflow:hidden;white-space:nowrap;letter-spacing:1px}
+  .side{flex:1;font-size:12.5px;line-height:1.6}
+  .side h3{font-size:14.5px;margin:0 0 6px}
+  .side table{border-collapse:collapse;width:100%;font-size:12px}
+  .side td,.side th{border:1px solid #999;padding:3px 6px;vertical-align:top}
+  .side th{background:#f2f2f2;text-align:left}
+  .ok{text-align:center;font-weight:700}
   .cert{position:absolute;right:48px;bottom:60px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
   .cert b{display:block;text-align:center;font-size:17px}
   .note{position:absolute;left:56px;bottom:66px;width:430px;font-size:12px;line-height:1.75}
 </style></head><body>
 <div class="pg">หน้า ....</div>
-<h1>ตัวอย่างใบกำกับภาษีอย่างย่อและสำเนา</h1>
-<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; กระดาษความร้อน 80 มม.</div>
+<h1>ตัวอย่างใบเสร็จรับเงินจากระบบ</h1>
+<div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; พิมพ์ผ่าน Print Server ออกเครื่องพิมพ์ความร้อน 80 มม. (32 ตัวอักษรต่อบรรทัด)</div>
 
 <div class="wrap">
-  <div class="col"><div class="cap">ต้นฉบับ (ให้ลูกค้า)</div><div class="slip" id="orig"></div></div>
-  <div class="col"><div class="cap">สำเนา (จัดเก็บแบบข้อมูลอิเล็กทรอนิกส์)</div><div class="slip" id="copy"></div></div>
+  <div class="col"><div class="cap">ใบเสร็จที่ระบบพิมพ์ในปัจจุบัน</div><div class="slip" id="slip"></div></div>
+  <div class="side">
+    <h3>เทียบกับรายการที่ต้องแสดง (แบบ ค.ก.๔ ก ข้อ 2.4)</h3>
+    <table>
+      <tr><th>รายการที่ต้องแสดง</th><th style="width:58px">ปัจจุบัน</th></tr>
+      <tr><td>ชื่อผู้ประกอบการ และเลขผู้เสียภาษี</td><td class="ok">มี</td></tr>
+      <tr><td>คำว่า "ใบกำกับภาษีอย่างย่อ" / TAX INV (ABB)</td><td class="ok">ไม่มี</td></tr>
+      <tr><td>เลขรหัสประจำเครื่อง (POS ID) ที่สรรพากรกำหนด</td><td class="ok">ไม่มี</td></tr>
+      <tr><td>เลขที่ใบเรียงต่อเนื่อง</td><td class="ok">มี<br><small>(Order No)</small></td></tr>
+      <tr><td>วัน เดือน ปี และเวลา</td><td class="ok">มี</td></tr>
+      <tr><td>ชื่อ ชนิด จำนวน และมูลค่าสินค้า</td><td class="ok">มี</td></tr>
+      <tr><td>ข้อความ "ราคารวมภาษีมูลค่าเพิ่มแล้ว" (VAT Included)</td><td class="ok">ไม่มี<br><small>(VAT บวกเพิ่มท้ายบิล)</small></td></tr>
+      <tr><td>รหัสแยกสินค้าเสียภาษี / ยกเว้นภาษี</td><td class="ok">ไม่มี</td></tr>
+    </table>
+    <p style="margin:8px 0 0">ต้องแก้ส่วนพิมพ์ใบเสร็จให้ครบทุกข้อก่อนยื่นคำขอ แล้วจึงนำใบจริงมาแนบแทนหน้านี้</p>
+  </div>
 </div>
 
 <div class="note">
   <b>หมายเหตุ</b><br>
-  V = สินค้า/บริการที่เสียภาษีมูลค่าเพิ่ม &nbsp; E = สินค้าที่ได้รับยกเว้นภาษี<br>
-  เลขที่ใบกำกับภาษีอย่างย่อเรียงต่อเนื่องตามเครื่อง ไม่ซ้ำ ไม่ข้าม<br>
-  สำเนาไม่พิมพ์เป็นม้วน แต่เก็บเป็นข้อมูลอิเล็กทรอนิกส์ที่เครื่องควบคุมกลาง<br>
-  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
+  ข้อความหัวใบ (ชื่อร้าน ที่อยู่ โทร เลขผู้เสียภาษี ข้อความท้ายใบ) ตั้งที่ หลังบ้าน &gt; สาขา<br>
+  Order No = รหัสบิลของสาขา-#ลำดับ เรียงต่อเนื่องตามสาขา<br>
+  สำเนาไม่พิมพ์เป็นม้วน เก็บเป็นข้อมูลอิเล็กทรอนิกส์ที่เครื่องควบคุมกลาง<br>
+  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ (ตั้ง VAT 7% ที่หลังบ้าน)
 </div>
 <div class="cert"><b>รับรองสำเนาถูกต้อง</b>
 ลงชื่อ.........................................<br>
@@ -47,47 +63,37 @@
 </div>
 
 <script>
+// เลียนแบบ print-ticket.js (printerType = 'receipt') และ buildReceiptOrder() ใน CheckoutModal.jsx
 const items = [
   { q: 2, n: 'ข้าวมันไก่หำไหล', a: 138 },
   { q: 1, n: 'ข้าวมันไก่ทอด', a: 75 },
   { q: 1, n: 'ชุดข้าวมันไก่สิงคโปร์', a: 89 },
 ];
-const total = items.reduce((s, i) => s + i.a, 0);
-const vatable = Math.round(total / 1.07 * 100) / 100;
-const vat = Math.round((total - vatable) * 100) / 100;
+const subtotal = items.reduce((s, i) => s + i.a, 0);
+const vatRate = 7;
+const vat = Math.round(subtotal * vatRate) / 100;          // calcCharges(): VAT บวกเพิ่มจากยอดอาหาร
+const grand = subtotal + vat;
 const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const slip = isCopy => `
-  <div class="c lg">.................................</div>
-  <div class="c">(ชื่อร้าน / ชื่อผู้ประกอบการ)</div>
-  <div class="c">สาขา ............ &nbsp; (สาขาที่ .....)</div>
-  <div class="c">TAX ID: XXXXXXXXXXXXX</div>
-  <div class="c">POS ID: XXXXXXXXXXXXXX</div>
-  <div class="hr"></div>
-  <div class="c b">ใบกำกับภาษีอย่างย่อ</div>
-  <div class="c b">TAX INV (ABB)</div>
-  ${isCopy ? '<div class="c" style="margin-top:3px"><span class="copy">สำเนา / COPY</span></div>' : ''}
-  <div class="hr"></div>
-  <div class="row"><span>เลขที่ ABB</span><span>XXXXXX-000031</span></div>
-  <div class="row"><span>บิล# 000123</span><span>โต๊ะ 5 · ทานที่ร้าน</span></div>
-  <div class="row"><span>วันที่ 01/10/2569</span><span>เวลา 12:35:10</span></div>
-  <div class="row"><span>พนักงาน: ............</span><span>ลูกค้า 3 ท่าน</span></div>
-  <div class="hr"></div>
-  <div class="row b"><span>จำนวน &nbsp;รายการ</span><span>จำนวนเงิน</span></div>
-  ${items.map(i => `<div class="row it"><span><span class="q">${i.q}</span>${i.n}</span><span>${m(i.a)} V</span></div>`).join('')}
-  <div class="hr"></div>
-  <div class="row"><span>รวม ${items.reduce((s, i) => s + i.q, 0)} รายการ</span><span>${m(total)}</span></div>
-  <div class="row"><span>ส่วนลด</span><span>0.00</span></div>
-  <div class="row tot"><span>ยอดสุทธิ</span><span>${m(total)}</span></div>
-  <div class="row"><span>เงินสด</span><span>${m(500)}</span></div>
-  <div class="row"><span>เงินทอน</span><span>${m(500 - total)}</span></div>
-  <div class="hr"></div>
-  <div class="row"><span>มูลค่าสินค้าที่เสียภาษี (V)</span><span>${m(vatable)}</span></div>
-  <div class="row"><span>ภาษีมูลค่าเพิ่ม 7%</span><span>${m(vat)}</span></div>
-  <div class="row"><span>มูลค่าสินค้าที่ยกเว้นภาษี (E)</span><span>0.00</span></div>
-  <div class="c b" style="margin-top:4px">ราคารวมภาษีมูลค่าเพิ่มแล้ว (VAT Included)</div>
-  <div class="hr"></div>
-  <div class="c sm">ขอบคุณที่ใช้บริการ</div>`;
-document.getElementById('orig').innerHTML = slip(false);
-document.getElementById('copy').innerHTML = slip(true);
+const dash = '<div class="hr">' + '-'.repeat(32) + '</div>';
+document.getElementById('slip').innerHTML = `
+  <div class="c">.......................... <small>(ชื่อร้าน)</small></div>
+  <div class="c">.......................... <small>(ที่อยู่สาขา)</small></div>
+  <div class="c">โทร ...................</div>
+  <div class="c">เลขผู้เสียภาษี .....................</div>
+  ${dash}
+  <div class="c">ใบเสร็จรับเงิน (RECEIPT)</div>
+  ${dash}
+  <div>Order No: XXXX-#031</div>
+  <div>Date: 1/10/2569 12:35:10</div>
+  <div>Customer: โต๊ะ 5</div>
+  ${dash}
+  ${items.map(i => `<div class="row"><span>${i.q}x ${i.n}</span><span>${m(i.a)}</span></div>`).join('')}
+  ${dash}
+  <div class="r">ยอดอาหาร: ${m(subtotal)}</div>
+  <div class="r">VAT ${vatRate}%: ${m(vat)}</div>
+  <div class="r">ชำระโดย: เงินสด</div>
+  <div class="r">TOTAL: B ${m(grand)}</div>
+  ${dash}
+  <div class="c">.......................... <small>(ข้อความท้ายใบ)</small></div>`;
 </script>
 </body></html>
