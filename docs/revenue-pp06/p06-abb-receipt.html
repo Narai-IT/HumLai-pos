@@ -25,34 +25,34 @@
   .note{position:absolute;left:56px;bottom:66px;width:430px;font-size:12px;line-height:1.75}
 </style></head><body>
 <div class="pg">หน้า ....</div>
-<h1>ตัวอย่างใบเสร็จรับเงินจากระบบ</h1>
+<h1>ตัวอย่างใบกำกับภาษีอย่างย่อ</h1>
 <div class="sub">ระบบ HumLai-POS &nbsp;·&nbsp; พิมพ์ผ่าน Print Server ออกเครื่องพิมพ์ความร้อน 80 มม. (32 ตัวอักษรต่อบรรทัด)</div>
 
 <div class="wrap">
-  <div class="col"><div class="cap">ใบเสร็จที่ระบบพิมพ์ในปัจจุบัน</div><div class="slip" id="slip"></div></div>
+  <div class="col"><div class="cap">ใบกำกับภาษีอย่างย่อที่ระบบพิมพ์</div><div class="slip" id="slip"></div></div>
   <div class="side">
     <h3>เทียบกับรายการที่ต้องแสดง (แบบ ค.ก.๔ ก ข้อ 2.4)</h3>
     <table>
-      <tr><th>รายการที่ต้องแสดง</th><th style="width:58px">ปัจจุบัน</th></tr>
-      <tr><td>ชื่อผู้ประกอบการ และเลขผู้เสียภาษี</td><td class="ok">มี</td></tr>
-      <tr><td>คำว่า "ใบกำกับภาษีอย่างย่อ" / TAX INV (ABB)</td><td class="ok">ไม่มี</td></tr>
-      <tr><td>เลขรหัสประจำเครื่อง (POS ID) ที่สรรพากรกำหนด</td><td class="ok">ไม่มี</td></tr>
-      <tr><td>เลขที่ใบเรียงต่อเนื่อง</td><td class="ok">มี<br><small>(Order No)</small></td></tr>
-      <tr><td>วัน เดือน ปี และเวลา</td><td class="ok">มี</td></tr>
-      <tr><td>ชื่อ ชนิด จำนวน และมูลค่าสินค้า</td><td class="ok">มี</td></tr>
-      <tr><td>ข้อความ "ราคารวมภาษีมูลค่าเพิ่มแล้ว" (VAT Included)</td><td class="ok">ไม่มี<br><small>(VAT บวกเพิ่มท้ายบิล)</small></td></tr>
-      <tr><td>รหัสแยกสินค้าเสียภาษี / ยกเว้นภาษี</td><td class="ok">ไม่มี</td></tr>
+      <tr><th>รายการที่ต้องแสดง</th><th style="width:90px">บนใบ</th></tr>
+      <tr><td>ชื่อผู้ประกอบการ และเลขผู้เสียภาษี</td><td>หัวใบ</td></tr>
+      <tr><td>คำว่า "ใบกำกับภาษีอย่างย่อ" / TAX INV (ABB)</td><td>หัวใบ</td></tr>
+      <tr><td>เลขรหัสประจำเครื่อง (POS ID) ที่สรรพากรกำหนด</td><td>หัวใบ</td></tr>
+      <tr><td>เลขที่ใบเรียงต่อเนื่อง</td><td>เลขที่</td></tr>
+      <tr><td>วัน เดือน ปี และเวลา</td><td>Date</td></tr>
+      <tr><td>ชื่อ ชนิด จำนวน และมูลค่าสินค้า</td><td>รายการอาหาร</td></tr>
+      <tr><td>รหัสแยกสินค้าเสียภาษี (V)</td><td>ท้ายราคา</td></tr>
+      <tr><td>ข้อความ "ราคารวมภาษีมูลค่าเพิ่มแล้ว" (VAT Included)</td><td>ท้ายใบ</td></tr>
     </table>
-    <p style="margin:8px 0 0">ต้องแก้ส่วนพิมพ์ใบเสร็จให้ครบทุกข้อก่อนยื่นคำขอ แล้วจึงนำใบจริงมาแนบแทนหน้านี้</p>
+    <p style="margin:8px 0 0">ระบบพิมพ์แบบนี้เมื่อสาขาตั้งเลขผู้เสียภาษีไว้ที่ หลังบ้าน &gt; สาขา และพิมพ์ POS ID ตามที่กรอกในช่อง "เลขรหัสประจำเครื่อง POS"</p>
   </div>
 </div>
 
 <div class="note">
   <b>หมายเหตุ</b><br>
   ข้อความหัวใบ (ชื่อร้าน ที่อยู่ โทร เลขผู้เสียภาษี ข้อความท้ายใบ) ตั้งที่ หลังบ้าน &gt; สาขา<br>
-  Order No = รหัสบิลของสาขา-#ลำดับ เรียงต่อเนื่องตามสาขา<br>
+  เลขที่ = รหัสบิลของสาขา-#ลำดับ เรียงต่อเนื่องตามสาขา<br>
   สำเนาไม่พิมพ์เป็นม้วน เก็บเป็นข้อมูลอิเล็กทรอนิกส์ที่เครื่องควบคุมกลาง<br>
-  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ (ตั้ง VAT 7% ที่หลังบ้าน)
+  V = สินค้าที่เสียภาษีมูลค่าเพิ่ม &nbsp; ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
 </div>
 <div class="cert"><b>รับรองสำเนาถูกต้อง</b>
 ลงชื่อ.........................................<br>
@@ -63,7 +63,7 @@
 </div>
 
 <script>
-// เลียนแบบ print-ticket.js (printerType = 'receipt') และ buildReceiptOrder() ใน CheckoutModal.jsx
+// เลียนแบบ print-ticket.js (printerType = 'receipt', paid) และ buildReceiptOrder() ใน CheckoutModal.jsx
 const items = [
   { q: 2, n: 'ข้าวมันไก่หำไหล', a: 138 },
   { q: 1, n: 'ข้าวมันไก่ทอด', a: 75 },
@@ -71,28 +71,33 @@ const items = [
 ];
 const subtotal = items.reduce((s, i) => s + i.a, 0);
 const vatRate = 7;
-const vat = Math.round(subtotal * vatRate) / 100;          // calcCharges(): VAT บวกเพิ่มจากยอดอาหาร
-const grand = subtotal + vat;
 const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const dash = '<div class="hr">' + '-'.repeat(32) + '</div>';
+const total = subtotal;                                     // ยอดบิล (รวม VAT แล้ว)
+const vatable = Math.round(total * 100 / (100 + vatRate) * 100) / 100;
 document.getElementById('slip').innerHTML = `
   <div class="c">.......................... <small>(ชื่อร้าน)</small></div>
   <div class="c">.......................... <small>(ที่อยู่สาขา)</small></div>
   <div class="c">โทร ...................</div>
-  <div class="c">เลขผู้เสียภาษี .....................</div>
+  <div class="c">เลขผู้เสียภาษี XXXXXXXXXXXXX</div>
+  <div class="c">POS ID: XXXXXXXXXXXXXX</div>
   ${dash}
-  <div class="c">ใบเสร็จรับเงิน (RECEIPT)</div>
+  <div class="c">ใบกำกับภาษีอย่างย่อ</div>
+  <div class="c">TAX INV (ABB)</div>
   ${dash}
-  <div>Order No: XXXX-#031</div>
+  <div>เลขที่: XXXX-#031</div>
   <div>Date: 1/10/2569 12:35:10</div>
   <div>Customer: โต๊ะ 5</div>
   ${dash}
-  ${items.map(i => `<div class="row"><span>${i.q}x ${i.n}</span><span>${m(i.a)}</span></div>`).join('')}
+  ${items.map(i => `<div class="row"><span>${i.q}x ${i.n}</span><span>${m(i.a)} V</span></div>`).join('')}
   ${dash}
-  <div class="r">ยอดอาหาร: ${m(subtotal)}</div>
-  <div class="r">VAT ${vatRate}%: ${m(vat)}</div>
   <div class="r">ชำระโดย: เงินสด</div>
-  <div class="r">TOTAL: B ${m(grand)}</div>
+  <div class="r">TOTAL: B ${m(total)}</div>
+  ${dash}
+  <div class="row"><span>มูลค่าสินค้าเสียภาษี (V)</span><span>${m(vatable)}</span></div>
+  <div class="row"><span>ภาษีมูลค่าเพิ่ม ${vatRate}%</span><span>${m(Math.round((total - vatable) * 100) / 100)}</span></div>
+  <div class="c">ราคารวมภาษีมูลค่าเพิ่มแล้ว</div>
+  <div class="c">(VAT Included)</div>
   ${dash}
   <div class="c">.......................... <small>(ข้อความท้ายใบ)</small></div>`;
 </script>
