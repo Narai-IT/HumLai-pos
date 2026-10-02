@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:794px;height:1123px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:30px;right:48px;font-size:14px}
+  h1{font-size:22px;text-align:center;margin:0;padding-top:70px}
+  .sub{text-align:center;font-size:14px;color:#333;margin-top:6px}
+  .win{position:absolute;left:117px;width:560px;border:1px solid #444;box-shadow:3px 3px 0 #ccc}
+  .tb{background:#fff;border-bottom:1px solid #ccc;padding:5px 8px;font-family:'Segoe UI',Arial,sans-serif;font-size:12px;display:flex;justify-content:space-between}
+  .con{background:#0c0c0c;color:#ccc;font-family:'DejaVu Sans Mono',Consolas,monospace;font-size:12px;line-height:1.55;padding:10px 12px;white-space:pre}
+  .cap{position:absolute;left:117px;width:560px;font-size:12.5px;text-align:center}
+  .steps{position:absolute;left:96px;top:700px;width:600px;font-size:13px;line-height:1.75}
+  .steps ol{margin:4px 0 0;padding-left:22px}
+  .cert{position:absolute;right:48px;bottom:40px;width:230px;border:1.5px solid #111;padding:8px 12px;font-size:14px;line-height:2}
+  .cert b{display:block;text-align:center;font-size:17px}
+</style></head><body>
+<div class="pg">หน้า ....</div>
+<h1>การตรวจสอบหมายเลขประจำเครื่อง (Serial Number)</h1>
+<div class="sub">เครื่อง POS ที่ติดตั้งโปรแกรม HumLai-POS &nbsp;·&nbsp; ยี่ห้อ/รุ่น ..................................</div>
+
+<div class="win" style="top:170px">
+  <div class="tb"><span>■ Administrator: Command Prompt</span><span>—&nbsp;&nbsp;☐&nbsp;&nbsp;✕</span></div>
+  <div class="con">Microsoft Windows [Version ..........]
+(c) Microsoft Corporation. All rights reserved.
+
+C:\Windows\system32&gt;wmic bios get serialnumber
+SerialNumber
+XXXXXXXXXX
+
+C:\Windows\system32&gt;_</div>
+</div>
+<div class="cap" style="top:390px">ภาพที่ 1 &nbsp;คำสั่ง wmic (Windows 10 / Windows 11 รุ่นที่ยังมี wmic)</div>
+
+<div class="win" style="top:440px">
+  <div class="tb"><span>■ Administrator: Windows PowerShell</span><span>—&nbsp;&nbsp;☐&nbsp;&nbsp;✕</span></div>
+  <div class="con" style="background:#012456;color:#eee">PS C:\Windows\system32&gt; gcim Win32_BIOS | select SerialNumber
+
+SerialNumber
+------------
+XXXXXXXXXX
+
+PS C:\Windows\system32&gt; _</div>
+</div>
+<div class="cap" style="top:640px">ภาพที่ 2 &nbsp;คำสั่ง PowerShell (ใช้แทนเมื่อเครื่องไม่มีคำสั่ง wmic)</div>
+
+<div class="steps">
+  <b>วิธีตรวจสอบ</b>
+  <ol>
+    <li>คลิกขวาที่ Start เลือก Terminal (Admin) หรือค้นหา cmd แล้วเลือก Run as administrator</li>
+    <li>พิมพ์คำสั่งตามภาพที่ 1 หรือภาพที่ 2 แล้วกด Enter</li>
+    <li>หมายเลขที่แสดงต้องตรงกับ Serial Number ที่ระบุในคำขอ และตรงกับป้ายที่ตัวเครื่อง (CPU)</li>
+    <li>แคปหน้าจอจริงจากเครื่อง POS มาแนบแทนภาพตัวอย่างนี้</li>
+  </ol>
+  <div style="margin-top:10px">Serial Number เครื่อง POS: ...........................................................</div>
+</div>
+
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ.........................................<br>
+ลงชื่อ.........................................<br>
+วันที่..........................................<br>
+<span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
+..................................................
+</div>
+</body></html>
