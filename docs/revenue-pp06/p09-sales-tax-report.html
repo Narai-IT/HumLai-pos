@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="th"><head><meta charset="utf-8">
+<style>
+  @page { size: A4 landscape; margin: 0 }
+  html,body{margin:0;background:#fff}
+  body{width:1123px;height:794px;font-family:'Loma','Sarabun',sans-serif;color:#111;position:relative}
+  .pg{position:absolute;top:24px;right:40px;font-size:13px}
+  .meta{position:absolute;top:24px;left:40px;font-size:11.5px;color:#333;line-height:1.6}
+  h1{font-size:20px;text-align:center;margin:0;padding-top:24px}
+  .head{text-align:center;font-size:13px;line-height:1.6}
+  table{position:absolute;top:150px;left:40px;width:1043px;border-collapse:collapse;font-size:10.5px}
+  th,td{border:1px solid #888;padding:2px 5px}
+  th{background:#f0f0f0;font-weight:700}
+  td.n{text-align:right;white-space:nowrap}
+  td.c{text-align:center}
+  tr.tot td{font-weight:700;background:#fafafa}
+  .cert{position:absolute;right:40px;bottom:22px;width:220px;border:1.5px solid #111;padding:4px 10px;font-size:12.5px;line-height:1.75}
+  .cert b{display:block;text-align:center;font-size:15px}
+  .note{position:absolute;left:40px;bottom:30px;width:640px;font-size:11px;line-height:1.7}
+</style></head><body>
+<div class="meta">ระบบ HumLai-POS · หลังบ้าน &gt; รายงาน &gt; รายงานภาษีขาย<br>ช่วงวันที่: 01/10/2569 - 31/10/2569 &nbsp; พิมพ์เมื่อ: 31/10/2569 22:10</div>
+<div class="pg">หน้า ....</div>
+<h1>รายงานภาษีขาย</h1>
+<div class="head">
+  <b>ข้าวมันไก่หำไหล</b> &nbsp; (สำนักงานใหญ่ / สาขา ..........)<br>
+  ที่อยู่ ........................................................................ &nbsp; เลขประจำตัวผู้เสียภาษีอากร ....................................
+</div>
+
+<table id="t"></table>
+
+<div class="note">
+  <b>หมายเหตุ</b> &nbsp; เลขที่ใบกำกับภาษีอย่างย่อ = เลขที่บิล เรียงต่อเนื่อง &nbsp;·&nbsp; บิลที่ขอใบกำกับเต็มรูป แสดงเลขที่ใบและข้อมูลผู้ซื้อในแถวเดียวกัน<br>
+  ยอดบิลรวม VAT แล้ว มูลค่าสินค้า = ยอดบิล × 100 / 107 &nbsp;·&nbsp; บิลที่ยกเลิกไม่นำมารวม (ดูแท็บประวัติการยกเลิก) &nbsp;·&nbsp; ส่งออกเป็นไฟล์ CSV ได้<br>
+  ข้อมูลในตัวอย่างเป็นข้อมูลสมมติ
+</div>
+<div class="cert"><b>รับรองสำเนาถูกต้อง</b>
+ลงชื่อ.......................................<br>
+วันที่........................................<br>
+<span style="display:block;text-align:center">เอกสารนี้ใช้ประกอบเรื่อง</span>
+</div>
+
+<script>
+// เลียนแบบแท็บ 'vat' ใน src/components/admin/Reports.jsx
+const totals = [302, 144, 89, 213, 158, 75, 377, 138, 164, 89, 1068, 227, 69, 302, 150, 233, 89, 144];
+const full = { 4: ['XXXX-TX2610-0001', 'บริษัท ตัวอย่าง จำกัด', 'X-XXXX-XXXXX-XX-X', 'สำนักงานใหญ่'], 10: ['XXXX-TX2610-0002', 'ห้างหุ้นส่วนจำกัด ตัวอย่าง', 'X-XXXX-XXXXX-XX-X', 'สาขาที่ 00001'] };
+const m = v => v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+let sv = 0, st = 0, sa = 0;
+const rows = totals.map((total, i) => {
+  const vatable = Math.round(total * 100 / 107 * 100) / 100, vat = Math.round((total - vatable) * 100) / 100;
+  sv += vatable; st += vat; sa += total;
+  const f = full[i] || ['—', '—', '—', '—'];
+  const day = String(1 + Math.floor(i / 3)).padStart(2, '0');
+  return `<tr><td class="c">${i + 1}</td><td class="c">${day}/10/69</td><td>XXXX-#${String(27 + i).padStart(3, '0')}</td><td>${f[0]}</td><td>${f[1]}</td><td>${f[2]}</td><td>${f[3]}</td><td class="n">${m(vatable)}</td><td class="n">${m(vat)}</td><td class="n">${m(total)}</td></tr>`;
+}).join('');
+document.getElementById('t').innerHTML = `
+  <tr><th>ลำดับ</th><th>วันที่</th><th>ใบกำกับอย่างย่อ</th><th>ใบกำกับเต็มรูป</th><th>ชื่อผู้ซื้อ</th><th>เลขผู้เสียภาษีผู้ซื้อ</th><th>สถานประกอบการ</th><th>มูลค่าสินค้า</th><th>ภาษี</th><th>รวม</th></tr>
+  ${rows}
+  <tr class="tot"><td colspan="7" class="c">รวม</td><td class="n">${m(sv)}</td><td class="n">${m(Math.round(st * 100) / 100)}</td><td class="n">${m(sa)}</td></tr>`;
+</script>
+</body></html>
