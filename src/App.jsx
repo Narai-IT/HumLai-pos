@@ -375,9 +375,11 @@ function App() {
     const b = branches.find(x => String(x.id) === String(tablesBranch));
     setReceiptHeader(b ? {
       name: b.name || b.id, address: b.address || '', phone: b.phone || '',
-      taxId: b.taxId || '', footer: b.receiptFooter || ''
+      taxId: b.taxId || '', posId: b.posId || '', footer: b.receiptFooter || '',
+      // อัตรา VAT สำหรับแยกยอดในใบกำกับภาษีอย่างย่อ — ใช้ค่าเดียวกับใบกำกับเต็มรูป (ไม่ได้ตั้ง = 7)
+      vatRate: Number(posSettings?.vat?.rate) > 0 ? Number(posSettings.vat.rate) : 7
     } : null);
-  }, [branches, tablesBranch]);
+  }, [branches, tablesBranch, posSettings]);
 
   // ผังโต๊ะของสาขานี้จากเซิร์ฟเวอร์ → เขียนลงที่เดิม (pos_tables_config) ที่หน้าขายอ่านอยู่แล้ว
   // สาขาที่ยังไม่เคยบันทึกผังขึ้นระบบ → ใช้ผังเดิมในเครื่องไปก่อน
@@ -986,6 +988,7 @@ function App() {
         id: billNo,
         orderNumber: billNo,
         noDrawer: true,
+        paid: true,
         customerDetails: { name: `โต๊ะ ${tbl}` },
         items: items.map(o => {
           const qty = Number(o.Quantity) || 1;
@@ -1126,7 +1129,7 @@ function App() {
       const receiptPrinter = printInfo.receiptPrinted ? null : getPrinterByType('receipt');
       if (receiptPrinter) {
         // ใช้ใบเสร็จแบบเต็มจากหน้าชำระเงิน (จำนวน ตัวเลือก ส่วนลด VAT) — ไม่มีค่อยใช้แบบย่อ
-        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: printInfo.receiptOrder ? { ...printInfo.receiptOrder, orderNumber: newOrderNumber, id: newOrderNumber } : newOrder })
+        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: { ...(printInfo.receiptOrder ? { ...printInfo.receiptOrder, orderNumber: newOrderNumber, id: newOrderNumber } : newOrder), paid: true } })
           .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
           .catch(err => console.error('Silent print failed:', err));
       }

@@ -408,6 +408,11 @@ FROM (
 WHERE b NOT IN ('Self-Order', '*');  -- ช่องทางลูกค้าสั่งเอง / พนักงานทุกสาขา ไม่ใช่สาขา
 GO
 
+-- เลขรหัสประจำเครื่อง POS ที่สรรพากรกำหนด (พิมพ์บนใบกำกับภาษีอย่างย่อ)
+IF COL_LENGTH('dbo.Branches', 'posId') IS NULL
+  ALTER TABLE dbo.Branches ADD posId NVARCHAR(40) NULL;
+GO
+
 -- ─────────────────────────────────────────
 -- แยกข้อมูลขายตามสาขา (เฟส 2)
 -- BranchId = Branches.id ของร้านที่เกิดรายการ — แยกจาก RecordedBy ที่ยังเป็น "ใครบันทึก" แบบเดิม

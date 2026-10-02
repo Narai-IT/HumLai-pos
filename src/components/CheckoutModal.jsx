@@ -5,7 +5,7 @@ import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload }
 import { print80mm, scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
 import { getPrinters, getPrinterByType } from '../utils/printerRouting';
-import { sendPrintJob } from '../utils/printServer';
+import { sendPrintJob, getReceiptHeader } from '../utils/printServer';
 
 const calcCharges = (subtotal, settings = {}, discount = null) => {
   let discountAmount = 0;
@@ -180,19 +180,33 @@ const CheckoutModal = ({
   const paidMethod = pendingComplete?.method || '';
   const buildReceiptHtml = () => {
     const now = new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    // หัวใบตามสาขา (หลังบ้าน > สาขา) — มีเลขผู้เสียภาษี = ใบกำกับภาษีอย่างย่อ เหมือนที่ Print Server พิมพ์
+    const esc = (v) => String(v || '').trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const h = getReceiptHeader() || {};
+    const isAbb = !!esc(h.taxId);
     const rows = (tableOrderItems || []).map(it => {
       const qty = Number(it.Quantity) || 1;
       const price = (Number(it.ItemPrice) || 0) * qty;
       const name = it.ItemName || '';
       const opt = it.Options ? `<div class="opt">${it.Options}</div>` : '';
-      return `<div class="it"><div class="row"><span>${qty}× ${name}</span><span>฿${price.toLocaleString()}</span></div>${opt}</div>`;
+      return `<div class="it"><div class="row"><span>${qty}× ${name}</span><span>฿${price.toLocaleString()}${isAbb ? ' V' : ''}</span></div>${opt}</div>`;
     }).join('');
     const line = (k, v, cls = '') => `<div class="row ${cls}"><span>${k}</span><span>${v}</span></div>`;
+    const rate = Number(h.vatRate) > 0 ? Number(h.vatRate) : 7;
+    const vatable = Math.round(grand * 100 / (100 + rate) * 100) / 100;
+    const m2 = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const headLines = [
+      ...esc(h.address).split(/\r?\n/).map(x => x.trim()).filter(Boolean),
+      h.phone ? `โทร ${esc(h.phone)}` : '',
+      isAbb ? `เลขผู้เสียภาษี ${esc(h.taxId)}` : '',
+      isAbb && esc(h.posId) ? `POS ID: ${esc(h.posId)}` : ''
+    ].filter(Boolean).map(x => `<div class="c sm">${x}</div>`).join('');
     return `
-      <div class="c xl">ข้าวมันไก่หำไหล</div>
-      <div class="c sm">ใบเสร็จรับเงิน / RECEIPT</div>
+      <div class="c xl">${esc(h.name) || 'ข้าวมันไก่หำไหล'}</div>
+      ${headLines}
+      <div class="c sm">${isAbb ? 'ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)' : 'ใบเสร็จรับเงิน / RECEIPT'}</div>
       <div class="hr"></div>
-      ${line('บิลเลขที่', orderNumber || '-')}
+      ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', orderNumber || '-')}
       ${tableNo ? line('โต๊ะ', tableNo) : ''}
       ${line('วันที่', now)}
       ${paidMethod ? line('ชำระโดย', paidMethod) : ''}
@@ -204,9 +218,10 @@ const CheckoutModal = ({
       ${sc > 0 ? line(`เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, `+฿${sc.toLocaleString()}`) : ''}
       ${vat > 0 ? line(`VAT ${settings.vat.rate}%`, `+฿${vat.toLocaleString()}`) : ''}
       <div class="hr"></div>
-      <div class="row tot"><span>รวมทั้งสิ้น</span><span>฿${grand.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></div>
+      <div class="row tot"><span>รวมทั้งสิ้น</span><span>฿${m2(grand)}</span></div>
       <div class="hr"></div>
-      <div class="c sm">ขอบคุณที่ใช้บริการ</div>
+      ${isAbb ? `${line('มูลค่าสินค้าเสียภาษี (V)', m2(vatable))}${line(`ภาษีมูลค่าเพิ่ม ${rate}%`, m2(Math.round((grand - vatable) * 100) / 100))}<div class="c sm">ราคารวมภาษีมูลค่าเพิ่มแล้ว (VAT Included)</div><div class="hr"></div>` : ''}
+      <div class="c sm">${esc(h.footer) || 'ขอบคุณที่ใช้บริการ'}</div>
     `;
   };
 
@@ -233,7 +248,8 @@ const CheckoutModal = ({
         };
       }),
       summary,
-      total: money2(grand)
+      total: money2(grand),
+      paid: true
     };
   };
 
