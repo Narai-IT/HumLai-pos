@@ -1,0 +1,305 @@
+<title>HumLai POS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: hero แบ่งสองฝั่ง (ข้อความ + ใบเสร็จ 80mm จริง) → ฟีเจอร์ตามเส้นทางของบิล → วันหนึ่งของร้าน → สิ่งที่ต้องมี → นัดเดโม */
+:root{
+  --bg:#fbf8ef;            /* ข้าวมันหุงไขมันไก่ */
+  --surface:#ffffff;
+  --ink:#2a2118;           /* ซีอิ๊วดำ */
+  --muted:#6f6455;
+  --line:#e6dfcd;
+  --ginger:#d8a12b;        /* ขิง */
+  --ginger-soft:#f6e7bf;
+  --scallion:#3f7d3a;      /* ต้นหอม */
+  --scallion-soft:#e2efd9;
+  --chili:#c2412d;         /* น้ำจิ้มเต้าเจี้ยวพริก */
+  --paper:#fffdf7;
+  --f-display:'Mitr','Leelawadee UI',Tahoma,sans-serif;
+  --f-body:'IBM Plex Sans Thai','Leelawadee UI',Tahoma,sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#1b1712;--surface:#252019;--ink:#f3ecdc;--muted:#b3a68f;--line:#3a3227;
+  --ginger:#e8b545;--ginger-soft:#3b2f15;--scallion:#7fbf72;--scallion-soft:#1f3020;--chili:#ec6a52;--paper:#2c261d;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#1b1712;--surface:#252019;--ink:#f3ecdc;--muted:#b3a68f;--line:#3a3227;
+  --ginger:#e8b545;--ginger-soft:#3b2f15;--scallion:#7fbf72;--scallion-soft:#1f3020;--chili:#ec6a52;--paper:#2c261d;color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.7;margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:20px}
+h1,h2,h3{font-family:var(--f-display);font-weight:500;line-height:1.25;text-wrap:balance;margin:0}
+p{margin:0}
+.eyebrow{font-family:var(--f-mono);font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--scallion)}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:48px;align-items:center;padding-block:56px 40px}
+.hero h1{font-size:clamp(34px,5.4vw,58px);font-weight:600;letter-spacing:-.01em}
+.hero h1 em{font-style:normal;color:var(--ginger)}
+.lead{font-size:18.5px;color:var(--muted);max-width:34em;margin-top:18px}
+.cta-row{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:var(--f-display);font-size:16px;padding:12px 22px;border-radius:999px;border:1.5px solid var(--ink);color:var(--ink);text-decoration:none;background:transparent}
+.btn.primary{background:var(--scallion);border-color:var(--scallion);color:#fff}
+.btn:focus-visible{outline:3px solid var(--ginger);outline-offset:3px}
+.facts{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:28px;font-size:14px;color:var(--muted)}
+.facts span::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--scallion);margin-right:8px;vertical-align:2px}
+
+/* receipt: ใบกำกับภาษีอย่างย่อ 80mm */
+.receipt{justify-self:center;width:100%;max-width:300px;background:var(--paper);color:var(--ink);font-family:var(--f-mono);font-size:12.5px;line-height:1.55;padding:22px 20px 26px;transform:rotate(1.6deg);box-shadow:0 18px 40px -18px rgba(42,33,24,.45);position:relative;
+  -webkit-mask:radial-gradient(circle 6px at 50% 100%,transparent 98%,#000) 0 0/14px 100% repeat-x;mask:radial-gradient(circle 6px at 50% 100%,transparent 98%,#000) 0 0/14px 100% repeat-x;padding-bottom:30px}
+.receipt .c{text-align:center}
+.receipt .b{font-weight:500}
+.receipt hr{border:0;border-top:1px dashed var(--muted);margin:8px 0}
+.receipt .r{display:flex;justify-content:space-between;gap:8px}
+.receipt .tot{font-size:15px;font-weight:500}
+.receipt .tag{display:inline-block;border:1px solid var(--ink);padding:0 6px;margin:4px 0}
+@media (prefers-reduced-motion:no-preference){.receipt{animation:print .9s cubic-bezier(.2,.7,.2,1) both}}
+@keyframes print{from{transform:translateY(-14px) rotate(1.6deg)}to{transform:translateY(0) rotate(1.6deg)}}
+
+/* sections */
+section{padding-block:48px}
+.sec-head{display:grid;gap:10px;max-width:46em;margin-bottom:28px}
+.sec-head h2{font-size:clamp(26px,3.4vw,36px)}
+.sec-head p{color:var(--muted)}
+
+/* bill path: กลุ่มฟีเจอร์ตามเส้นทางของบิล */
+.groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.g{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 22px 20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.g .k{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.g h3{font-size:21px}
+.g ul{margin:0;padding-left:1.1em;color:var(--ink)}
+.g li{margin-bottom:4px}
+.g li::marker{color:var(--ginger)}
+.g.hl{background:var(--scallion-soft);border-color:transparent}
+
+/* tax band */
+.tax{background:var(--ink);color:var(--bg);border-radius:20px;padding:40px clamp(20px,4vw,48px);display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:36px}
+.tax .eyebrow{color:var(--ginger)}
+.tax h2{font-size:clamp(26px,3.2vw,34px);margin-top:8px}
+.tax p{color:color-mix(in srgb,var(--bg) 78%,var(--ink));margin-top:12px}
+.tax ul{margin:0;padding:0;list-style:none;display:grid;gap:12px}
+.tax li{border-top:1px solid color-mix(in srgb,var(--bg) 22%,var(--ink));padding-top:12px}
+.tax li b{font-family:var(--f-display);font-weight:500;color:var(--ginger)}
+
+/* day timeline (ลำดับจริงของงาน) */
+.day{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;border-top:2px solid var(--ink)}
+.step{padding:16px 16px 0 0;min-width:0}
+.step .t{font-family:var(--f-mono);font-size:13px;color:var(--chili)}
+.step h3{font-size:18px;margin:4px 0 6px}
+.step p{font-size:14.5px;color:var(--muted)}
+
+/* requirements table */
+.req-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:520px;font-size:15px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-display);font-weight:500;width:28%}
+td{color:var(--muted)}
+
+/* closing */
+.close{border:2px solid var(--ink);border-radius:20px;padding:36px clamp(20px,4vw,44px);display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:28px;align-items:center;background:var(--ginger-soft)}
+.close h2{font-size:clamp(26px,3.4vw,36px)}
+.close p{color:var(--muted);margin-top:10px}
+.checklist{margin:0;padding:0;list-style:none;display:grid;gap:8px}
+.checklist li{display:flex;gap:10px}
+.checklist li::before{content:"✓";color:var(--scallion);font-weight:600}
+footer{padding-block:28px 40px;color:var(--muted);font-size:13.5px}
+
+@media (max-width:880px){
+  .hero,.tax,.close{grid-template-columns:1fr}
+  .groups{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .day{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:12px}
+}
+@media (max-width:560px){
+  .groups,.day{grid-template-columns:1fr}
+  .hero{padding-block:36px 24px}
+  .receipt{transform:none}
+}
+</style>
+
+<div class="wrap">
+
+<header class="hero">
+  <div>
+    <div class="eyebrow">HumLai POS · ระบบขายหน้าร้านสำหรับร้านอาหาร</div>
+    <h1 style="margin-top:12px">รับออเดอร์ ส่งครัว เก็บเงิน ออกใบกำกับภาษี <em>จบในจอเดียว</em></h1>
+    <p class="lead">พัฒนาและใช้งานจริงทุกวันที่ร้านข้าวมันไก่หำไหล ตั้งแต่โต๊ะแรกตอนเปิดร้านจนถึงรายงานปิดยอดตอนปิดร้าน รองรับหลายสาขา ลูกค้าสแกน QR สั่งเองได้ และออกเอกสารภาษีตามแบบที่กรมสรรพากรกำหนด</p>
+    <div class="cta-row">
+      <a class="btn primary" href="#demo">นัดดูเดโมที่ร้าน</a>
+      <a class="btn" href="#features">ดูฟีเจอร์ทั้งหมด</a>
+    </div>
+    <div class="facts">
+      <span>ใช้ได้ทั้งจอสัมผัสและคีย์บอร์ด</span>
+      <span>ทำงานบนเว็บเบราว์เซอร์</span>
+      <span>ข้อมูลเก็บบน SQL Server ของร้านเอง</span>
+    </div>
+  </div>
+
+  <div class="receipt" aria-label="ตัวอย่างใบกำกับภาษีอย่างย่อที่ระบบพิมพ์">
+    <div class="c b">ข้าวมันไก่หำไหล</div>
+    <div class="c">สาขาหลัก · โต๊ะ 5</div>
+    <div class="c"><span class="tag">TAX INV (ABB)</span></div>
+    <div class="r"><span>POS ID</span><span>E0xxxxxxxxxx</span></div>
+    <div class="r"><span>เลขที่</span><span>HL01-000128</span></div>
+    <div class="r"><span>05/10/2569</span><span>12:41</span></div>
+    <hr>
+    <div class="r"><span>2 ข้าวมันไก่หำไหล V</span><span>138.00</span></div>
+    <div class="r"><span>1 ข้าวมันไก่ทอด V</span><span>75.00</span></div>
+    <div class="r"><span>1 ชาดำเย็น V</span><span>35.00</span></div>
+    <hr>
+    <div class="r"><span>ส่วนลดสมาชิก 10%</span><span>-24.80</span></div>
+    <div class="r tot"><span>สุทธิ</span><span>223.20</span></div>
+    <div class="r"><span>โอน / PromptPay</span><span>223.20</span></div>
+    <hr>
+    <div class="c">ราคารวมภาษีมูลค่าเพิ่มแล้ว<br>(VAT Included)</div>
+  </div>
+</header>
+
+<section id="features">
+  <div class="sec-head">
+    <div class="eyebrow">ทำอะไรได้บ้าง</div>
+    <h2>ครบทุกจุดที่บิลหนึ่งใบต้องผ่าน</h2>
+    <p>เรียงตามเส้นทางของออเดอร์ ตั้งแต่ลูกค้านั่งลงจนเงินเข้ารายงาน ทุกข้อด้านล่างเป็นฟังก์ชันที่มีอยู่ในระบบแล้ววันนี้</p>
+  </div>
+
+  <div class="groups">
+    <article class="g">
+      <div class="k">หน้าขาย</div>
+      <h3>จัดการโต๊ะและออเดอร์</h3>
+      <ul>
+        <li>ผังโต๊ะแสดงสีสถานะ ว่าง / มีลูกค้า / นั่งเกิน 90 นาที / จ่ายผ่าน QR แล้ว</li>
+        <li>แยกโซน ทานที่ร้าน · ห่อกลับบ้าน · Delivery ราคาเปลี่ยนตามโซนอัตโนมัติ</li>
+        <li>ย้ายโต๊ะ รวมบิลหลายโต๊ะ แยกบิล</li>
+        <li>ค้นหาเมนู ตัวเลือกความเผ็ด/ท็อปปิ้ง หมายเหตุถึงครัว</li>
+        <li>สั่งเพิ่มโต๊ะเดิม ไม่ส่งรายการเก่าซ้ำ</li>
+      </ul>
+    </article>
+
+    <article class="g hl">
+      <div class="k">ลูกค้าสั่งเอง</div>
+      <h3>สแกน QR สั่งและจ่ายเอง</h3>
+      <ul>
+        <li>ลูกค้าสแกน QR ที่โต๊ะ ดูเมนูพร้อมรูป ซูมดูรูปได้</li>
+        <li>เลือกทานที่ร้าน หรือห่อกลับบ้าน</li>
+        <li>จ่ายด้วย QR PromptPay พร้อมตรวจสลิปอัตโนมัติ</li>
+        <li>ใบครัวพิมพ์เองทันที แคชเชียร์ได้รับแจ้งเตือนยืนยันยอด</li>
+        <li>ลดงานพนักงานช่วงคนแน่นร้าน</li>
+      </ul>
+    </article>
+
+    <article class="g">
+      <div class="k">ครัวและเครื่องพิมพ์</div>
+      <h3>ส่งครัวไม่มีหลุด</h3>
+      <ul>
+        <li>ใบสั่งอาหารพิมพ์แยกครัว/บาร์ตามหมวดของเมนูเอง</li>
+        <li>จอครัว (Kitchen Monitor) เห็นออเดอร์ โต๊ะ และเวลาที่สั่ง</li>
+        <li>พิมพ์ใบครัวซ้ำหรือยกเลิกรายการได้ทีละรายการ</li>
+        <li>รองรับเครื่องพิมพ์ความร้อน 80mm หลายเครื่องต่อสาขา</li>
+      </ul>
+    </article>
+
+    <article class="g">
+      <div class="k">ชำระเงิน</div>
+      <h3>รับได้ทุกช่องทาง</h3>
+      <ul>
+        <li>เงินสด · โอน / QR PromptPay · บัตรเครดิต</li>
+        <li>แยกจ่ายหลายช่องทางในบิลเดียว</li>
+        <li>พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนจ่าย</li>
+        <li>ส่วนลดแบบ % หรือจำนวนเงิน กำหนดหมวดที่ลดได้</li>
+        <li>Service Charge และ VAT ตั้งอัตราเองได้</li>
+        <li>บิลค้างชำระ เก็บไว้เรียกเก็บทีหลัง</li>
+      </ul>
+    </article>
+
+    <article class="g">
+      <div class="k">หลังบ้าน</div>
+      <h3>สต็อกและต้นทุน</h3>
+      <ul>
+        <li>สูตรวัตถุดิบ (BOM) ตัดสต็อกตามยอดขายจริง</li>
+        <li>นับสต็อก และบันทึกการเตรียมของประจำวัน</li>
+        <li>บันทึกของเสีย (Waste) รู้ว่าทิ้งอะไรไปเท่าไร</li>
+        <li>ฝากเหล้า/เบียร์ให้ลูกค้า ดูยอดคงเหลือรายคน</li>
+      </ul>
+    </article>
+
+    <article class="g">
+      <div class="k">เจ้าของร้าน</div>
+      <h3>รายงานและหลายสาขา</h3>
+      <ul>
+        <li>แดชบอร์ด สรุปประจำวัน รายงานปิดกะ</li>
+        <li>ยอดขายตามเมนู รายรับแยกช่องทางชำระ</li>
+        <li>ส่งออกไฟล์ Excel ได้ทุกรายงาน</li>
+        <li>เมนู ราคา โต๊ะ เครื่องพิมพ์ เลขบิล แยกตามสาขา</li>
+        <li>สิทธิ์ พนักงาน / แคชเชียร์ / ผู้ดูแลระบบ เข้าด้วยรหัสประจำตัว</li>
+        <li>หน้าจอภาษาไทยและอังกฤษ</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<section>
+  <div class="tax">
+    <div>
+      <div class="eyebrow">พร้อมยื่น ภ.พ.06</div>
+      <h2>เครื่องบันทึกเงินสดที่สรรพากรตรวจได้</h2>
+      <p>ร้านที่จด VAT ใช้ระบบนี้ออกใบกำกับภาษีได้ถูกแบบ และเรามีชุดเอกสารประกอบคำขออนุมัติใช้เครื่อง POS (ภ.พ.06) เตรียมไว้ให้แล้ว ทั้งคุณสมบัติโปรแกรม ผังการทำงาน และตัวอย่างรายงาน</p>
+    </div>
+    <ul>
+      <li><b>ใบกำกับภาษีอย่างย่อ</b> (มาตรา 86/6) พร้อม POS ID รหัส V กำกับสินค้า และข้อความ VAT Included</li>
+      <li><b>ใบกำกับภาษีเต็มรูป</b> (มาตรา 86/4) ออกจากเครื่องเดียวกัน เลขที่เรียงต่อเนื่อง ไม่ซ้ำ</li>
+      <li><b>เลขที่บิลเรียงต่อเนื่อง</b> ชุดเดียวต่อสาขา ตามลำดับการขาย</li>
+      <li><b>รายงานภาษีขาย</b> และรายงานปิดยอด แสดงเลขที่ใบแรก-ใบสุดท้าย</li>
+      <li><b>ตรวจสอบย้อนหลังได้</b> บิลที่ยกเลิกไม่ถูกลบ เก็บเวลาและเหตุผลไว้</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">หนึ่งวันกับ HumLai POS</div>
+    <h2>พนักงานใหม่เรียนรู้ได้ในกะเดียว</h2>
+    <p>งานหน้าร้านทั้งวันมีแค่ห้าขั้นตอนนี้ ปุ่มทุกปุ่มมีคู่มือพร้อมภาพประกอบให้</p>
+  </div>
+  <div class="day">
+    <div class="step"><div class="t">เปิดร้าน</div><h3>เข้าระบบ</h3><p>พนักงานใส่รหัสประจำตัว ระบบรู้ว่าเครื่องนี้อยู่สาขาไหน</p></div>
+    <div class="step"><div class="t">ลูกค้ามา</div><h3>เปิดโต๊ะ คีย์ออเดอร์</h3><p>กดโต๊ะ ใส่จำนวนคน เลือกเมนู หรือให้ลูกค้าสแกน QR สั่งเอง</p></div>
+    <div class="step"><div class="t">ส่งครัว</div><h3>ใบครัวออกเอง</h3><p>กดส่งครั้งเดียว ครัวและบาร์ได้ใบของตัวเองตามหมวด</p></div>
+    <div class="step"><div class="t">เก็บเงิน</div><h3>ชำระและคืนโต๊ะ</h3><p>เลือกช่องทาง พิมพ์ใบเสร็จ โต๊ะกลับเป็นว่างทันที</p></div>
+    <div class="step"><div class="t">ปิดร้าน</div><h3>ปิดกะ ปิดยอด</h3><p>พิมพ์รายงานปิดยอดประจำวัน ยอดเงินแยกช่องทางพร้อมนับ</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head">
+    <div class="eyebrow">ร้านต้องมีอะไรบ้าง</div>
+    <h2>ใช้อุปกรณ์ที่ร้านมีอยู่แล้วได้</h2>
+  </div>
+  <div class="req-wrap">
+    <table>
+      <tr><th>เครื่องขาย</th><td>คอมพิวเตอร์ Windows หรือแท็บเล็ตที่เปิดเว็บเบราว์เซอร์ได้ รองรับจอสัมผัส</td></tr>
+      <tr><th>เครื่องพิมพ์</th><td>เครื่องพิมพ์ความร้อน 80mm สำหรับใบเสร็จ และแยกเครื่องสำหรับครัว/บาร์ได้ ติดตั้ง Print Server ให้เปิดเองทุกครั้งที่เปิดเครื่อง</td></tr>
+      <tr><th>ฐานข้อมูล</th><td>SQL Server ที่เครื่องควบคุมกลางของร้าน ข้อมูลการขายบันทึกทันทีที่ชำระเงิน และสำรองข้อมูลได้</td></tr>
+      <tr><th>QR สั่งเอง</th><td>อินเทอร์เน็ตที่ร้าน และบัญชี PromptPay สำหรับรับโอน</td></tr>
+      <tr><th>การติดตั้ง</th><td>ทีมงานลงเมนู โต๊ะ และเครื่องพิมพ์ให้ พร้อมคู่มือหน้าขายแบบอธิบายทีละปุ่ม</td></tr>
+    </table>
+  </div>
+</section>
+
+<section id="demo">
+  <div class="close">
+    <div>
+      <h2>มาดูระบบทำงานจริงที่หน้าร้านเรา</h2>
+      <p>นั่งทานข้าวมันไก่สักจาน แล้วดูทั้งหน้าขาย จอครัว และการสั่งผ่าน QR ทำงานกับลูกค้าจริง จากนั้นเราจะประเมินให้ว่าร้านของคุณต้องตั้งค่าอะไรเพิ่มบ้าง</p>
+      <div class="cta-row"><span class="btn primary">ติดต่อทีมงาน HumLai POS</span></div>
+    </div>
+    <ul class="checklist">
+      <li>ดูเดโมฟรี ไม่มีข้อผูกมัด</li>
+      <li>ช่วยย้ายเมนูและราคาจากระบบเดิม</li>
+      <li>เตรียมเอกสาร ภ.พ.06 ให้ร้านที่จด VAT</li>
+      <li>ปรับเมนูและหมวดตามสาขาได้เอง</li>
+    </ul>
+  </div>
+</section>
+
+<footer>HumLai POS · ระบบขายหน้าร้าน ที่ใช้งานจริงในร้านข้าวมันไก่หำไหล · ใบเสร็จด้านบนเป็นตัวอย่างประกอบ</footer>
+</div>
