@@ -256,7 +256,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     return sum + (price * item.quantity);
   }, 0);
 
-  const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  // รายการพ่วง/ของแถมที่ผูกอยู่กับจานหลักในตะกร้า — แสดงอยู่ในการ์ดของจานหลัก ไม่นับเป็นรายการแยก
+  const isGroupMember = (row) => !!(row.groupId && !row.wizardState
+    && cart.some(m => m.wizardState && m.groupId === row.groupId));
+  const cartCards = cart.filter(row => !isGroupMember(row));
+  const totalItemsCount = cartCards.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => { setQrSaveState(''); }, [isCheckoutOpen, cartSubtotal]);
 
@@ -394,18 +398,17 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     return [...rows, ...bundledRowsFor(baseFood, dining, groupId)];
   };
 
-  // แก้ไขแล้ว: แทนที่ทั้งชุดเดิม ณ ตำแหน่งเดิม — จำนวนของจานหลักคงเดิม
-  // รายการพ่วงที่ยังเป็นเมนูเดิม ก็คงจำนวนที่ลูกค้าปรับไว้
+  // จานหลัก (สั่งผ่านป๊อปอัพ) กับรายการพ่วง/ของแถมของมัน = 1 ชุด แสดงในการ์ดเดียวกันในตะกร้า
+  // จำนวนของชุด = จำนวนของจานหลัก ทุกรายการในชุดมีจำนวนเท่ากันเสมอ (สั่ง 2 ชุด = พ่วงมา 2 ด้วย)
+  const isGroupMain = (row) => !!(row && row.wizardState && row.groupId);
+  const groupMembersOf = (main, list = cart) => (isGroupMain(main)
+    ? list.filter(r => r.groupId === main.groupId && r.cartId !== main.cartId)
+    : []);
+
+  // แก้ไขแล้ว: แทนที่ทั้งชุดเดิม ณ ตำแหน่งเดิม — จำนวนชุดคงเดิม
   const replaceGroup = (list, oldRow, rows) => {
     const oldGroup = list.filter(r => r.cartId === oldRow.cartId || (oldRow.groupId && r.groupId === oldRow.groupId));
-    const used = new Set();
-    const fresh = rows.map((r, i) => {
-      if (i === 0) return { ...r, quantity: oldRow.quantity };
-      const prev = oldGroup.find(o => o.cartId !== oldRow.cartId && !used.has(o.cartId) && String(o.food.id) === String(r.food.id));
-      if (!prev) return r;
-      used.add(prev.cartId);
-      return { ...r, quantity: prev.quantity };
-    });
+    const fresh = rows.map(r => ({ ...r, quantity: oldRow.quantity }));
     const at = list.findIndex(r => oldGroup.includes(r));
     if (at < 0) return [...list, ...fresh];
     const rest = list.filter(r => !oldGroup.includes(r));
@@ -429,8 +432,12 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const handleUpdateQty = (cartId, delta) => {
     const row = cart.find(item => item.cartId === cartId);
     if (!row) return;
-    if (row.quantity + delta <= 0) { removeRow(row); return; }
-    setCart(cart.map(item => (item.cartId === cartId ? { ...item, quantity: item.quantity + delta } : item)));
+    const n = row.quantity + delta;
+    if (n <= 0) { removeRow(row); return; }
+    // ปรับจำนวนจานหลัก = ปรับทั้งชุด
+    setCart(cart.map(item => (item.cartId === cartId || (isGroupMain(row) && item.groupId === row.groupId)
+      ? { ...item, quantity: n }
+      : item)));
   };
 
   // แก้ตัวเลือกได้เฉพาะจานที่สั่งผ่านป๊อปอัพ (มีขั้นตอนให้เลือก) และเมนูยังขายอยู่
@@ -920,6 +927,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // รายการหนึ่งบรรทัดในหน้าตะกร้า: รูป · ชื่อ/ตัวเลือก/หมายเหตุ · จำนวน · แก้ไข/ลบ
   const renderCartRow = (item) => {
     const editSource = editSourceFor(item);
+    const members = groupMembersOf(item);
+    const unitTotal = (row) => (Number(row.food.price) || 0) + (row.allPopups || []).reduce((sum, p) => sum + (Number(p.price) || 0), 0);
+    const cardTotal = lineTotal(item) + members.reduce((sum, m) => sum + lineTotal(m), 0);
     const stepBtn = { width: 34, height: 32, border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0f172a' };
     return (
       <div key={item.cartId} style={{
@@ -943,7 +953,22 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               📝 {item.note}
             </div>
           )}
-          {/* รายการที่แยกออกมาจากป๊อปอัพ / ของแถมของอีกจาน */}
+          {/* รายการพ่วง/ของแถมของชุดนี้ — อยู่ในการ์ดเดียวกัน แก้ไข/ลบ/ปรับจำนวนไปพร้อมจานหลัก */}
+          {members.length > 0 && (
+            <div style={{ marginTop: 5, borderLeft: '3px solid #fed7aa', paddingLeft: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {members.map(m => (
+                <div key={m.cartId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.4rem', fontSize: '0.8rem', color: '#334155', lineHeight: 1.35 }}>
+                  <span style={{ minWidth: 0 }}>
+                    + {th ? m.food.name : (m.food.nameEn || m.food.name)}
+                    {m.allPopups && m.allPopups.length > 0 && <span style={{ color: '#64748b' }}> ({m.allPopups.map(p => p.name).join(', ')})</span>}
+                    {m.food.isBundled && <span style={{ color: '#16a34a', fontWeight: 800 }}> {th ? '🎁 แถม' : '🎁 free'}</span>}
+                  </span>
+                  {unitTotal(m) > 0 && <span style={{ flexShrink: 0, color: '#64748b', fontWeight: 700 }}>฿{unitTotal(m).toLocaleString()}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+          {/* รายการพ่วง/ของแถมที่ไม่มีจานหลักอยู่ในตะกร้าแล้ว */}
           {item.fromPopupOf && (
             <div style={{ fontSize: '0.74rem', color: '#1d4ed8', fontWeight: 700, marginTop: 2 }}>
               {item.food.isBundled
@@ -958,7 +983,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               <span style={{ minWidth: 30, textAlign: 'center', fontWeight: 900, fontSize: '0.95rem', borderLeft: '1px solid #e2e8f0', borderRight: '1px solid #e2e8f0', lineHeight: '32px' }}>{item.quantity}</span>
               <button onClick={() => handleUpdateQty(item.cartId, 1)} aria-label={th ? 'เพิ่มจำนวน' : 'Increase'} style={stepBtn}><Plus size={16} /></button>
             </div>
-            <span style={{ fontWeight: 900, color: '#ea580c', fontSize: '1rem' }}>฿{lineTotal(item).toLocaleString()}</span>
+            <span style={{ fontWeight: 900, color: '#ea580c', fontSize: '1rem' }}>฿{cardTotal.toLocaleString()}</span>
           </div>
 
           <div style={{ display: 'flex', gap: 6, marginTop: '0.45rem', flexWrap: 'wrap' }}>
@@ -996,7 +1021,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             {th ? `${totalItemsCount} รายการ · ตรวจสอบและแก้ไขได้ก่อนชำระเงิน` : `${totalItemsCount} items · review and edit before paying`}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {cart.map(renderCartRow)}
+            {cartCards.map(renderCartRow)}
           </div>
           <button onClick={goBack} style={{
             width: '100%', marginTop: '0.75rem', border: '2px dashed #fdba74', background: '#fff7ed', color: '#c2410c',
@@ -1099,15 +1124,26 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 <Pencil size={13} /> {th ? 'แก้ไขตะกร้า' : 'Edit cart'}
               </button>
             </div>
-            {cart.map(item => (
-              <div key={item.cartId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', padding: '0.12rem 0' }}>
-                <span style={{ minWidth: 0 }}>
-                  {item.quantity}× {th ? item.food.name : (item.food.nameEn || item.food.name)}
-                  {item.allPopups && item.allPopups.length > 0 && <span style={{ color: '#64748b' }}> ({item.allPopups.map(p => p.name).join(', ')})</span>}
-                </span>
-                <b style={{ flexShrink: 0 }}>฿{lineTotal(item).toLocaleString()}</b>
-              </div>
-            ))}
+            {cartCards.map(item => {
+              const members = groupMembersOf(item);
+              return (
+                <div key={item.cartId} style={{ padding: '0.12rem 0' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
+                    <span style={{ minWidth: 0 }}>
+                      {item.quantity}× {th ? item.food.name : (item.food.nameEn || item.food.name)}
+                      {item.allPopups && item.allPopups.length > 0 && <span style={{ color: '#64748b' }}> ({item.allPopups.map(p => p.name).join(', ')})</span>}
+                    </span>
+                    <b style={{ flexShrink: 0 }}>฿{(lineTotal(item) + members.reduce((sum, m) => sum + lineTotal(m), 0)).toLocaleString()}</b>
+                  </div>
+                  {members.map(m => (
+                    <div key={m.cartId} style={{ fontSize: '0.8rem', color: '#64748b', paddingLeft: '1.1rem' }}>
+                      + {th ? m.food.name : (m.food.nameEn || m.food.name)}
+                      {m.allPopups && m.allPopups.length > 0 ? ` (${m.allPopups.map(p => p.name).join(', ')})` : ''}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
 
           {/* PromptPay QR Code container */}
