@@ -70,23 +70,27 @@ const MAX_POPUP_DEPTH = 3;
 // เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
 const isChannelPrice = (name) => isChannelPriceName(name);
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false }) => {
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false, initialState = null, confirmLabel = null }) => {
+  // initialState = ตัวเลือกเดิมที่เคยเลือกไว้ (จาก onConfirm ครั้งก่อน) — ใช้ตอนลูกค้ากด "แก้ไขตัวเลือก" ในตะกร้า
+  // เปิดมาแล้วเห็นที่เลือกไว้ครบ แก้เฉพาะจุดแล้วกดถัดไปจนจบได้เลย
+  const init = initialState || {};
+  const initPopup = (n) => ({ ...((init.popups || {})[n] || {}) });
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [selectedPopup1, setSelectedPopup1] = useState({});
-  const [selectedPopup2, setSelectedPopup2] = useState({});
-  const [selectedPopup3, setSelectedPopup3] = useState({});
-  const [selectedPopup4, setSelectedPopup4] = useState({});
-  const [selectedPopup5, setSelectedPopup5] = useState({});
-  const [selectedPopup6, setSelectedPopup6] = useState({});
-  const [selectedDining, setSelectedDining] = useState(DINING_OPTIONS[0]);
+  const [selectedPopup1, setSelectedPopup1] = useState(() => initPopup(1));
+  const [selectedPopup2, setSelectedPopup2] = useState(() => initPopup(2));
+  const [selectedPopup3, setSelectedPopup3] = useState(() => initPopup(3));
+  const [selectedPopup4, setSelectedPopup4] = useState(() => initPopup(4));
+  const [selectedPopup5, setSelectedPopup5] = useState(() => initPopup(5));
+  const [selectedPopup6, setSelectedPopup6] = useState(() => initPopup(6));
+  const [selectedDining, setSelectedDining] = useState(() => DINING_OPTIONS.find(o => o.id === init.diningId) || DINING_OPTIONS[0]);
   // ตัวเลือกย่อยของแต่ละครั้งที่เลือก (ป๊อปอัพซ้อนป๊อปอัพ)
   // รูปแบบ: { [popupNum]: { [itemId]: [ { selectedPrice, allPopups }, ... ] } }
-  const [subOptions, setSubOptions] = useState({});
+  const [subOptions, setSubOptions] = useState(() => init.subOptions || {});
   // เมนูในป๊อปอัพที่กำลังเปิดป๊อปอัพของตัวเองอยู่
   const [nestedPending, setNestedPending] = useState(null);
   // หมายเหตุถึงครัว — ปุ่มที่กดเลือกไว้ (id → true) และข้อความที่ลูกค้าพิมพ์เอง
-  const [pickedNotes, setPickedNotes] = useState({});
-  const [customNote, setCustomNote] = useState('');
+  const [pickedNotes, setPickedNotes] = useState(() => ({ ...(init.pickedNotes || {}) }));
+  const [customNote, setCustomNote] = useState(() => init.customNote || '');
 
   const allPriceOptions = getPriceOptions(food);
   // ราคาที่ให้เลือกในขั้นตอน "เลือกราคา/ขนาด" = ตัดราคาช่องทางขาย (Takehome/Deli) ออก
@@ -97,6 +101,9 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
   const [selectedPrice, setSelectedPrice] = useState(() => {
     const opts = priceOptions.length > 0 ? priceOptions : allPriceOptions;
+    const prev = init.selectedPrice;
+    const kept = prev && opts.find(o => o.name === prev.name && Number(o.price) === Number(prev.price));
+    if (kept) return kept;
     const match = opts.find(o => Number(o.price) === Number(basePrice));
     return match || opts[0];
   });
@@ -414,6 +421,15 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
       separateItems: getSeparateItems(),
       note: buildNote(),
       dining: skipDining ? categoryDining(food, categories) : selectedDining
+    }, {
+      // ตัวเลือกดิบที่เลือกไว้ — ส่งกลับมาเป็น initialState เพื่อเปิดแก้ไขทีหลังได้
+      selectedPrice: hasMultiplePrices ? selectedPrice : null,
+      popups: { 1: selectedPopup1, 2: selectedPopup2, 3: selectedPopup3, 4: selectedPopup4, 5: selectedPopup5, 6: selectedPopup6 },
+      subOptions,
+      pickedNotes,
+      customNote,
+      diningId: selectedDining.id,
+      stepCount: validSteps.length
     });
   };
 
@@ -748,7 +764,9 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             </button>
           ) : (
             <button className="nav-btn confirm" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}>
-              {lang === 'th' ? `ยืนยันและเพิ่ม (฿${currentTotal()})` : `Confirm & Add (฿${currentTotal()})`} <Check size={20} />
+              {confirmLabel
+                ? `${confirmLabel} (฿${currentTotal()})`
+                : (lang === 'th' ? `ยืนยันและเพิ่ม (฿${currentTotal()})` : `Confirm & Add (฿${currentTotal()})`)} <Check size={20} />
             </button>
           )}
         </div>
