@@ -664,31 +664,40 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                 </h3>
                 <p className="step-desc" style={{ color: '#475569', fontWeight: '600' }}>
                   {lang === 'th'
-                    ? `เลือกได้หลายข้อ หรือข้ามไปก็ได้ — เลือกแล้ว ${pickedCount} ข้อ`
-                    : `Pick as many as you like, or skip — ${pickedCount} selected`}
+                    ? `ติ๊กได้หลายข้อ หรือข้ามไปก็ได้ — เลือกแล้ว ${pickedCount} ข้อ`
+                    : `Tick as many as you like, or skip — ${pickedCount} selected`}
                 </p>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                {/* แบบ checkbox: แถวละข้อเต็มความกว้าง แตะตรงไหนของแถวก็ติ๊ก/เอาออกได้ */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                   {noteOptions.map(o => {
                     const on = !!pickedNotes[o.id];
                     return (
                       <button
                         key={o.id}
                         type="button"
-                        aria-pressed={on}
+                        role="checkbox"
+                        aria-checked={on}
                         onClick={() => setPickedNotes(prev => {
                           const next = { ...prev };
                           if (next[o.id]) delete next[o.id]; else next[o.id] = true;
                           return next;
                         })}
                         style={{
-                          fontFamily: 'inherit', fontSize: '0.9rem', fontWeight: 700, lineHeight: 1.3,
+                          width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', textAlign: 'left',
+                          fontFamily: 'inherit', fontSize: '1rem', fontWeight: 700, lineHeight: 1.3,
                           color: '#0f172a', background: on ? '#fff7ed' : '#ffffff',
                           border: `2px solid ${on ? '#ea580c' : '#cbd5e1'}`,
-                          borderRadius: '10px', padding: '0.6rem 0.85rem', cursor: 'pointer'
+                          borderRadius: '12px', padding: '0.75rem 0.9rem', cursor: 'pointer'
                         }}
                       >
-                        {on && <span style={{ color: '#ea580c', marginRight: '0.35rem', fontWeight: 800 }}>✓</span>}
+                        <span aria-hidden="true" style={{
+                          width: 22, height: 22, flexShrink: 0, borderRadius: 6,
+                          border: `2px solid ${on ? '#ea580c' : '#94a3b8'}`, background: on ? '#ea580c' : '#ffffff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center'
+                        }}>
+                          {on && <Check size={15} color="#ffffff" strokeWidth={3.5} />}
+                        </span>
                         {lang === 'th' ? o.name : (o.nameEn || o.name)}
                       </button>
                     );
