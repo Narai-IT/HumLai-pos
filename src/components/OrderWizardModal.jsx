@@ -70,7 +70,8 @@ const MAX_POPUP_DEPTH = 3;
 // เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
 const isChannelPrice = (name) => isChannelPriceName(name);
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false, initialState = null, confirmLabel = null }) => {
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false, initialState = null, confirmLabel = null, customerView = false }) => {
+  // customerView = หน้าลูกค้าสั่งเอง (QR): การ์ดตัวเลือกมีรูปเมนู และไม่โชว์ป้าย "ฟรี ฿0"
   // initialState = ตัวเลือกเดิมที่เคยเลือกไว้ (จาก onConfirm ครั้งก่อน) — ใช้ตอนลูกค้ากด "แก้ไขตัวเลือก" ในตะกร้า
   // เปิดมาแล้วเห็นที่เลือกไว้ครบ แก้เฉพาะจุดแล้วกดถัดไปจนจบได้เลย
   const init = initialState || {};
@@ -496,7 +497,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                   cursor: unpriced ? 'not-allowed' : (cardDisabled ? 'default' : 'pointer'),
                   opacity: cardDisabled ? 0.5 : 1,
                   background: isSelected ? '#fff7ed' : '#ffffff',
-                  border: `2px solid ${isSelected ? '#ea580c' : '#cbd5e1'}`
+                  border: `2px solid ${isSelected ? '#ea580c' : '#cbd5e1'}`,
+                  ...(customerView ? { padding: '0.55rem 0.55rem 0.7rem' } : {})
                 }}
                 title={unpriced
                   ? (lang === 'th' ? 'ยังไม่ได้ตั้งราคาสำหรับประเภทการขายนี้' : 'No price set for this sale type')
@@ -530,6 +532,17 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                     }}>{qty}</div>
                   </div>
                 )}
+                {customerView && (
+                  <img
+                    src={addon.image || `/images/menu/${addon.id}.png`}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    draggable={false}
+                    onError={(e) => { e.target.onerror = null; e.target.src = '/images/menu/default.png'; }}
+                    style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', borderRadius: '9px', background: '#f1f5f9', marginBottom: '0.45rem' }}
+                  />
+                )}
                 <FitOneLine
                   text={lang === 'th' ? addon.name : addon.nameEn}
                   style={{ color: '#0f172a', fontWeight: '700', marginBottom: nested ? '0.25rem' : undefined }}
@@ -543,7 +556,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                   </div>
                 )}
                 {/* รายละเอียดเมนู — คนละบรรทัดกับชื่อ ตัวเล็กกว่า */}
-                {addonDesc && <div className="option-desc">{addonDesc}</div>}
+                {addonDesc && !(customerView && addonDesc.trim() === String(addon.name || '').trim()) && <div className="option-desc">{addonDesc}</div>}
                 {/* ตัวเลือกย่อยที่เลือกไว้ของแต่ละครั้ง */}
                 {picks.length > 0 && (
                   <div style={{ marginTop: '2px', textAlign: 'left' }}>
@@ -569,7 +582,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                   {/* ป๊อปอัพที่แยกรายการ = เป็นจานของตัวเอง จึงโชว์ราคาเต็มของรายการนั้น (ฟรีก็เป็น ฿0)
                       ส่วนป๊อปอัพที่เป็นตัวเลือกใต้เมนูหลัก ยังโชว์เป็นส่วนที่บวกเพิ่ม (+฿) เหมือนเดิม */}
                   {config.separate
-                    ? (addon.price > 0 ? `฿${addon.price}` : (lang === 'th' ? 'ฟรี ฿0' : 'Free ฿0'))
+                    ? (addon.price > 0 ? `฿${addon.price}` : (customerView ? '' : (lang === 'th' ? 'ฟรี ฿0' : 'Free ฿0')))
                     : (addon.price > 0 ? `+฿${addon.price}` : '')}
                   {nested && addon.price <= 0 && picks.length === 0 && !config.separate ? (lang === 'th' ? 'กดเพื่อเลือก' : 'tap to choose') : ''}
                 </div>
@@ -785,6 +798,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
         depth={depth + 1}
         ancestorIds={chain}
         hasPriceForCustomerType={hasPriceForCustomerType}
+        customerView={customerView}
         onClose={() => setNestedPending(null)}
         onConfirm={handleNestedConfirm}
       />

@@ -1482,6 +1482,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           hasPriceForCustomerType={(m) => !m.noTakehomePrice}
           noteOptions={kioskNoteConfig.options}
           allowCustomNote={kioskNoteConfig.allowCustom}
+          customerView
           onClose={() => setSelectedFood(null)}
           onConfirm={handleConfirmWizardOrder}
         />
@@ -1568,6 +1569,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             hasPriceForCustomerType={(m) => !m.noTakehomePrice}
             noteOptions={kioskNoteConfig.options}
             allowCustomNote={kioskNoteConfig.allowCustom}
+            customerView
             initialState={editingRow.wizardState}
             confirmLabel={th ? 'บันทึกการแก้ไข' : 'Save changes'}
             onClose={() => setEditingRow(null)}
