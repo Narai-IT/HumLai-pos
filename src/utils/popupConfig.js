@@ -115,16 +115,14 @@ export const DEFAULT_NOTE_OPTIONS = [
 export const NOTE_MAX_LENGTH = 120;
 
 // อ่านค่าหมายเหตุจาก settings ของร้าน
-//   kiosk = true  → หน้าลูกค้าสแกน QR สั่งเอง — เลือกได้เฉพาะปุ่ม พิมพ์เองไม่ได้เสมอ
-//                   (กันลูกค้าพิมพ์สิ่งที่ครัวทำให้ไม่ได้ / ค่า allowCustomKiosk เก่าใน settings ไม่มีผลแล้ว)
-//   kiosk = false → หน้าขายที่พนักงานกดให้ (ค่าเริ่มต้นคือพิมพ์เองได้)
-export const resolveNoteConfig = (settings, { kiosk = false } = {}) => {
+// ทั้งหน้าลูกค้าสแกน QR และหน้าขายของพนักงาน เลือกได้เฉพาะปุ่มหมายเหตุ — ไม่มีช่องพิมพ์เองแล้ว
+// (กันพิมพ์สิ่งที่ครัวทำให้ไม่ได้ / ค่า allowCustomKiosk, allowCustomPos เก่าใน settings ไม่มีผลแล้ว)
+export const resolveNoteConfig = (settings) => {
   const raw = settings && typeof settings.orderNotes === 'object' ? settings.orderNotes : null;
   const options = (raw && Array.isArray(raw.options) ? raw.options : DEFAULT_NOTE_OPTIONS)
     .filter(o => o && String(o.name || '').trim())
     .map(o => ({ id: String(o.id || o.name), name: String(o.name).trim(), nameEn: String(o.nameEn || o.name).trim() }));
-  const allowCustom = kiosk ? false : (raw && raw.allowCustomPos !== undefined ? !!raw.allowCustomPos : true);
-  return { options, allowCustom };
+  return { options, allowCustom: false };
 };
 
 // เมนูนี้ถามหมายเหตุไหม — ไม่เคยตั้งค่า = ถาม (เมนูเดิมทั้งหมดจึงได้ใช้ทันทีโดยไม่ต้องไล่เปิดทีละอัน)
