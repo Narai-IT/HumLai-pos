@@ -16,7 +16,7 @@ const DEFAULT_SETTINGS = {
   qrAccountName: '',
   branchQR: {}, // { [ชื่อสาขา]: { qrType, kshopRawPayload, qrShopName, qrAccountName, promptPayId, staticQrUrl } }
   // หมายเหตุถึงครัวที่ลูกค้าเลือกได้ตอนสั่ง
-  orderNotes: { options: DEFAULT_NOTE_OPTIONS, allowCustomPos: true, allowCustomKiosk: false }
+  orderNotes: { options: DEFAULT_NOTE_OPTIONS, allowCustomPos: true }
 };
 
 // ชื่อสาขา = คอลัม branch ของชีต Users (เผื่อข้อมูลเก่าใช้ id/username)
@@ -653,7 +653,7 @@ const ManageSettings = ({ users = [] }) => {
 
         {noteOptions.length === 0 ? (
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.9rem', background: 'rgba(0,0,0,0.03)', borderRadius: 10, margin: 0 }}>
-            ยังไม่มีรายการหมายเหตุ — ลูกค้าจะเห็นเฉพาะช่องพิมพ์เอง (ถ้าเปิดไว้) หรือไม่เห็นขั้นตอนนี้เลย
+            ยังไม่มีรายการหมายเหตุ — ลูกค้าที่สแกน QR จะไม่เห็นขั้นตอนนี้ (หน้าขายยังพิมพ์เองได้ ถ้าเปิดไว้ด้านล่าง)
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -728,14 +728,6 @@ const ManageSettings = ({ users = [] }) => {
             <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>พนักงานพิมพ์เพิ่มเองได้ในป๊อปอัพ นอกเหนือจากรายการข้างบน</div>
           </div>
           <ToggleBtn checked={noteCfg.allowCustomPos !== false} onChange={(v) => update('orderNotes', 'allowCustomPos', v)} />
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', marginTop: '0.9rem' }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ color: 'var(--text-main)', fontWeight: 600, fontSize: '0.92rem' }}>ลูกค้าสแกน QR สั่งเอง — ให้พิมพ์หมายเหตุเองได้</div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>ปิดไว้ = ลูกค้าเลือกได้เฉพาะรายการข้างบน กันพิมพ์สิ่งที่ครัวทำให้ไม่ได้</div>
-          </div>
-          <ToggleBtn checked={noteCfg.allowCustomKiosk === true} onChange={(v) => update('orderNotes', 'allowCustomKiosk', v)} />
         </div>
       </div>
 
