@@ -29,6 +29,14 @@ const diningFromTableName = (table) => {
   if (/deli|grab|line\s*man|shopee|robinhood|foodpanda|panda/i.test(table)) return 'Delivery';
   return '';
 };
+// ค่าการรับประทานของรายการอาหารบางทีเป็นชื่อหมวด (หมวดที่ปิดคำถามการรับประทานไว้ เช่น "ชุดอิ่มเดี่ยว")
+// ไม่ใช่ประเภทจริง — รับเฉพาะค่าที่เป็นประเภทการรับประทาน ไม่งั้นหัวใบครัวขึ้นชื่อหมวดแทน
+const diningKind = (name) => {
+  const s = String(name || '').trim();
+  if (!s) return '';
+  if (s === DINE_IN || /^dine/i.test(s)) return DINE_IN;
+  return diningFromTableName(s);
+};
 const diningOf = (orderData) => {
   if (String(orderData.dining || '').trim()) return String(orderData.dining).trim();
   const fromTable = diningFromTableName(rawTableOf(orderData));
@@ -36,11 +44,20 @@ const diningOf = (orderData) => {
   const items = Array.isArray(orderData.items) ? orderData.items : [];
   for (const item of items) {
     const d = item && item.dining;
-    const name = typeof d === 'string' ? d : (d && d.name);
-    if (name && String(name).trim()) return String(name).trim();
+    const kind = diningKind(typeof d === 'string' ? d : (d && d.name));
+    if (kind) return kind;
   }
   return DINE_IN;
 };
+
+// เครื่องพิมพ์ความร้อนพิมพ์ได้แค่ตัวอักษรในชุดของเครื่อง — ↳ • และ emoji ออกมาเป็น "?"
+// แทนด้วยตัวที่พิมพ์ได้ก่อนส่งไปเครื่อง
+const printable = (text) => String(text ?? '')
+  .replace(/📝\s*/gu, 'หมายเหตุ: ')
+  .replace(/↳/g, '-')
+  .replace(/•/g, '*')
+  .replace(/×/g, 'x')
+  .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '');
 // บรรทัดที่สองของหัวใบ: ทานที่ร้าน = "โต๊ะ 5" / ห่อกลับบ้าน-เดลิเวอรี = ชื่อช่อง เช่น "Takehome 1", "Grab"
 const tableLineOf = (orderData, dining) => {
   const table = rawTableOf(orderData);
@@ -334,27 +351,27 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
           // V = สินค้าที่เสียภาษีมูลค่าเพิ่ม (ร้านไม่มีสินค้ายกเว้นภาษี)
           const amount = money2(item.amount) + (isAbb ? ' V' : '');
           const lines = wrap(`${qty}x ${itemName}`, LINE - widthOf(amount) - 1);
-          lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+          lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(printable(l), amount) : printable(l)));
         } else {
-          printer.println(`${qty}x ${itemName}`);
+          printer.println(printable(`${qty}x ${itemName}`));
         }
 
         // Print SubItems / Options
         if (item.isFlattened && item.subItems) {
           item.subItems.forEach(sub => {
-            printer.println(`   ${sub}`);
+            printer.println(printable(`   ${sub}`));
           });
         } else if (!item.isFlattened) {
           if (item.spice && item.spice.name) {
-            printer.println(`   (ความเผ็ด: ${item.spice.name})`);
+            printer.println(printable(`   (ความเผ็ด: ${item.spice.name})`));
           }
           const popups = [...(item.allPopups || []), ...(item.addOns || [])];
           popups.forEach(p => {
             // ตัวเลือกย่อยจากป๊อปอัพซ้อน ย่อหน้าลึกกว่าเพื่อให้เห็นว่าอยู่ใต้รายการก่อนหน้า
-            printer.println(p.isNestedOption ? `      • ${p.name}` : `   ↳ ${p.name}`);
+            printer.println(printable(p.isNestedOption ? `      • ${p.name}` : `   ↳ ${p.name}`));
           });
           if (item.promo && item.promo.id !== 'none') {
-            printer.println(`   ↳ ${item.promo.name}`);
+            printer.println(printable(`   ↳ ${item.promo.name}`));
           }
         }
       });
