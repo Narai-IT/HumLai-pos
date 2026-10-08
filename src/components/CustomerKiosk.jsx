@@ -354,7 +354,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const foodImageSrc = (food) => food.image || `/images/menu/${food.id}.png`;
 
   // หมายเหตุฝั่งลูกค้าสั่งเอง — สวิตช์พิมพ์เองแยกจากหน้าขาย (ค่าเริ่มต้นคือเลือกได้เฉพาะปุ่ม)
-  const kioskNoteConfig = useMemo(() => resolveNoteConfig(settings, { kiosk: true }), [settings]);
+  const kioskNoteConfig = useMemo(() => resolveNoteConfig(settings), [settings]);
 
   // รายการจากป๊อปอัพหนึ่งครั้ง = จานหลัก + รายการที่แยกบรรทัด + ของแถม ผูกกันด้วย groupId
   // จานหลักเก็บตัวเลือกดิบ (wizardState) ไว้ เปิดแก้ไขในตะกร้าได้ภายหลัง
