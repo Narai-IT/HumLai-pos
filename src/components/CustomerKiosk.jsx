@@ -366,7 +366,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const buildWizardRows = (rawFood, orderDetails, wizardState) => {
     const chosenPrice = orderDetails?.selectedPrice;
     const baseFood = chosenPrice ? { ...rawFood, price: Number(chosenPrice.price) || 0, priceName: chosenPrice.name } : rawFood;
-    const dining = orderType === 'takeaway' ? TAKEAWAY_DINING : (orderDetails.dining || DINE_IN_DINING);
+    // ประเภทมาจากที่ลูกค้าเลือกที่จอแรกเท่านั้น — ป๊อปอัพของหมวดที่ปิดคำถามการรับประทานไว้
+    // ส่งชื่อหมวดมาเป็น dining (เช่น "ชุดอิ่มเดี่ยว") ซึ่งไปโผล่เป็นหัวใบครัวแทน "ทานที่ร้าน"
+    const dining = orderType === 'takeaway' ? TAKEAWAY_DINING : DINE_IN_DINING;
     const groupId = `g${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const rows = [{
