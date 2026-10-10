@@ -166,12 +166,12 @@ const run = async () => {
     }
 
     // ส่วนลดผูกกับหมวดหมู่เป็นรายการ JSON
-    const discounts = await runner('SELECT RowId, categories FROM dbo.Discounts');
+    const discounts = await runner('SELECT id, categories FROM dbo.Discounts');
     let discountTouched = 0;
     for (const row of discounts.recordset) {
       const mapped = remapList(row.categories, catMap);
       if (mapped === row.categories) continue;
-      await runner('UPDATE dbo.Discounts SET categories = @categories WHERE RowId = @rowId', { categories: mapped, rowId: row.RowId });
+      await runner('UPDATE dbo.Discounts SET categories = @categories WHERE id = @id', { categories: mapped, id: row.id });
       discountTouched++;
     }
     console.log(`  Discounts.categories: แก้ ${discountTouched} แถว`);
