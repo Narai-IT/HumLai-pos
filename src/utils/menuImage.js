@@ -24,7 +24,8 @@ const CATEGORY_FOLDERS = {
   "โชจู": "โชจู"
 };
 
-// ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริง PNG/JPG ก่อน)
+// ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริงก่อน)
+// .webp = ไฟล์ย่อของรูปถ่าย (กว้างไม่เกิน 800px) โหลดเร็วกว่า PNG ต้นฉบับมาก — ลองก่อนเสมอ
 export const menuImageCandidates = (food) => {
   if (!food) return [];
   const folder = CATEGORY_FOLDERS[food.category] || food.category || 'uncategorized';
@@ -38,14 +39,17 @@ export const menuImageCandidates = (food) => {
     list.push(String(food.image).trim());
   }
   if (fileName) {
-    // 2. Check folder-based real photos (PNG/JPG)
+    // 2. Check folder-based real photos (WebP/PNG/JPG)
+    list.push(`/images/${folder}/${fileName}.webp`);
     list.push(`/images/${folder}/${fileName}.png`);
     list.push(`/images/${folder}/${fileName}.jpg`);
-    // 3. Check root-based real photos (PNG/JPG)
+    // 3. Check root-based real photos (WebP/PNG/JPG)
+    list.push(`/images/${fileName}.webp`);
     list.push(`/images/${fileName}.png`);
     list.push(`/images/${fileName}.jpg`);
   }
-  // 4. Check ID-based real photos (PNG/JPG)
+  // 4. Check ID-based real photos (WebP/PNG/JPG)
+  list.push(`/images/item_${id}.webp`);
   list.push(`/images/item_${id}.png`);
   list.push(`/images/item_${id}.jpg`);
   // 5. SVG vector fallback
