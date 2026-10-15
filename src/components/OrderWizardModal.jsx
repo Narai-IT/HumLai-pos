@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { X, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { X, ArrowRight, ArrowLeft, Check, Ban } from 'lucide-react';
 import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps, categoryDining, itemAsksNotes, NOTE_MAX_LENGTH } from '../utils/popupConfig';
 import { TAKEHOME_ALIASES, normName as norm, isChannelPriceName } from '../utils/salePricing';
 
@@ -437,9 +437,21 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const renderPopupStep = (stepNum, config, qtyMap) => {
     const total = totalQty(qtyMap);
     const atMax = config.maxSelect > 0 && total >= config.maxSelect;
+    // ตัวนับ "เลือกแล้ว x/สูงสุด" — แดงเมื่อยังไม่ถึงขั้นต่ำ, ส้มเมื่อเลือกครบแล้ว, เทาตามปกติ
+    const belowMin = config.minSelect > 0 && total < config.minSelect;
+    const counterText = `${lang === 'th' ? 'เลือกแล้ว' : 'Selected'} ${total}${config.maxSelect > 0 ? `/${config.maxSelect}` : ''}`;
+    const counterColors = belowMin
+      ? { background: '#fee2e2', color: '#b91c1c' }
+      : atMax ? { background: '#ffedd5', color: '#c2410c' } : { background: '#f1f5f9', color: '#475569' };
+    const skipOn = total === 0;
     return (
       <div className="wizard-step">
-        <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? `เลือก ${config.namesTh}` : `Select ${config.namesEn}`}</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', marginBottom: '0.75rem' }}>
+          <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800', margin: 0 }}>{lang === 'th' ? `เลือก ${config.namesTh}` : `Select ${config.namesEn}`}</h3>
+          <span style={{ ...counterColors, flexShrink: 0, whiteSpace: 'nowrap', borderRadius: '999px', padding: '0.2rem 0.7rem', fontSize: '0.85rem', fontWeight: 800 }}>
+            {counterText}
+          </span>
+        </div>
         {config.separate && (
           <div style={{
             display: 'inline-block', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8',
@@ -448,32 +460,7 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             {lang === 'th' ? 'รายการที่เลือกจะแยกเป็นรายการของตัวเองในบิล/ใบครัว' : 'Picks here become their own order lines'}
           </div>
         )}
-        <p className="step-desc" style={{ color: '#475569', fontWeight: '600' }}>
-          {lang === 'th' ? (
-            <>
-              {config.minSelect > 0 ? `ต้องเลือกอย่างน้อย ${config.minSelect} รายการ` : 'เลือกเพิ่มเติมได้ตามต้องการ'}
-              {config.maxSelect > 0 ? ` (สูงสุด ${config.maxSelect} รายการ)` : ''}
-              {` — เลือกแล้ว ${total} รายการ`}
-            </>
-          ) : (
-            <>
-              {config.minSelect > 0 ? `Min ${config.minSelect}` : 'Optional'}
-              {config.maxSelect > 0 ? `, Max ${config.maxSelect}` : ''}
-              {` — Selected: ${total}`}
-            </>
-          )}
-        </p>
         <div className="options-grid">
-          {config.minSelect === 0 && config.items.length > 0 && (
-            <div
-              className={`option-card ${total === 0 ? 'selected' : ''}`}
-              style={{ background: total === 0 ? '#fff7ed' : '#ffffff', border: `2px solid ${total === 0 ? '#ea580c' : '#cbd5e1'}` }}
-              onClick={() => clearStep(stepNum)}
-            >
-              <FitOneLine text={lang === 'th' ? 'ไม่รับ (ข้าม)' : 'No Thanks'} style={{ color: '#0f172a', fontWeight: '700' }} />
-              <div className="option-price" style={{ color: '#64748b' }}>-</div>
-            </div>
-          )}
           {config.items.length > 0 ? config.items.map(addon => {
             const qty = getQty(qtyMap, addon.id);
             const perItemMax = perItemMaxOf(config, addon.id);
@@ -595,6 +582,48 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             </p>
           )}
         </div>
+        {/* "ไม่รับ" อยู่ล่างสุดเสมอ — เห็นเมนูก่อน แล้วค่อยเห็นทางข้าม */}
+        {config.minSelect === 0 && config.items.length > 0 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', color: '#94a3b8', fontSize: '0.75rem', fontWeight: 700, margin: '1rem 0 0.6rem' }}>
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+              {lang === 'th' ? 'หรือ' : 'or'}
+              <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            </div>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={skipOn}
+              onClick={() => clearStep(stepNum)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', textAlign: 'left',
+                fontFamily: 'inherit', cursor: 'pointer', borderRadius: '14px', padding: '0.75rem 0.9rem',
+                background: skipOn ? '#fff7ed' : '#ffffff',
+                border: `2px ${skipOn ? 'solid' : 'dashed'} ${skipOn ? '#ea580c' : '#cbd5e1'}`
+              }}
+            >
+              <span aria-hidden="true" style={{
+                width: 34, height: 34, flexShrink: 0, borderRadius: '50%',
+                background: skipOn ? '#ffedd5' : '#f1f5f9', color: skipOn ? '#c2410c' : '#64748b',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <Ban size={18} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', color: '#0f172a', fontWeight: 800, fontSize: '1rem' }}>
+                  {lang === 'th' ? 'ไม่รับ' : 'No thanks'}
+                </span>
+                <span style={{ display: 'block', color: '#64748b', fontSize: '0.78rem', fontWeight: 600 }}>
+                  {lang === 'th' ? 'ข้ามขั้นตอนนี้ ไม่เพิ่มรายการ' : 'Skip this step, add nothing'}
+                </span>
+              </span>
+              <span aria-hidden="true" style={{
+                width: 22, height: 22, flexShrink: 0, borderRadius: '50%', boxSizing: 'border-box',
+                border: skipOn ? '6px solid #ea580c' : '2px solid #cbd5e1', background: '#ffffff'
+              }} />
+            </button>
+          </>
+        )}
       </div>
     );
   };
@@ -782,7 +811,13 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
           {!isLastStep ? (
             <button className="nav-btn next" onClick={handleNext} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}>
-              {lang === 'th' ? `ถัดไป (ยอดรวมชั่วคราว: ฿${currentTotal()})` : `Next (Total: ฿${currentTotal()})`} <ArrowRight size={20} />
+              {(() => {
+                // ขั้นไม่บังคับที่ยังไม่เลือกอะไร = ปุ่มบอกชัดว่ากดแล้วคือข้าม
+                const cfg = stepConfigs[step];
+                const skipping = cfg && cfg.minSelect === 0 && cfg.items.length > 0 && totalQty(stepQtyMaps[step]) === 0;
+                if (lang === 'th') return skipping ? `ข้าม ไปต่อ (฿${currentTotal()})` : `ถัดไป (฿${currentTotal()})`;
+                return skipping ? `Skip (฿${currentTotal()})` : `Next (฿${currentTotal()})`;
+              })()} <ArrowRight size={20} />
             </button>
           ) : (
             <button className="nav-btn confirm" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}>
