@@ -4,6 +4,7 @@ import { ShoppingBag, CheckCircle, Globe, Plus, Minus, X, ChevronRight, ChevronL
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
+import MenuImage from './MenuImage';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
@@ -19,7 +20,7 @@ const LOGO_WIDE = '/logo-wide.png';
 // ตอนซูมอยู่ แตะพื้นที่ว่างจะคืนขนาดเดิม (ยังไม่ปิด) — ตอนไม่ซูม แตะพื้นที่ว่างจะปิดรูป
 const MAX_ZOOM = 4;
 const DOUBLE_TAP_ZOOM = 2.5;
-const ZoomableImage = ({ src, alt, onBackdropTap, hint }) => {
+const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
   // ระหว่างนิ้วแตะจอ ปิด transition ให้รูปตามนิ้วทันที
   const [touching, setTouching] = useState(false);
@@ -136,13 +137,12 @@ const ZoomableImage = ({ src, alt, onBackdropTap, hint }) => {
         overflow: 'hidden', position: 'relative', touchAction: 'none'
       }}
     >
-      <img
+      <MenuImage
         ref={imgRef}
-        src={src}
+        food={food}
         alt={alt}
-        referrerPolicy="no-referrer"
+        placeholderSize="4rem"
         draggable={false}
-        onError={(e) => { e.target.src = '/images/menu/default.png'; }}
         style={{
           maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
           borderRadius: zoomed ? 0 : '16px', userSelect: 'none', WebkitUserSelect: 'none',
@@ -354,8 +354,6 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (window.history.state?.kioskImgPreview) window.history.back();
     else setPreviewFood(null);
   };
-
-  const foodImageSrc = (food) => food.image || `/images/menu/${food.id}.png`;
 
   // หมายเหตุฝั่งลูกค้าสั่งเอง — สวิตช์พิมพ์เองแยกจากหน้าขาย (ค่าเริ่มต้นคือเลือกได้เฉพาะปุ่ม)
   const kioskNoteConfig = useMemo(() => resolveNoteConfig(settings), [settings]);
@@ -729,12 +727,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           onClick={() => setPreviewFood(food)}
           style={{ width: '100%', aspectRatio: '1 / 1', position: 'relative', background: '#f1f5f9', cursor: 'zoom-in' }}
         >
-          <img
-            src={foodImageSrc(food)}
+          <MenuImage
+            food={food}
             alt={food.name}
             loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={(e) => { e.target.src = '/images/menu/default.png'; }}
+            placeholderSize="3rem"
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           />
           
@@ -854,7 +851,6 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const th = lang === 'th';
   const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const lineTotal = (item) => ((Number(item.food.price) || 0) + (item.allPopups || []).reduce((sum, p) => sum + (Number(p.price) || 0), 0)) * item.quantity;
-  const cartImageSrc = (food) => food.image || `/images/menu/${food.baseId || food.id}.png`;
 
   // แถบบนของหน้าตะกร้า/ชำระเงิน: ปุ่มย้อนกลับ + ชื่อหน้า + โลโก้ร้าน
   const renderTopBar = (title, icon, canBack) => (
@@ -938,8 +934,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
         background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0.65rem',
         display: 'flex', gap: '0.7rem', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
       }}>
-        <img src={cartImageSrc(item.food)} alt="" loading="lazy" referrerPolicy="no-referrer"
-          onError={(e) => { e.target.src = '/images/menu/default.png'; }}
+        <MenuImage food={item.food} alt="" loading="lazy" placeholderSize="1.8rem"
           style={{ width: 68, height: 68, borderRadius: '12px', objectFit: 'cover', flexShrink: 0, background: '#f1f5f9' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: '0.93rem', lineHeight: 1.3, color: '#0f172a' }}>
@@ -1464,7 +1459,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
           <ZoomableImage
             key={previewFood.id}
-            src={foodImageSrc(previewFood)}
+            food={previewFood}
             alt={previewFood.name}
             onBackdropTap={closePreview}
             hint={lang === 'th' ? 'ใช้สองนิ้วซูม หรือแตะสองครั้ง' : 'Pinch or double-tap to zoom'}

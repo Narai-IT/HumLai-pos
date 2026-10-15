@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { X, ArrowRight, ArrowLeft, Check, Ban } from 'lucide-react';
+import MenuImage from './MenuImage';
 import { resolvePopupSource, getPriceOptions, hasOwnPopupSteps, categoryDining, itemAsksNotes, NOTE_MAX_LENGTH } from '../utils/popupConfig';
 import { TAKEHOME_ALIASES, normName as norm, isChannelPriceName } from '../utils/salePricing';
 
@@ -520,13 +521,11 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                   </div>
                 )}
                 {customerView && (
-                  <img
-                    src={addon.image || `/images/menu/${addon.id}.png`}
+                  <MenuImage
+                    food={addon}
                     alt=""
                     loading="lazy"
-                    referrerPolicy="no-referrer"
                     draggable={false}
-                    onError={(e) => { e.target.onerror = null; e.target.src = '/images/menu/default.png'; }}
                     style={{ display: 'block', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover', borderRadius: '9px', background: '#f1f5f9', marginBottom: '0.45rem' }}
                   />
                 )}
