@@ -1,59 +1,13 @@
 import React from 'react';
 import { Plus, Minus } from 'lucide-react';
-
-const CATEGORY_FOLDERS = {
-  "ชุดอิ่มเดี่ยว": "ชุดอิ่มเดี่ยว",
-  "ไก่ล้วนๆ": "ไก่ล้วนๆ",
-  "ท๊อปปิ้งเสริม": "ท๊อปปิ้งเสริม",
-  "น้ำจิ้ม": "น้ำจิ้ม",
-  "ก๋วยเตี๊ยวลูกชิ้นไก่": "ก๋วยเตี๊ยวลูกชิ้นไก่",
-  "ของทานเล่น": "ของทานเล่น",
-  "เครื่องดื่ม": "เครื่องดื่ม",
-  "ของหวาน": "ของหวาน",
-  "Promotion": "Promotion",
-  "SET": "กับแกล้ม3อย่าง  ทอด ต้ม ย่าง",
-  "ของกินเล่น": "ของกินเล่น",
-  "ย่าง": "ย่าง",
-  "อาหารจานเดียว": "อาหารจานเดียว",
-  "ต้ม": "ต้ม",
-  "ผัด": "ผัด",
-  "ยำ": "ยำ",
-  "เบียร์": "เบียร์",
-  "เหล้า": "เหล้า",
-  "มิกเซอร์": "มิกเซอร์",
-  "โชจู": "โชจู"
-};
+import { menuImageCandidates } from '../utils/menuImage';
 
 const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang = 'th', displayPrice, disabled = false, disabledReason = '' }) => {
   const name = lang === 'th' ? food.name : (food.nameEn || food.name);
   const desc = lang === 'th' ? food.description : (food.descriptionEn || food.description);
 
-  const folder = CATEGORY_FOLDERS[food.category] || food.category || 'uncategorized';
-  const sanitizedFileName = (food.name || '').replace(/[\\/:*?"<>|]/g, '_').trim();
-
-  // ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริง PNG/JPG ก่อน)
-  const candidates = React.useMemo(() => {
-    const list = [];
-    // 1. รูปที่แอดมินอัปโหลด/ใส่ลิงก์ไว้เอง (เช่นรูปใน Google Drive) — มาก่อนเสมอ
-    //    เพราะเป็นรูปที่ตั้งใจเลือกให้เมนูนี้ ส่วนข้อ 2-4 เป็นการ "เดา" ชื่อไฟล์ในเครื่อง
-    if (food.image && String(food.image).trim()) {
-      list.push(String(food.image).trim());
-    }
-    // 2. Check folder-based real photos (PNG/JPG)
-    list.push(`/images/${folder}/${sanitizedFileName}.png`);
-    list.push(`/images/${folder}/${sanitizedFileName}.jpg`);
-    // 3. Check root-based real photos (PNG/JPG)
-    list.push(`/images/${sanitizedFileName}.png`);
-    list.push(`/images/${sanitizedFileName}.jpg`);
-    // 4. Check ID-based real photos (PNG/JPG)
-    list.push(`/images/item_${food.id}.png`);
-    list.push(`/images/item_${food.id}.jpg`);
-    // 5. SVG vector fallback
-    list.push(`/images/${folder}/${sanitizedFileName}.svg`);
-    list.push(`/images/${sanitizedFileName}.svg`);
-    list.push(`/images/item_${food.id}.svg`);
-    return list;
-  }, [food.image, folder, sanitizedFileName, food.id]);
+  // ลำดับรูปที่จะลองโหลด — ใช้ร่วมกับหน้าลูกค้า (utils/menuImage)
+  const candidates = React.useMemo(() => menuImageCandidates(food), [food]);
 
   const [imgIdx, setImgIdx] = React.useState(0);
   React.useEffect(() => { setImgIdx(0); }, [food.id, candidates.length]);
