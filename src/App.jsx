@@ -1152,7 +1152,11 @@ function App() {
       rows: rowsToSend,
       // ระบบสมาชิก: เลขสมาชิกที่สแกน/ค้นตอนปิดบิล + ส่วนลดร้าน (แต้มคิดจากยอดหลังส่วนลด ก่อนค่าบริการ/VAT)
       memberId: printInfo.member ? printInfo.member.id : undefined,
-      storeDiscount: Number(printInfo.discountAmount) || 0,
+      // ส่วนลดเป็นคูปองสมาชิก → ส่งเป็นคูปอง (ระบบสมาชิกตัดคูปองตอนบันทึกบิล) ไม่ใช่ส่วนลดร้าน
+      storeDiscount: printInfo.crmCoupon ? 0 : (Number(printInfo.discountAmount) || 0),
+      couponIds: printInfo.crmCoupon ? printInfo.crmCoupon.ids : undefined,
+      couponRef: printInfo.crmCoupon ? printInfo.crmCoupon.ref : undefined,
+      couponDiscount: printInfo.crmCoupon ? printInfo.crmCoupon.discount : undefined,
       payment: {
         orderNumber: newOrderNumber,
         tableNo: String(tableNumber),
@@ -1379,7 +1383,7 @@ function App() {
 
   // ── ลูกค้าแจ้งโอน (หน้าคีออส) → รอพนักงานหน้าขายกดยืนยัน ──
   // ส่งออเดอร์ทั้งก้อนไปเก็บไว้ก่อน บิลจริงออกตอนพนักงานกด "ได้รับเงินแล้ว" (respondKioskPayment)
-  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel, memberId) => {
+  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel, memberId, coupon) => {
     const cartForServer = cartItems.map(item => {
       let unitPrice = Number(item.food.price) || 0;
       if (item.allPopups && item.allPopups.length > 0) {
@@ -1396,7 +1400,11 @@ function App() {
       items: cartForServer,
       total: Number(total) || 0,
       timestamp: getThaiTimeISO(),
-      memberId: memberId || undefined
+      memberId: memberId || undefined,
+      // คูปองสมาชิกที่ใช้ในตะกร้า (จองไว้แล้ว) — total ด้านบนหักส่วนลดนี้แล้ว
+      couponIds: coupon ? coupon.ids : undefined,
+      couponRef: coupon ? coupon.ref : undefined,
+      couponDiscount: coupon ? coupon.discount : undefined
     };
     let lastError = '';
     for (let attempt = 0; attempt < 3; attempt++) {

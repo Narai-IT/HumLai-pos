@@ -59,7 +59,11 @@ export async function kioskPaymentRequest(data) {
   const payload = JSON.stringify({
     branchId, tableNumber: text(data.tableNumber, 50), items, total, timestamp: data.timestamp || thaiTimeISO(),
     // เลขสมาชิกที่ลูกค้าใส่ก่อนสั่ง (ค้นจากระบบสมาชิกแล้ว) — ได้แต้มตอนพนักงานยืนยันยอดโอน
-    memberId: /^MB-\d{7}$/.test(String(data.memberId || '')) ? String(data.memberId) : null
+    memberId: /^MB-\d{7}$/.test(String(data.memberId || '')) ? String(data.memberId) : null,
+    // คูปองที่ลูกค้าใช้ในหน้าตะกร้า (จองไว้ในระบบสมาชิกแล้ว) — ตัดคูปองตอนพนักงานยืนยันยอดโอน
+    couponIds: Array.isArray(data.couponIds) ? data.couponIds.map(String).slice(0, 3) : [],
+    couponRef: text(data.couponRef, 80),
+    couponDiscount: Math.max(0, Number(data.couponDiscount) || 0)
   });
   const now = thaiTimeISO();
   const row = {

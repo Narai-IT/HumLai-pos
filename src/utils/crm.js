@@ -35,3 +35,21 @@ export const maskPhone = (p) => {
   const s = String(p || '').replace(/\D/g, '');
   return s.length >= 4 ? `***-***-${s.slice(-4)}` : '';
 };
+
+// เรียกคำสั่งระบบสมาชิกอื่น ๆ ผ่าน API ของ POS (คูปอง/แลกแต้ม/รหัสยืนยัน)
+export async function crmCall(action, data) {
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, ...data })
+    });
+    const json = await res.json().catch(() => null);
+    return json || { success: false, error: 'เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ' };
+  } catch {
+    return { success: false, offline: true, error: 'ติดต่อเซิร์ฟเวอร์ไม่ได้' };
+  }
+}
+
+// รหัสอ้างอิงบิลที่กำลังเปิด ใช้จองคูปองไว้กับบิลนี้
+export const newCouponRef = (prefix = 'pos') => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;

@@ -10,11 +10,11 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
-import { lookupMember, crmStatus, flushCrmQueue } from './crm.js';
+import { lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-10-16-crm-members';
+export const BUILD = '2026-10-16-crm-coupons';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -78,7 +78,19 @@ const POST_ACTIONS = {
   // ระบบสมาชิก: พนักงานค้นสมาชิกตอนปิดบิล (เห็นชื่อเต็ม แต้ม) · ลูกค้าหน้า QR ใส่เลขสมาชิก (เห็นแค่ชื่อย่อ)
   crmMemberLookup:   async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: true }),
   crmKioskMember:    async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: false }),
-  crmRetry:          async () => ({ success: true, sent: await flushCrmQueue(100) })
+  crmRetry:          async () => ({ success: true, sent: await flushCrmQueue(100) }),
+  // คูปอง/แลกแต้ม — หน้าขายของพนักงาน
+  crmWallet:         async (data) => memberWallet(data, await branchForWrite(data), false),
+  crmReserveCoupon:  async (data) => reserveCoupon(data, await branchForWrite(data), false),
+  crmReleaseCoupon:  async (data) => releaseCoupon(data, await branchForWrite(data)),
+  crmRedeem:         async (data) => redeemReward(data, await branchForWrite(data), false),
+  // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (ต้องยืนยันรหัสที่ส่งเข้า LINE ก่อน ระบบสมาชิกตรวจ verifyToken เอง)
+  crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),
+  crmKioskCheckCode: async (data) => checkMemberCode(data, await branchForWrite(data)),
+  crmKioskWallet:    async (data) => memberWallet(data, await branchForWrite(data), true),
+  crmKioskReserve:   async (data) => reserveCoupon(data, await branchForWrite(data), true),
+  crmKioskRelease:   async (data) => releaseCoupon(data, await branchForWrite(data)),
+  crmKioskRedeem:    async (data) => redeemReward(data, await branchForWrite(data), true)
 };
 
 // คำสั่งอ่านที่ไม่ได้อยู่ใน read.handleGet (ของเบ็ดเตล็ด/ของที่ใช้ตรวจระบบ)

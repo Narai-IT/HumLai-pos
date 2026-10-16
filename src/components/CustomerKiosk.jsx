@@ -8,7 +8,7 @@ import MenuImage from './MenuImage';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
-import { crmEnabled, lookupMember } from '../utils/crm';
+import { crmEnabled, lookupMember, crmCall, newCouponRef } from '../utils/crm';
 
 const TAKEAWAY_DINING = { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' };
 const DINE_IN_DINING = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
@@ -186,7 +186,40 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
-  const keepMember = (m) => { setMember(m); try { if (m) sessionStorage.setItem(MEMBER_KEY, JSON.stringify(m)); else sessionStorage.removeItem(MEMBER_KEY); } catch { /* ไม่มีที่เก็บ */ } };
+  const keepMember = (m) => {
+    if (!m || !member || m.id !== member.id) { dropCoupon(); saveSession(VERIFY_KEY, null); setVerifyToken(''); setKWallet(null); setCodeSent(false); }
+    setMember(m); saveSession(MEMBER_KEY, m);
+  };
+
+  // ── คูปอง / แลกแต้มในหน้าตะกร้า ──
+  // ต้องยืนยันตัวตนด้วยรหัส 4 หลักที่ส่งเข้า LINE ของสมาชิกก่อน (กันคนอื่นใส่เบอร์เราแล้วเอาแต้มไปใช้)
+  // คูปองที่เลือกถูกจองไว้กับออเดอร์นี้ (kioskRef) และถูกตัดตอนพนักงานยืนยันยอดโอน
+  const VERIFY_KEY = 'kiosk_member_verify';
+  const COUPON_KEY = 'kiosk_coupon';
+  const REF_KEY = 'kiosk_coupon_ref';
+  function saveSession(key, v) { try { if (v) sessionStorage.setItem(key, typeof v === 'string' ? v : JSON.stringify(v)); else sessionStorage.removeItem(key); } catch { /* ไม่มีที่เก็บ */ } }
+  const readSession = (key, json) => { try { const v = sessionStorage.getItem(key); return json ? JSON.parse(v || 'null') : (v || ''); } catch { return json ? null : ''; } };
+  const kioskRef = useRef(readSession(REF_KEY) || (() => { const r = newCouponRef('kiosk'); saveSession(REF_KEY, r); return r; })());
+  const [verifyToken, setVerifyToken] = useState(() => readSession(VERIFY_KEY));
+  const [codeSent, setCodeSent] = useState(false);
+  const [codeInput, setCodeInput] = useState('');
+  const [kWallet, setKWallet] = useState(null);
+  const [kCoupon, setKCoupon] = useState(() => readSession(COUPON_KEY, true));
+  const [kBusy, setKBusy] = useState('');
+  const [kMsg, setKMsg] = useState('');
+  const keepCoupon = (c) => { setKCoupon(c); saveSession(COUPON_KEY, c); };
+  function dropCoupon() {
+    const c = readSession(COUPON_KEY, true);
+    if (c) crmCall('crmKioskRelease', { couponId: c.id, ref: kioskRef.current, branchId });
+    setKCoupon(null); saveSession(COUPON_KEY, null);
+  }
+  // ใช้คูปองไปแล้ว (พนักงานยืนยันยอด) → ออเดอร์ถัดไปเริ่มรหัสอ้างอิงใหม่
+  const finishCoupon = () => { setKCoupon(null); saveSession(COUPON_KEY, null); kioskRef.current = newCouponRef('kiosk'); saveSession(REF_KEY, kioskRef.current); setKWallet(null); };
+  const kioskCall = async (action, extra) => {
+    const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, ...extra });
+    if (!res.success && res.verify) { setVerifyToken(''); saveSession(VERIFY_KEY, null); setCodeSent(false); }
+    return res;
+  };
   const checkMember = async () => {
     const q = memberInput.trim();
     if (!q || memberBusy) return;
@@ -280,24 +313,81 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     return sum + (price * item.quantity);
   }, 0);
 
+  // ยอดที่ลูกค้าต้องโอน = ยอดอาหาร - ส่วนลดคูปองสมาชิก (QR พร้อมเพย์ใช้ยอดนี้)
+  const couponOff = kCoupon ? Math.min(Number(kCoupon.discount) || 0, cartSubtotal) : 0;
+  const payTotal = Math.max(0, Math.round((cartSubtotal - couponOff) * 100) / 100);
+
   // รายการพ่วง/ของแถมที่ผูกอยู่กับจานหลักในตะกร้า — แสดงอยู่ในการ์ดของจานหลัก ไม่นับเป็นรายการแยก
   const isGroupMember = (row) => !!(row.groupId && !row.wizardState
     && cart.some(m => m.wizardState && m.groupId === row.groupId));
   const cartCards = cart.filter(row => !isGroupMember(row));
   const totalItemsCount = cartCards.reduce((sum, item) => sum + item.quantity, 0);
 
-  useEffect(() => { setQrSaveState(''); }, [isCheckoutOpen, cartSubtotal]);
+  useEffect(() => { setQrSaveState(''); }, [isCheckoutOpen, payTotal]);
+
+  // ฟังก์ชันคูปอง (ใช้ cartSubtotal จึงต้องอยู่หลังคำนวณยอด)
+  const loadKWallet = async () => {
+    if (!member || !verifyToken) return;
+    setKMsg('');
+    const res = await kioskCall('crmKioskWallet', { subtotal: cartSubtotal });
+    if (res.success) setKWallet(res); else setKMsg(res.error || (lang === 'th' ? 'โหลดคูปองไม่สำเร็จ' : 'Could not load coupons'));
+  };
+  const sendCode = async () => {
+    if (kBusy) return;
+    setKBusy('send'); setKMsg('');
+    const res = await crmCall('crmKioskSendCode', { memberId: member.id, branchId });
+    setKBusy('');
+    if (res.success) { setCodeSent(true); setCodeInput(''); }
+    else setKMsg(res.error || (lang === 'th' ? 'ส่งรหัสไม่สำเร็จ' : 'Could not send code'));
+  };
+  const checkCode = async () => {
+    if (kBusy || codeInput.length !== 4) return;
+    setKBusy('check'); setKMsg('');
+    const res = await crmCall('crmKioskCheckCode', { memberId: member.id, code: codeInput, branchId });
+    setKBusy('');
+    if (res.success && res.verifyToken) { setVerifyToken(res.verifyToken); saveSession(VERIFY_KEY, res.verifyToken); setCodeSent(false); }
+    else setKMsg(res.error || (lang === 'th' ? 'รหัสไม่ถูกต้อง' : 'Wrong code'));
+  };
+  const pickKCoupon = async (c) => {
+    if (kBusy) return;
+    setKBusy('c' + c.id); setKMsg('');
+    const res = await kioskCall('crmKioskReserve', { couponId: c.id, subtotal: cartSubtotal });
+    setKBusy('');
+    if (res.success) keepCoupon(res.coupon); else { setKMsg(res.error || 'ใช้คูปองไม่สำเร็จ'); loadKWallet(); }
+  };
+  const redeemK = async (r) => {
+    if (kBusy) return;
+    if (!window.confirm(lang === 'th'
+      ? `แลก "${r.name}" ใช้ ${Number(r.cost).toLocaleString()} แต้ม แล้วใช้กับออเดอร์นี้เลย?\n(ตัดแต้มทันที ถ้าไม่สั่งต่อ คูปองยังอยู่ในบัตรสมาชิกไว้ใช้ครั้งหน้า)`
+      : `Redeem "${r.name}" for ${r.cost} points and use it now?`)) return;
+    setKBusy('r' + r.id); setKMsg('');
+    const res = await kioskCall('crmKioskRedeem', { rewardId: r.id, subtotal: cartSubtotal });
+    setKBusy('');
+    if (res.success) { keepCoupon(res.coupon); loadKWallet(); } else setKMsg(res.error || 'แลกแต้มไม่สำเร็จ');
+  };
+  // ยืนยันตัวตนแล้ว → โหลดคูปอง · ยอดในตะกร้าเปลี่ยน → คำนวณส่วนลดของคูปองที่ใช้อยู่ใหม่ (ไม่ถึงขั้นต่ำแล้วเอาออก)
+  useEffect(() => { if (crmOn && member && verifyToken) loadKWallet(); }, [crmOn, member && member.id, verifyToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!kCoupon || !member || !verifyToken || cartSubtotal <= 0 || payStage) return;
+    let alive = true;
+    kioskCall('crmKioskReserve', { couponId: kCoupon.id, subtotal: cartSubtotal }).then(res => {
+      if (!alive) return;
+      if (res.success) { if (Number(res.coupon.discount) !== Number(kCoupon.discount)) keepCoupon(res.coupon); }
+      else { setKCoupon(null); saveSession(COUPON_KEY, null); setKMsg((lang === 'th' ? 'เอาคูปองออกแล้ว: ' : 'Coupon removed: ') + (res.error || '')); }
+    });
+    return () => { alive = false; };
+  }, [cartSubtotal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Generate QR Code when checkout opens
   useEffect(() => {
-    if (!isCheckoutOpen || cartSubtotal <= 0) { setQrDataUrl(''); return; }
+    if (!isCheckoutOpen || payTotal <= 0) { setQrDataUrl(''); return; }
     let cancelled = false;
     let payload = '';
 
     if (qrType === 'kshop_dynamic') {
-      payload = generateDynamicQRFromRaw(kshopRawPayload, cartSubtotal);
+      payload = generateDynamicQRFromRaw(kshopRawPayload, payTotal);
     } else {
-      payload = generatePromptPayPayload(promptPayId, cartSubtotal);
+      payload = generatePromptPayPayload(promptPayId, payTotal);
     }
 
     if (payload) {
@@ -308,7 +398,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       setQrDataUrl('');
     }
     return () => { cancelled = true; };
-  }, [isCheckoutOpen, cartSubtotal, qrType, kshopRawPayload, promptPayId]);
+  }, [isCheckoutOpen, payTotal, qrType, kshopRawPayload, promptPayId]);
 
   // เมนูที่เพิ่มอัตโนมัติเมื่อสั่ง (Bundled Items) = เมนูจริงที่แถมไปกับจานนี้
   // ลงตะกร้าเป็นรายการของตัวเองราคา ฿0 เหมือนฝั่งพนักงานสั่ง ครัวจะได้เห็นเป็นคนละรายการ
@@ -477,7 +567,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const src = qrType === 'static' ? staticQrUrl : qrDataUrl;
     if (!src) return;
     setQrSaveState('');
-    const fileName = `promptpay-table${tableNo}-${Math.round(cartSubtotal)}baht.png`;
+    const fileName = `promptpay-table${tableNo}-${Math.round(payTotal)}baht.png`;
 
     try {
       const blob = await (await fetch(src)).blob();
@@ -533,7 +623,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (!paySessionRef.current) paySessionRef.current = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const snap = {
       id: paySessionRef.current,
-      total: cartSubtotal,
+      total: payTotal,
       orderType,
       tableNo,
       items: cart.map(item => {
@@ -549,7 +639,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setPayBusy(true); setPayError('');
     const dining = orderType === 'takeaway' ? 'ห่อกลับบ้าน' : 'ทานที่ร้าน';
     const res = onRequestPayment
-      ? await onRequestPayment(tableNo, cart, cartSubtotal, snap.id, dining, member ? member.id : null)
+      ? await onRequestPayment(tableNo, cart, payTotal, snap.id, dining, member ? member.id : null,
+          kCoupon && member ? { ids: [String(kCoupon.id)], ref: kioskRef.current, discount: couponOff } : null)
       : { success: false, error: 'ระบบยังไม่พร้อม' };
     setPayBusy(false);
     if (!res || !res.success) {
@@ -563,6 +654,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (res.status === 'approved') {
       setOrderNumber(res.orderNumber || '');
       setPayStage('approved');
+      finishCoupon();
       savePending(null);
       setCart([]);
     } else {
@@ -583,6 +675,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       if (st.status === 'approved') {
         setOrderNumber(st.orderNumber || '');
         setPayStage('approved');
+        finishCoupon();
         savePending(null);
         setCart([]);
       } else if (st.status === 'rejected') {
@@ -912,6 +1005,81 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const money = (n) => Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const lineTotal = (item) => ((Number(item.food.price) || 0) + (item.allPopups || []).reduce((sum, p) => sum + (Number(p.price) || 0), 0)) * item.quantity;
 
+  // การ์ด "คูปองและแต้มของคุณ" ในหน้าตะกร้า
+  const renderCouponCard = () => {
+    const box = { margin: '0 1rem 1rem', border: '2px solid #fed7aa', background: '#fff7ed', borderRadius: 16, padding: '0.9rem' };
+    const btn = (on) => ({ border: on ? '2px solid #16a34a' : 'none', background: on ? '#dcfce7' : '#ea580c', color: on ? '#166534' : '#fff', borderRadius: 10, padding: '0.45rem 0.8rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' });
+    const head = <b style={{ display: 'block', marginBottom: '0.4rem' }}>🎁 {th ? `คูปองและแต้มของคุณ${member.name}` : 'Your coupons & points'}</b>;
+    if (!verifyToken) {
+      return (
+        <div style={box}>
+          {head}
+          {!codeSent ? (
+            <>
+              <span style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.6rem' }}>
+                {th ? 'ยืนยันตัวตนก่อนใช้คูปองหรือแลกแต้ม ระบบจะส่งรหัส 4 หลักไปที่แชท LINE ของร้าน' : 'We will send a 4-digit code to your LINE chat'}
+              </span>
+              <button onClick={sendCode} disabled={kBusy === 'send'} style={btn(false)}>{kBusy === 'send' ? '…' : (th ? 'ส่งรหัสไปที่ LINE' : 'Send code to LINE')}</button>
+            </>
+          ) : (
+            <>
+              <label htmlFor="kiosk-code" style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.4rem' }}>
+                {th ? 'เปิดแชท LINE ของร้าน แล้วใส่รหัส 4 หลักที่ได้รับ' : 'Enter the 4-digit code from LINE'}
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input id="kiosk-code" value={codeInput} inputMode="numeric" maxLength={4} autoComplete="one-time-code"
+                  onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                  onKeyDown={e => { if (e.key === 'Enter') checkCode(); }}
+                  style={{ width: 110, letterSpacing: '0.4em', textAlign: 'center', fontSize: '1.2rem', border: '1px solid #fdba74', borderRadius: 10, padding: '0.5rem', fontFamily: 'inherit' }} />
+                <button onClick={checkCode} disabled={kBusy === 'check' || codeInput.length !== 4} style={{ ...btn(false), opacity: codeInput.length === 4 ? 1 : 0.5 }}>{kBusy === 'check' ? '…' : (th ? 'ยืนยัน' : 'Verify')}</button>
+                <button onClick={sendCode} disabled={!!kBusy} style={{ border: 'none', background: 'none', color: '#9a3412', textDecoration: 'underline', fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.82rem' }}>{th ? 'ส่งใหม่' : 'Resend'}</button>
+              </div>
+            </>
+          )}
+          {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
+        </div>
+      );
+    }
+    const coupons = (kWallet && kWallet.coupons) || [];
+    const rewards = ((kWallet && kWallet.rewards) || []).filter(r => r.affordable);
+    return (
+      <div style={box}>
+        {head}
+        {!kWallet && !kMsg && <span style={{ fontSize: '0.85rem', color: '#9a3412' }}>{th ? 'กำลังโหลด…' : 'Loading…'}</span>}
+        {kWallet && <span style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.5rem' }}>{th ? `แต้มคงเหลือ ${Number(kWallet.balance || 0).toLocaleString()} แต้ม · ใช้ได้ 1 คูปองต่อออเดอร์` : `${kWallet.balance} points · 1 coupon per order`}</span>}
+        {kWallet && coupons.length === 0 && rewards.length === 0 && <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{th ? 'ยังไม่มีคูปองที่ใช้ได้ และแต้มยังไม่พอแลก' : 'No coupons yet'}</span>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+          {coupons.map(c => {
+            const on = kCoupon && String(kCoupon.id) === String(c.id);
+            return (
+              <div key={'c' + c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#fff', borderRadius: 12, padding: '0.5rem 0.6rem', opacity: c.usable ? 1 : 0.55 }}>
+                <span style={{ minWidth: 48, textAlign: 'center', fontWeight: 900, color: '#ea580c' }}>{c.big}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
+                  <div style={{ fontSize: '0.75rem', color: c.usable ? '#64748b' : '#b91c1c' }}>{c.usable ? (th ? `ลด ฿${money(c.discount)}` : `-฿${money(c.discount)}`) : c.reason}</div>
+                </div>
+                {c.usable && (on
+                  ? <button onClick={dropCoupon} style={btn(true)}>{th ? '✓ ใช้อยู่' : '✓ Applied'}</button>
+                  : <button onClick={() => pickKCoupon(c)} disabled={!!kBusy} style={btn(false)}>{kBusy === 'c' + c.id ? '…' : (th ? 'ใช้' : 'Use')}</button>)}
+              </div>
+            );
+          })}
+          {rewards.length > 0 && <b style={{ fontSize: '0.85rem', marginTop: '0.3rem' }}>{th ? 'แลกแต้มเป็นคูปอง' : 'Redeem points'}</b>}
+          {rewards.map(r => (
+            <div key={'r' + r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#fff', borderRadius: 12, padding: '0.5rem 0.6rem', border: '1px dashed #fdba74' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{r.name}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.big === 'ฟรี' ? (th ? `ของฟรี มูลค่า ฿${r.value}` : `Free (฿${r.value})`) : (th ? `ส่วนลด ฿${r.value}` : `-฿${r.value}`)}{r.minSpend ? (th ? ` · ขั้นต่ำ ฿${r.minSpend}` : ` · min ฿${r.minSpend}`) : ''}</div>
+              </div>
+              <button onClick={() => redeemK(r)} disabled={!!kBusy} style={btn(false)}>{kBusy === 'r' + r.id ? '…' : (th ? `แลก ${Number(r.cost).toLocaleString()} แต้ม` : `${r.cost} pts`)}</button>
+            </div>
+          ))}
+        </div>
+        {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
+      </div>
+    );
+  };
+
   // แถบบนของหน้าตะกร้า/ชำระเงิน: ปุ่มย้อนกลับ + ชื่อหน้า + โลโก้ร้าน
   const renderTopBar = (title, icon, canBack) => (
     <div style={{
@@ -1090,11 +1258,22 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
         </div>
       )}
 
+      {cart.length > 0 && crmOn && member && renderCouponCard()}
+
       {cart.length > 0 && (
         <div style={footerStyle}>
+          {couponOff > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, marginBottom: '0.3rem', color: '#16a34a', fontSize: '0.9rem' }}>
+              <span>{th ? 'ส่วนลดคูปอง' : 'Coupon'} · {kCoupon.title}</span>
+              <span>-฿{money(couponOff)}</span>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontWeight: 800, marginBottom: '0.6rem', color: '#0f172a' }}>
             <span>{th ? `ยอดรวม (${totalItemsCount} รายการ)` : `Total (${totalItemsCount} items)`}</span>
-            <span style={{ color: '#ea580c', fontSize: '1.3rem', fontWeight: 900 }}>฿{money(cartSubtotal)}</span>
+            <span style={{ color: '#ea580c', fontSize: '1.3rem', fontWeight: 900 }}>
+              {couponOff > 0 && <s style={{ color: '#94a3b8', fontSize: '0.9rem', marginRight: 6 }}>฿{money(cartSubtotal)}</s>}
+              ฿{money(payTotal)}
+            </span>
           </div>
           <button onClick={() => goTo('pay')} style={{ ...bigBtnStyle(ORANGE, false), justifyContent: 'space-between', boxShadow: '0 8px 20px rgba(217,119,6,0.3)' }}>
             <span>{th ? 'ไปหน้าชำระเงิน' : 'Continue to payment'}</span>
@@ -1225,7 +1404,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             <div style={{ marginTop: '0.5rem', color: '#0f172a' }}>
               <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{lang === 'th' ? 'ยอดชำระทั้งสิ้น' : 'Total Amount'}</div>
               <div style={{ fontSize: '1.75rem', fontWeight: '900', color: '#ea580c' }}>
-                ฿{cartSubtotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ฿{payTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
 
@@ -1472,7 +1651,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                     {th ? 'ตะกร้าของคุณ' : 'Your Cart'}
                   </div>
                   <div style={{ fontSize: '1.2rem', fontWeight: '900', color: '#ffffff' }}>
-                    ฿{cartSubtotal.toLocaleString()}
+                    ฿{payTotal.toLocaleString()}
                   </div>
                 </div>
               </div>
