@@ -24,9 +24,26 @@ const CATEGORY_FOLDERS = {
   "โชจู": "โชจู"
 };
 
+// รูปที่อัปโหลดไว้บน ImgBB เป็นไฟล์ขนาดเต็ม — ขอฉบับย่อ (WebP) ผ่านตัวย่อรูปของ Vercel
+// ขนาดที่ขอได้ต้องตรงกับ images.sizes ใน vercel.json
+const OPTIMIZABLE_HOSTS = ['i.ibb.co'];
+export const IMAGE_WIDTHS = [256, 640, 1080];
+
+const optimizedUrl = (url, width) => {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:' || !OPTIMIZABLE_HOSTS.includes(u.hostname)) return null;
+  } catch {
+    return null;
+  }
+  const w = IMAGE_WIDTHS.find(x => x >= width) || IMAGE_WIDTHS[IMAGE_WIDTHS.length - 1];
+  return `/_vercel/image?url=${encodeURIComponent(url)}&w=${w}&q=75`;
+};
+
 // ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริงก่อน)
+// width = ความกว้างที่ต้องใช้จริงโดยประมาณ (px รวมความคมจอแล้ว)
 // .webp = ไฟล์ย่อของรูปถ่าย (กว้างไม่เกิน 800px) โหลดเร็วกว่า PNG ต้นฉบับมาก — ลองก่อนเสมอ
-export const menuImageCandidates = (food) => {
+export const menuImageCandidates = (food, width = 640) => {
   if (!food) return [];
   const folder = CATEGORY_FOLDERS[food.category] || food.category || 'uncategorized';
   const fileName = (food.name || '').replace(/[\\/:*?"<>|]/g, '_').trim();
@@ -36,7 +53,11 @@ export const menuImageCandidates = (food) => {
   // 1. รูปที่แอดมินอัปโหลด/ใส่ลิงก์ไว้เอง (เช่นรูปใน Google Drive) — มาก่อนเสมอ
   //    เพราะเป็นรูปที่ตั้งใจเลือกให้เมนูนี้ ส่วนข้อ 2-4 เป็นการ "เดา" ชื่อไฟล์ในเครื่อง
   if (food.image && String(food.image).trim()) {
-    list.push(String(food.image).trim());
+    const url = String(food.image).trim();
+    // ฉบับย่อก่อน — ถ้าย่อไม่ได้ (เช่นรันในเครื่อง ไม่มีตัวย่อของ Vercel) ค่อยใช้ไฟล์ต้นฉบับ
+    const small = optimizedUrl(url, width);
+    if (small) list.push(small);
+    list.push(url);
   }
   if (fileName) {
     // 2. Check folder-based real photos (WebP/PNG/JPG)
