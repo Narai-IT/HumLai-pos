@@ -187,7 +187,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
   const keepMember = (m) => {
-    if (!m || !member || m.id !== member.id) { dropCoupon(); saveSession(VERIFY_KEY, null); setVerifyToken(''); setKWallet(null); setCodeSent(false); }
+    if (!m || !member || m.id !== member.id) { dropCoupon(); saveSession(VERIFY_KEY, null); setVerifyToken(''); setKWallet(null); setCardUrl(''); setCodeInput(''); }
     setMember(m); saveSession(MEMBER_KEY, m);
   };
 
@@ -201,7 +201,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const readSession = (key, json) => { try { const v = sessionStorage.getItem(key); return json ? JSON.parse(v || 'null') : (v || ''); } catch { return json ? null : ''; } };
   const kioskRef = useRef(readSession(REF_KEY) || (() => { const r = newCouponRef('kiosk'); saveSession(REF_KEY, r); return r; })());
   const [verifyToken, setVerifyToken] = useState(() => readSession(VERIFY_KEY));
-  const [codeSent, setCodeSent] = useState(false);
+  const [cardUrl, setCardUrl] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [kWallet, setKWallet] = useState(null);
   const [kCoupon, setKCoupon] = useState(() => readSession(COUPON_KEY, true));
@@ -217,7 +217,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const finishCoupon = () => { setKCoupon(null); saveSession(COUPON_KEY, null); kioskRef.current = newCouponRef('kiosk'); saveSession(REF_KEY, kioskRef.current); setKWallet(null); };
   const kioskCall = async (action, extra) => {
     const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, ...extra });
-    if (!res.success && res.verify) { setVerifyToken(''); saveSession(VERIFY_KEY, null); setCodeSent(false); }
+    if (!res.success && res.verify) { setVerifyToken(''); saveSession(VERIFY_KEY, null); }
     return res;
   };
   const checkMember = async () => {
@@ -332,20 +332,24 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const res = await kioskCall('crmKioskWallet', { subtotal: cartSubtotal });
     if (res.success) setKWallet(res); else setKMsg(res.error || (lang === 'th' ? 'โหลดคูปองไม่สำเร็จ' : 'Could not load coupons'));
   };
-  const sendCode = async () => {
-    if (kBusy) return;
-    setKBusy('send'); setKMsg('');
-    const res = await crmCall('crmKioskSendCode', { memberId: member.id, branchId });
-    setKBusy('');
-    if (res.success) { setCodeSent(true); setCodeInput(''); }
-    else setKMsg(res.error || (lang === 'th' ? 'ส่งรหัสไม่สำเร็จ' : 'Could not send code'));
-  };
+  // ยืนยันตัวตนด้วยรหัส 6 หลักในบัตรสมาชิก LINE (เปลี่ยนทุกนาที) — ไม่ส่งข้อความ จึงไม่เสียโควต้า LINE OA
+  // ถามระบบสมาชิกครั้งเดียวเพื่อเอาลิงก์เปิดบัตรสมาชิก และเช็กว่าสมาชิกคนนี้ผูก LINE แล้ว
+  useEffect(() => {
+    if (!crmOn || !member || verifyToken || cardUrl || cart.length === 0) return;
+    let alive = true;
+    crmCall('crmKioskSendCode', { memberId: member.id, branchId }).then(res => {
+      if (!alive) return;
+      if (res.success) setCardUrl(res.liffUrl || '-');
+      else setKMsg(res.error || '');
+    });
+    return () => { alive = false; };
+  }, [crmOn, member && member.id, verifyToken, cardUrl, cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const checkCode = async () => {
-    if (kBusy || codeInput.length !== 4) return;
+    if (kBusy || codeInput.length !== 6) return;
     setKBusy('check'); setKMsg('');
     const res = await crmCall('crmKioskCheckCode', { memberId: member.id, code: codeInput, branchId });
     setKBusy('');
-    if (res.success && res.verifyToken) { setVerifyToken(res.verifyToken); saveSession(VERIFY_KEY, res.verifyToken); setCodeSent(false); }
+    if (res.success && res.verifyToken) { setVerifyToken(res.verifyToken); saveSession(VERIFY_KEY, res.verifyToken); setCodeInput(''); }
     else setKMsg(res.error || (lang === 'th' ? 'รหัสไม่ถูกต้อง' : 'Wrong code'));
   };
   const pickKCoupon = async (c) => {
@@ -1014,28 +1018,22 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       return (
         <div style={box}>
           {head}
-          {!codeSent ? (
-            <>
-              <span style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.6rem' }}>
-                {th ? 'ยืนยันตัวตนก่อนใช้คูปองหรือแลกแต้ม ระบบจะส่งรหัส 4 หลักไปที่แชท LINE ของร้าน' : 'We will send a 4-digit code to your LINE chat'}
-              </span>
-              <button onClick={sendCode} disabled={kBusy === 'send'} style={btn(false)}>{kBusy === 'send' ? '…' : (th ? 'ส่งรหัสไปที่ LINE' : 'Send code to LINE')}</button>
-            </>
-          ) : (
-            <>
-              <label htmlFor="kiosk-code" style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.4rem' }}>
-                {th ? 'เปิดแชท LINE ของร้าน แล้วใส่รหัส 4 หลักที่ได้รับ' : 'Enter the 4-digit code from LINE'}
-              </label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input id="kiosk-code" value={codeInput} inputMode="numeric" maxLength={4} autoComplete="one-time-code"
-                  onChange={e => setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  onKeyDown={e => { if (e.key === 'Enter') checkCode(); }}
-                  style={{ width: 110, letterSpacing: '0.4em', textAlign: 'center', fontSize: '1.2rem', border: '1px solid #fdba74', borderRadius: 10, padding: '0.5rem', fontFamily: 'inherit' }} />
-                <button onClick={checkCode} disabled={kBusy === 'check' || codeInput.length !== 4} style={{ ...btn(false), opacity: codeInput.length === 4 ? 1 : 0.5 }}>{kBusy === 'check' ? '…' : (th ? 'ยืนยัน' : 'Verify')}</button>
-                <button onClick={sendCode} disabled={!!kBusy} style={{ border: 'none', background: 'none', color: '#9a3412', textDecoration: 'underline', fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.82rem' }}>{th ? 'ส่งใหม่' : 'Resend'}</button>
-              </div>
-            </>
+          <label htmlFor="kiosk-code" style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.5rem' }}>
+            {th ? 'ยืนยันตัวตนก่อนใช้คูปองหรือแลกแต้ม: เปิดบัตรสมาชิกใน LINE แล้วพิมพ์รหัส 6 หลักที่อยู่ใต้ QR' : 'Open your LINE member card and type the 6-digit code under the QR'}
+          </label>
+          {cardUrl && cardUrl !== '-' && (
+            <a href={cardUrl} target="_blank" rel="noopener noreferrer"
+              style={{ ...btn(false), display: 'inline-block', textDecoration: 'none', background: '#06c755', marginBottom: '0.6rem' }}>
+              {th ? 'เปิดบัตรสมาชิกใน LINE' : 'Open LINE member card'}
+            </a>
           )}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <input id="kiosk-code" value={codeInput} inputMode="numeric" maxLength={6} autoComplete="off" placeholder="000000"
+              onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setKMsg(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') checkCode(); }}
+              style={{ width: 140, letterSpacing: '0.3em', textAlign: 'center', fontSize: '1.2rem', border: '1px solid #fdba74', borderRadius: 10, padding: '0.5rem', fontFamily: 'inherit' }} />
+            <button onClick={checkCode} disabled={kBusy === 'check' || codeInput.length !== 6} style={{ ...btn(false), opacity: codeInput.length === 6 ? 1 : 0.5 }}>{kBusy === 'check' ? '…' : (th ? 'ยืนยัน' : 'Verify')}</button>
+          </div>
           {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
         </div>
       );

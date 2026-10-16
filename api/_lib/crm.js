@@ -120,7 +120,7 @@ export async function redeemReward(data, branchId, kiosk) {
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
   return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30 }, branchId);
 }
-// รหัสยืนยัน 4 หลักเข้าแชท LINE ของสมาชิก (หน้าลูกค้าสั่งเอง)
+// ยืนยันตัวตนที่หน้าลูกค้าสั่งเอง: รหัส 6 หลักในบัตรสมาชิก LINE (ไม่ส่งข้อความ) · send = ขอลิงก์เปิดบัตรสมาชิก
 export async function sendMemberCode(data, branchId) {
   if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
   if (rateLimited(30)) return { success: false, error: 'ขอรหัสถี่เกินไป ลองใหม่ในอีกสักครู่' };
@@ -128,7 +128,7 @@ export async function sendMemberCode(data, branchId) {
 }
 export async function checkMemberCode(data, branchId) {
   if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
-  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 4) }, branchId);
+  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 6) }, branchId);
 }
 
 // ── ส่งบิล ──
