@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound } from 'lucide-react';
-import { crmEnabled, lookupMember, maskPhone } from '../utils/crm';
+import { crmEnabled, lookupMember, maskPhone, crmCall, newCouponRef } from '../utils/crm';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
@@ -47,8 +47,59 @@ const CheckoutModal = ({
     setMemberBusy(true); setMemberErr('');
     const res = await lookupMember(q, branchId);
     setMemberBusy(false);
-    if (res.success) { setMember(res.member); setMemberQuery(''); }
+    if (res.success) { setMember(res.member); setMemberQuery(''); loadWallet(res.member); }
     else setMemberErr(res.error || 'ค้นหาสมาชิกไม่สำเร็จ');
+  };
+
+  // ── คูปองสมาชิก / แลกแต้ม: คูปองที่เลือกถูกจองไว้กับบิลนี้ (couponRef) จนกว่าจะจ่ายหรือเปลี่ยนใจ ──
+  const couponRef = useRef(newCouponRef('pos'));
+  const completedRef = useRef(false);
+  const [wallet, setWallet] = useState(null);
+  const [walletMsg, setWalletMsg] = useState('');
+  const [couponBusy, setCouponBusy] = useState('');
+  const loadWallet = async (m = member) => {
+    if (!m) return;
+    setWalletMsg('');
+    const res = await crmCall('crmWallet', { memberId: m.id, subtotal: total, ref: couponRef.current, branchId });
+    if (res.success) { setWallet(res); setMember(prev => (prev && prev.id === m.id ? { ...prev, points: res.balance } : prev)); }
+    else setWalletMsg(res.error || 'โหลดคูปองไม่สำเร็จ');
+  };
+  const applyCoupon = (c) => setSelectedDiscount({
+    id: 'crm-' + c.id, name: `คูปอง ${c.title}`, type: 'baht', value: Number(c.discount) || 0,
+    crmCoupon: { id: String(c.id), code: c.code, title: c.title }
+  });
+  const pickCoupon = async (c) => {
+    if (couponBusy) return;
+    setCouponBusy('c' + c.id); setWalletMsg('');
+    const res = await crmCall('crmReserveCoupon', { memberId: member.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId });
+    setCouponBusy('');
+    if (res.success) applyCoupon(res.coupon);
+    else { setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ'); loadWallet(); }
+  };
+  const redeem = async (r) => {
+    if (couponBusy) return;
+    if (!window.confirm(`แลก "${r.name}" ใช้ ${Number(r.cost).toLocaleString()} แต้ม แล้วใช้กับบิลนี้เลย?\n(ตัดแต้มทันที ถ้ายกเลิกบิล ลูกค้ายังมีคูปองนี้ไว้ใช้ครั้งหน้า)`)) return;
+    setCouponBusy('r' + r.id); setWalletMsg('');
+    const res = await crmCall('crmRedeem', { memberId: member.id, rewardId: r.id, ref: couponRef.current, subtotal: total, branchId });
+    setCouponBusy('');
+    if (res.success) { applyCoupon(res.coupon); loadWallet(); }
+    else setWalletMsg(res.error || 'แลกแต้มไม่สำเร็จ');
+  };
+  // เปลี่ยนจากคูปองเป็นส่วนลดอื่น / ไม่ใช้ส่วนลด → ปล่อยคูปองที่จองไว้
+  const heldCoupon = useRef(null);
+  useEffect(() => {
+    const now = selectedDiscount && selectedDiscount.crmCoupon ? selectedDiscount.crmCoupon.id : null;
+    const prev = heldCoupon.current;
+    if (prev && prev !== now) crmCall('crmReleaseCoupon', { couponId: prev, ref: couponRef.current, branchId });
+    heldCoupon.current = now;
+  }, [selectedDiscount, branchId]);
+  // ปิดหน้าต่างโดยไม่จ่าย → ปล่อยคูปอง (ถ้าปล่อยไม่ทัน ระบบปล่อยเองเมื่อหมดเวลาจอง)
+  useEffect(() => () => {
+    if (!completedRef.current && heldCoupon.current) crmCall('crmReleaseCoupon', { couponId: heldCoupon.current, ref: couponRef.current, branchId });
+  }, [branchId]);
+  const removeMember = () => {
+    if (selectedDiscount && selectedDiscount.crmCoupon) setSelectedDiscount(null);
+    setMember(null); setWallet(null); setWalletMsg('');
   };
   const [cashInput, setCashInput] = useState('');
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
@@ -276,7 +327,10 @@ const CheckoutModal = ({
   // print = กดปุ่มพิมพ์ใบเสร็จ: เครื่องที่ยังไม่ได้ตั้งเครื่องพิมพ์ใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
   const finalizeComplete = (print = false) => {
     const pc = pendingComplete || { method: 'เงินสด' };
-    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount });
+    completedRef.current = true;
+    const crmCoupon = member && selectedDiscount && selectedDiscount.crmCoupon
+      ? { ids: [selectedDiscount.crmCoupon.id], ref: couponRef.current, discount: discountAmount } : null;
+    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount, crmCoupon });
   };
 
   const PriceBreakdown = ({ compact = false }) => (
@@ -374,11 +428,55 @@ const CheckoutModal = ({
                         {lang === 'th' ? 'แต้มคงเหลือ' : 'Points'} {Number(member.points || 0).toLocaleString()}{member.tier ? ` · ${member.tier}` : ''}{member.phone ? ` · ${member.phone}` : ''}
                       </div>
                     </div>
-                    <button type="button" onClick={() => setMember(null)} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700 }}>
+                    <button type="button" onClick={removeMember} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700 }}>
                       {lang === 'th' ? 'เปลี่ยน' : 'Change'}
                     </button>
                   </div>
-                ) : (
+                ) : null}
+                {member && (
+                  <div style={{ marginTop: '0.6rem' }}>
+                    {!wallet && !walletMsg && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>กำลังโหลดคูปอง…</div>}
+                    {walletMsg && (
+                      <div role="alert" style={{ color: '#dc2626', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
+                        {walletMsg} <button type="button" onClick={() => loadWallet()} style={{ border: 'none', background: 'none', color: '#2563eb', textDecoration: 'underline', cursor: 'pointer' }}>ลองใหม่</button>
+                      </div>
+                    )}
+                    {wallet && (() => {
+                      const chosen = selectedDiscount && selectedDiscount.crmCoupon ? selectedDiscount.crmCoupon.id : null;
+                      const coupons = wallet.coupons || [];
+                      const rewards = (wallet.rewards || []).filter(r => r.affordable);
+                      const btn = (active) => ({ border: active ? '2px solid #16a34a' : '1px solid #cbd5e1', background: active ? '#dcfce7' : '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 800, whiteSpace: 'nowrap', cursor: 'pointer' });
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
+                          {coupons.length === 0 && rewards.length === 0 && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ยังไม่มีคูปอง และแต้มยังไม่พอแลกของรางวัล</div>}
+                          {coupons.map(c => (
+                            <div key={'c' + c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: '10px', background: '#fff', opacity: c.usable ? 1 : 0.55 }}>
+                              <span style={{ minWidth: '52px', textAlign: 'center', fontWeight: 900, color: '#ea580c' }}>{c.big}</span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
+                                <div style={{ fontSize: '0.75rem', color: c.usable ? '#475569' : '#dc2626' }}>{c.usable ? `ลด ฿${Number(c.discount).toLocaleString()} · ${c.code}` : c.reason}</div>
+                              </div>
+                              {c.usable && (chosen === String(c.id)
+                                ? <button type="button" style={btn(true)} onClick={() => setSelectedDiscount(null)}>✓ ใช้อยู่</button>
+                                : <button type="button" style={btn(false)} disabled={!!couponBusy} onClick={() => pickCoupon(c)}>{couponBusy === 'c' + c.id ? '…' : 'ใช้'}</button>)}
+                            </div>
+                          ))}
+                          {rewards.length > 0 && <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', marginTop: '4px' }}>แลกแต้ม (มี {Number(wallet.balance || 0).toLocaleString()} แต้ม)</div>}
+                          {rewards.map(r => (
+                            <div key={'r' + r.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '1px dashed #cbd5e1', borderRadius: '10px', background: '#fff' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{r.name}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#475569' }}>{r.big === 'ฟรี' ? `ของฟรี มูลค่า ฿${r.value}` : `ส่วนลด ฿${r.value}`}{r.minSpend ? ` · ขั้นต่ำ ฿${r.minSpend}` : ''}</div>
+                              </div>
+                              <button type="button" style={btn(false)} disabled={!!couponBusy} onClick={() => redeem(r)}>{couponBusy === 'r' + r.id ? '…' : `แลก ${Number(r.cost).toLocaleString()} แต้ม`}</button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+                {!member && (
                   <>
                     <label htmlFor="crm-member" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, fontSize: '0.9rem', marginBottom: '6px' }}>
                       <UserRound size={18} /> {lang === 'th' ? 'สมาชิก (สะสมแต้ม)' : 'Member (earn points)'}

@@ -137,6 +137,7 @@ export async function handleKioskPaidOrder(data) {
     // 4) ส่งแต้มเข้าระบบสมาชิก (ลูกค้าใส่เลขสมาชิกก่อนสั่ง) — เข้าคิวพร้อมบิล
     await queueBill(runner, branchId, billPayload({
       orderNumber: orderNo, memberId: data.memberId, paidTotal: total, channel: 'kiosk',
+      couponIds: data.couponIds, couponRef: data.couponRef, couponDiscount: data.couponDiscount,
       rows: items.map(item => ({ name: (item.food && item.food.name) || '', price: (Number(item.food && item.food.price) || 0) * (Number(item.quantity) || 1), qty: Number(item.quantity) || 1 }))
     }));
 
@@ -302,6 +303,7 @@ export async function insertOrder(data) {
       if (orderNo) {
         await queueBill(runner, branchId, billPayload({
           orderNumber: orderNo, memberId: data.memberId, paidTotal: p.grandTotal, storeDiscount: data.storeDiscount, staff: p.staff, channel: 'pos',
+          couponIds: data.couponIds, couponRef: data.couponRef, couponDiscount: data.couponDiscount,
           rows: rows.filter(Array.isArray).map(r => ({ name: toText(r[4]), price: toNum(r[6]), qty: toNum(r[12]) }))
         }));
       }

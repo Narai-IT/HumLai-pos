@@ -86,10 +86,55 @@ export async function lookupMember({ query: q, branchId, staff }) {
   return { success: true, member: { id: m.id, name: m.name, phone: m.phone, points: r.data.balance, tier: r.data.tier }, coupons: (r.data.coupons || []).length };
 }
 
+// ── คูปองและแลกแต้ม (ระยะ 2) ──
+// kiosk = หน้าลูกค้าสั่งเอง: ต้องยืนยันตัวตนด้วยรหัสที่ส่งเข้า LINE ก่อน (verifyToken) · จองคูปองนานกว่า เพราะรอพนักงานยืนยันยอดโอน
+const MEMBER_RE = MEMBER_ID;
+function memberBody(data, kiosk) {
+  const memberId = String(data.memberId || '');
+  if (!MEMBER_RE.test(memberId)) return null;
+  return kiosk ? { memberId, requireVerify: true, verifyToken: String(data.verifyToken || '') } : { memberId };
+}
+const ref = (v) => String(v || '').replace(/[^\w.:-]/g, '').slice(0, 80);
+async function crmAction(path, body, branchId) {
+  if (!crmEnabled(branchId)) return { success: false, error: 'สาขานี้ยังไม่ได้เชื่อมระบบสมาชิก' };
+  const r = await call(path, body, branchId);
+  if (!r.ok) return { success: false, offline: !!r.retry, code: r.code, verify: r.status === 401 && r.code === 'verify_required', error: r.error };
+  return { success: true, ...r.data };
+}
+export async function memberWallet(data, branchId, kiosk) {
+  const m = memberBody(data, kiosk);
+  if (!m) return { success: false, error: 'ไม่พบเลขสมาชิก' };
+  return crmAction('/api/pos/members/wallet', { ...m, subtotal: Number(data.subtotal) || 0, ref: ref(data.ref) }, branchId);
+}
+export async function reserveCoupon(data, branchId, kiosk) {
+  const m = memberBody(data, kiosk);
+  if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
+  return crmAction('/api/pos/coupons/reserve', { ...m, couponId: String(data.couponId || ''), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30 }, branchId);
+}
+export async function releaseCoupon(data, branchId) {
+  if (!data.couponId || !ref(data.ref)) return { success: true, released: false };
+  return crmAction('/api/pos/coupons/release', { couponId: String(data.couponId), ref: ref(data.ref) }, branchId);
+}
+export async function redeemReward(data, branchId, kiosk) {
+  const m = memberBody(data, kiosk);
+  if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
+  return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30 }, branchId);
+}
+// รหัสยืนยัน 4 หลักเข้าแชท LINE ของสมาชิก (หน้าลูกค้าสั่งเอง)
+export async function sendMemberCode(data, branchId) {
+  if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
+  if (rateLimited(30)) return { success: false, error: 'ขอรหัสถี่เกินไป ลองใหม่ในอีกสักครู่' };
+  return crmAction('/api/pos/members/verify/send', { memberId: String(data.memberId) }, branchId);
+}
+export async function checkMemberCode(data, branchId) {
+  if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
+  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 4) }, branchId);
+}
+
 // ── ส่งบิล ──
 // สร้างข้อมูลที่จะส่งจากแถว Orders ของบิล (แถวตัวเลือก ↳ ราคา 0 ไม่นับ)
 //   rows: [{ name, price (ราคารวมของแถว), qty }]
-export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDiscount, channel, staff }) {
+export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDiscount, channel, staff, couponIds, couponRef, couponDiscount }) {
   const items = rows
     .filter((r) => r.name && !String(r.name).startsWith('↳'))
     .map((r, i) => {
@@ -103,6 +148,10 @@ export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDisco
     storeDiscount: Math.max(0, Number(storeDiscount) || 0),
     paidTotal: Math.max(0, Number(paidTotal) || 0),
     channel: channel === 'kiosk' ? 'kiosk' : 'pos',
+    // คูปองสมาชิกที่จองไว้กับบิลนี้ + ยอดส่วนลดที่ให้ลูกค้าไปจริง (CRM ใช้ยอดนี้แม้คูปองมีปัญหาตอนบิลมาถึง)
+    ...(Array.isArray(couponIds) && couponIds.length && MEMBER_ID.test(String(memberId || ''))
+      ? { couponIds: couponIds.map(String).slice(0, 3), couponRef: ref(couponRef), couponDiscount: Math.max(0, Number(couponDiscount) || 0) }
+      : {}),
     staffId: staff ? String(staff).slice(0, 60) : undefined
   };
 }
