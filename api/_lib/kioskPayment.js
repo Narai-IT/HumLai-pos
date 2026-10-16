@@ -57,7 +57,9 @@ export async function kioskPaymentRequest(data) {
 
   const branchId = await branchForWrite(data);
   const payload = JSON.stringify({
-    branchId, tableNumber: text(data.tableNumber, 50), items, total, timestamp: data.timestamp || thaiTimeISO()
+    branchId, tableNumber: text(data.tableNumber, 50), items, total, timestamp: data.timestamp || thaiTimeISO(),
+    // เลขสมาชิกที่ลูกค้าใส่ก่อนสั่ง (ค้นจากระบบสมาชิกแล้ว) — ได้แต้มตอนพนักงานยืนยันยอดโอน
+    memberId: /^MB-\d{7}$/.test(String(data.memberId || '')) ? String(data.memberId) : null
   });
   const now = thaiTimeISO();
   const row = {

@@ -10,9 +10,11 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
+import { lookupMember, crmStatus, flushCrmQueue } from './crm.js';
+import { branchForWrite } from './branch.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-09-24-kiosk-pay-confirm';
+export const BUILD = '2026-10-16-crm-members';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -71,7 +73,12 @@ const POST_ACTIONS = {
   stockIn:                 recordStockIn,
   saveBOM:                 saveBOM,
   upsertIngredient,
-  deleteIngredient
+  deleteIngredient,
+
+  // ระบบสมาชิก: พนักงานค้นสมาชิกตอนปิดบิล (เห็นชื่อเต็ม แต้ม) · ลูกค้าหน้า QR ใส่เลขสมาชิก (เห็นแค่ชื่อย่อ)
+  crmMemberLookup:   async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: true }),
+  crmKioskMember:    async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: false }),
+  crmRetry:          async () => ({ success: true, sent: await flushCrmQueue(100) })
 };
 
 // คำสั่งอ่านที่ไม่ได้อยู่ใน read.handleGet (ของเบ็ดเตล็ด/ของที่ใช้ตรวจระบบ)
@@ -84,6 +91,7 @@ async function handleExtraGet(action, params = {}) {
     case 'getSalesReport':    return await generateSalesReport();
     case 'getKioskPayment':         return await getKioskPayment(params);
     case 'getPendingKioskPayments': return await getPendingKioskPayments(params);
+    case 'getCrmStatus':      return { success: true, ...(await crmStatus()) };
     case 'getTaxInvoices':    return { success: true, invoices: await listTaxInvoices() };
     case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };
     case 'getStock':          return await getStockLevels(String(params.branch || '').trim());
@@ -99,7 +107,7 @@ async function handleExtraGet(action, params = {}) {
 // เช็กว่า API ที่หน้าเว็บเรียกอยู่เป็นโค้ดตัวไหน และต่อฐานข้อมูลได้จริงไหม
 // เปิด <URL>?action=ping ในเบราว์เซอร์แล้วดูผลได้เลย
 async function ping() {
-  const out = { success: true, build: BUILD, backend: 'sqlserver', database: process.env.SQL_DATABASE || '', server: process.env.SQL_SERVER || '' };
+  const out = { success: true, build: BUILD, backend: 'sqlserver', database: process.env.SQL_DATABASE || '', server: process.env.SQL_SERVER || '', crm: !!process.env.CRM_URL };
   try {
     const pool = await getPool();
     const res = await pool.request().query('SELECT COUNT(*) AS n FROM dbo.Menu');
