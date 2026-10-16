@@ -8,6 +8,7 @@ import MenuImage from './MenuImage';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
+import { crmEnabled, lookupMember } from '../utils/crm';
 
 const TAKEAWAY_DINING = { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' };
 const DINE_IN_DINING = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
@@ -166,7 +167,7 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
 };
 
 // tables = ผังโต๊ะของสาขานี้ (ใช้ตอนเข้าหน้าลูกค้าจากหน้าแรกของเว็บ ที่ไม่มีเลขโต๊ะติดมากับลิงก์)
-const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [] }) => {
+const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [], branchId = '' }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   // QR โต๊ะมีเลขโต๊ะในลิงก์ (ส่งไปหลังบ้านให้พนักงานรู้โต๊ะ แต่ไม่แสดงให้ลูกค้าเห็น)
@@ -175,6 +176,28 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   // ทานที่ร้าน / ห่อกลับบ้าน — เลือกที่จอแรก ราคาทุกเมนูแสดงตามนี้
   const [orderType, setOrderType] = useState('');
+
+  // ── ระบบสมาชิก: ใส่เลขสมาชิก/เบอร์โทรก่อนสั่ง เพื่อสะสมแต้ม (ไม่บังคับ) ──
+  // จำไว้ในแท็บนี้ รีเฟรชหน้าแล้วไม่ต้องกรอกใหม่
+  const MEMBER_KEY = 'kiosk_member';
+  const [crmOn, setCrmOn] = useState(false);
+  const [member, setMember] = useState(() => { try { return JSON.parse(sessionStorage.getItem(MEMBER_KEY) || 'null'); } catch { return null; } });
+  const [memberInput, setMemberInput] = useState('');
+  const [memberBusy, setMemberBusy] = useState(false);
+  const [memberErr, setMemberErr] = useState('');
+  useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
+  const keepMember = (m) => { setMember(m); try { if (m) sessionStorage.setItem(MEMBER_KEY, JSON.stringify(m)); else sessionStorage.removeItem(MEMBER_KEY); } catch { /* ไม่มีที่เก็บ */ } };
+  const checkMember = async () => {
+    const q = memberInput.trim();
+    if (!q || memberBusy) return;
+    setMemberBusy(true); setMemberErr('');
+    const res = await lookupMember(q, branchId, { kiosk: true });
+    setMemberBusy(false);
+    if (res.success) { keepMember(res.member); setMemberInput(''); }
+    else setMemberErr(res.notFound
+      ? (lang === 'th' ? 'ไม่พบสมาชิก ตรวจเลขอีกครั้ง หรือสมัครได้ที่ LINE ของร้าน' : 'Member not found')
+      : (res.error || (lang === 'th' ? 'ตรวจสอบไม่สำเร็จ ลองอีกครั้ง' : 'Please try again')));
+  };
   // ห่อกลับบ้านโดยไม่มีเลขโต๊ะ → ลงโต๊ะโซน Takehome ตัวแรกของร้าน (ไม่มีก็ใช้ชื่อ Takehome)
   const takeawayTable = (() => {
     const t = (Array.isArray(tables) ? tables : []).find(tb => tb.active !== false && tb.zone === 'Takehome');
@@ -526,7 +549,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setPayBusy(true); setPayError('');
     const dining = orderType === 'takeaway' ? 'ห่อกลับบ้าน' : 'ทานที่ร้าน';
     const res = onRequestPayment
-      ? await onRequestPayment(tableNo, cart, cartSubtotal, snap.id, dining)
+      ? await onRequestPayment(tableNo, cart, cartSubtotal, snap.id, dining, member ? member.id : null)
       : { success: false, error: 'ระบบยังไม่พร้อม' };
     setPayBusy(false);
     if (!res || !res.success) {
@@ -832,6 +855,42 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
         <div style={{ textAlign: 'center', color: '#ea580c', fontWeight: 700, fontSize: '0.85rem', marginBottom: '1.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
           <Utensils size={14} /> {lang === 'th' ? 'สั่งอาหารด้วยตนเอง' : 'Self-ordering'}
         </div>
+
+        {crmOn && (
+          <div style={{ border: '2px solid ' + (member ? '#86efac' : '#fed7aa'), background: member ? '#f0fdf4' : '#fff7ed', borderRadius: 18, padding: '1rem', marginBottom: '1.4rem' }}>
+            {member ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <span style={{ fontSize: '1.8rem' }} aria-hidden="true">🎉</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <b style={{ display: 'block' }}>{lang === 'th' ? `สวัสดีคุณ${member.name}` : `Hi ${member.name}`}</b>
+                  <span style={{ fontSize: '0.85rem', color: '#166534' }}>{member.id} · {lang === 'th' ? 'บิลนี้สะสมแต้มให้อัตโนมัติ' : 'Points will be added to this bill'}</span>
+                </div>
+                <button onClick={() => keepMember(null)} style={{ border: 'none', background: 'none', color: '#64748b', textDecoration: 'underline', fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.85rem' }}>
+                  {lang === 'th' ? 'ไม่ใช่ฉัน' : 'Not me'}
+                </button>
+              </div>
+            ) : (
+              <>
+                <label htmlFor="kiosk-member" style={{ display: 'block', fontWeight: 800, marginBottom: '0.15rem' }}>{lang === 'th' ? 'เป็นสมาชิกหำไหลไหม? สะสมแต้มได้เลย' : 'Member? Earn points'}</label>
+                <span style={{ display: 'block', fontSize: '0.82rem', color: '#9a3412', marginBottom: '0.6rem' }}>
+                  {lang === 'th' ? 'ใส่เลขที่สมาชิก (ดูในบัตรสมาชิกใน LINE) หรือเบอร์โทรที่สมัครไว้ · ไม่มีข้ามได้' : 'Member no. (in your LINE member card) or phone · optional'}
+                </span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input id="kiosk-member" value={memberInput} inputMode="text" autoComplete="off"
+                    onChange={e => { setMemberInput(e.target.value); setMemberErr(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); checkMember(); } }}
+                    placeholder={lang === 'th' ? 'เช่น MB-0000123 หรือ 0812345678' : 'e.g. MB-0000123 or 0812345678'}
+                    style={{ flex: 1, minWidth: 0, border: '1px solid #fdba74', borderRadius: 12, padding: '0.75rem', fontSize: '1rem', fontFamily: 'inherit', background: '#fff' }} />
+                  <button onClick={checkMember} disabled={memberBusy || !memberInput.trim()}
+                    style={{ border: 'none', borderRadius: 12, padding: '0 1rem', background: '#ea580c', color: '#fff', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', opacity: memberBusy || !memberInput.trim() ? 0.5 : 1 }}>
+                    {memberBusy ? '…' : (lang === 'th' ? 'ตรวจสอบ' : 'Check')}
+                  </button>
+                </div>
+                {memberErr && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{memberErr}</div>}
+              </>
+            )}
+          </div>
+        )}
 
         <h2 style={{ fontSize: '1.4rem', fontWeight: 900, margin: '0 0 0.3rem' }}>{lang === 'th' ? 'ทานที่ร้าน หรือ ห่อกลับบ้าน?' : 'Dine in or take away?'}</h2>
         <p style={{ color: '#64748b', margin: '0 0 1.25rem' }}>{lang === 'th' ? 'ราคาในเมนูจะแสดงตามที่เลือก' : 'Menu prices follow your choice'}</p>

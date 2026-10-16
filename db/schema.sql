@@ -616,3 +616,33 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_KioskPayments_Status' AND object_id = OBJECT_ID('dbo.KioskPayments'))
   CREATE INDEX IX_KioskPayments_Status ON dbo.KioskPayments ([status], branchId, requestedAt);
 GO
+
+-- ─────────────────────────────────────────
+-- เชื่อมระบบสมาชิก (CRM): คิวส่งบิลไปให้แต้ม
+-- ทุกบิลที่ชำระแล้วเข้าคิวในทรานแซกชันเดียวกับบิล แล้วส่งไป CRM ทันที ถ้าส่งไม่ได้ (เน็ตหลุด/CRM ปิด) ส่งซ้ำเองภายหลัง
+-- CRM กันบิลซ้ำด้วยเลขบิล จึงส่งซ้ำได้ไม่ได้แต้มซ้ำ
+-- status: pending (รอส่ง) / sent (ส่งแล้ว) / failed (CRM ปฏิเสธ ต้องตรวจ)
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.CrmBills', 'U') IS NULL
+CREATE TABLE dbo.CrmBills (
+  RowId        INT IDENTITY(1,1) PRIMARY KEY,
+  BranchId     NVARCHAR(60)  NOT NULL,
+  OrderNumber  NVARCHAR(60)  NOT NULL,
+  MemberId     NVARCHAR(20)  NULL,
+  PayloadJson  NVARCHAR(MAX) NOT NULL,
+  [Status]     NVARCHAR(20)  NOT NULL DEFAULT 'pending',
+  Attempts     INT           NOT NULL DEFAULT 0,
+  NextAttempt  DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  LastError    NVARCHAR(500) NULL,
+  Points       INT           NULL,
+  Balance      INT           NULL,
+  CreatedAt    DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  SentAt       DATETIME2(0)  NULL
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_CrmBills_Bill' AND object_id = OBJECT_ID('dbo.CrmBills'))
+  CREATE UNIQUE INDEX UX_CrmBills_Bill ON dbo.CrmBills (BranchId, OrderNumber);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CrmBills_Pending' AND object_id = OBJECT_ID('dbo.CrmBills'))
+  CREATE INDEX IX_CrmBills_Pending ON dbo.CrmBills ([Status], NextAttempt);
+GO

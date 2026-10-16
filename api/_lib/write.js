@@ -4,6 +4,7 @@ import { toThaiClock, thaiTimeISO } from './time.js';
 import { toText, toNum } from './rows.js';
 import { deductStock } from './stock.js';
 import { branchForWrite, requestedBranch, branchFilter } from './branch.js';
+import { billPayload, queueBill, sendBillNow, flushCrmQueue } from './crm.js';
 
 const ORDER_INSERT_COLS = ['Timestamp','OrderNumber','CustomerName','Address','ItemDetail','DiningOption','Price','TotalAmount','Status','OrderStartTime','CompletionTime','RecordedBy','Quantity','TsLocal','BranchId'];
 const PAYMENT_COLS = ['timestamp','orderNumber','tableNo','paymentMethod','grandTotal','staff','shiftId','splitDetail','BranchId'];
@@ -133,8 +134,17 @@ export async function handleKioskPaidOrder(data) {
     });
     await insertRows('TableOrders', TABLE_COLS, tableRows, runner);
 
+    // 4) ส่งแต้มเข้าระบบสมาชิก (ลูกค้าใส่เลขสมาชิกก่อนสั่ง) — เข้าคิวพร้อมบิล
+    await queueBill(runner, branchId, billPayload({
+      orderNumber: orderNo, memberId: data.memberId, paidTotal: total, channel: 'kiosk',
+      rows: items.map(item => ({ name: (item.food && item.food.name) || '', price: (Number(item.food && item.food.price) || 0) * (Number(item.quantity) || 1), qty: Number(item.quantity) || 1 }))
+    }));
+
     return { success: true, orderNumber: orderNo };
   });
+  if (result.success && !result.duplicate) {
+    sendBillNow(branchId, result.orderNumber).then(() => flushCrmQueue()).catch(() => {});
+  }
 
   // 4) ตัดสต็อกตาม BOM — อยู่นอกทรานแซกชันโดยตั้งใจ บิลกับยอดเงินบันทึกไปแล้ว
   //    ห้ามล้มทั้งคำขอเพราะตัดสต็อกไม่ได้ (ร้านที่ยังไม่ตั้ง BOM ก็ต้องขายได้)
@@ -288,9 +298,24 @@ export async function insertOrder(data) {
       ];
       if (useRef) await insertRows('PaymentSummary', [...PAYMENT_COLS, 'ClientRef'], [[...row, clientRef]], runner);
       else await insertRows('PaymentSummary', PAYMENT_COLS, [row], runner);
+      // ระบบสมาชิก: เข้าคิวในทรานแซกชันเดียวกับบิล (บิลไม่ใช่สมาชิกก็ส่ง เพื่อให้ CRM รู้สัดส่วนยอดขายสมาชิก)
+      if (orderNo) {
+        await queueBill(runner, branchId, billPayload({
+          orderNumber: orderNo, memberId: data.memberId, paidTotal: p.grandTotal, storeDiscount: data.storeDiscount, staff: p.staff, channel: 'pos',
+          rows: rows.filter(Array.isArray).map(r => ({ name: toText(r[4]), price: toNum(r[6]), qty: toNum(r[12]) }))
+        }));
+      }
     }
     return { success: true, orderNumber: orderNo };
   });
+  // สมาชิก: ส่งทันทีเพื่อเอาแต้มไปพิมพ์ลงใบเสร็จ (รอสั้น ๆ) · ส่งไม่ได้ก็อยู่ในคิว ส่งซ้ำเองภายหลัง
+  if (result.success && result.orderNumber) {
+    if (data.memberId) {
+      const crm = await sendBillNow(branchId, result.orderNumber);
+      if (crm) result.crm = crm;
+    }
+    flushCrmQueue().catch(() => {});
+  }
   return result;
 }
 

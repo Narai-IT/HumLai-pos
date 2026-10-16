@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer } from 'lucide-react';
+import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound } from 'lucide-react';
+import { crmEnabled, lookupMember, maskPhone } from '../utils/crm';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
@@ -27,12 +28,28 @@ const calcCharges = (subtotal, settings = {}, discount = null) => {
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
-  settings = {}, discounts = [], categories = [], initialDiscount = null
+  settings = {}, discounts = [], categories = [], initialDiscount = null, branchId = ''
 }) => {
   // ส่วนลดเก็บเป็น "รหัสหมวดหมู่" (HL#####) ซึ่งอ่านไม่รู้เรื่องถ้าโชว์ดิบ ๆ
   // แปลงเป็นชื่อหมวดให้แคชเชียร์อ่านออกก่อนแสดง
   const categoryLabel = (slug) => categories.find(c => c.slug === slug)?.name || slug;
   const [paymentStep, setPaymentStep] = useState('summary');
+  // ── ระบบสมาชิก: สแกน QR บัตรสมาชิก (เครื่องยิงพิมพ์ลงช่องแล้วกด Enter ให้เอง) หรือพิมพ์เบอร์/เลขสมาชิก ──
+  const [crmOn, setCrmOn] = useState(false);
+  const [member, setMember] = useState(null);
+  const [memberQuery, setMemberQuery] = useState('');
+  const [memberBusy, setMemberBusy] = useState(false);
+  const [memberErr, setMemberErr] = useState('');
+  useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
+  const findMember = async () => {
+    const q = memberQuery.trim();
+    if (!q || memberBusy) return;
+    setMemberBusy(true); setMemberErr('');
+    const res = await lookupMember(q, branchId);
+    setMemberBusy(false);
+    if (res.success) { setMember(res.member); setMemberQuery(''); }
+    else setMemberErr(res.error || 'ค้นหาสมาชิกไม่สำเร็จ');
+  };
   const [cashInput, setCashInput] = useState('');
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
   const [selectedDiscount, setSelectedDiscount] = useState(initialDiscount);
@@ -210,6 +227,7 @@ const CheckoutModal = ({
       ${tableNo ? line('โต๊ะ', tableNo) : ''}
       ${line('วันที่', now)}
       ${paidMethod ? line('ชำระโดย', paidMethod) : ''}
+      ${member ? line('สมาชิก', esc(member.id)) : ''}
       <div class="hr"></div>
       ${rows}
       <div class="hr"></div>
@@ -234,6 +252,7 @@ const CheckoutModal = ({
     if (sc > 0) summary.push({ label: `เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, value: money2(sc) });
     if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(vat) });
     if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
+    if (member) summary.push({ label: 'สมาชิก', value: `${member.id}${member.phone ? ' ' + maskPhone(member.phone) : ''}` });
     return {
       id: no,
       orderNumber: no || '-',
@@ -257,7 +276,7 @@ const CheckoutModal = ({
   // print = กดปุ่มพิมพ์ใบเสร็จ: เครื่องที่ยังไม่ได้ตั้งเครื่องพิมพ์ใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
   const finalizeComplete = (print = false) => {
     const pc = pendingComplete || { method: 'เงินสด' };
-    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml });
+    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount });
   };
 
   const PriceBreakdown = ({ compact = false }) => (
@@ -344,6 +363,44 @@ const CheckoutModal = ({
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1rem' }}>
               <PriceBreakdown />
             </div>
+            {crmOn && (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem 1rem', marginBottom: '1rem', background: member ? '#f0fdf4' : '#ffffff' }}>
+                {member ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <UserRound size={22} color="#16a34a" />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 800 }}>{member.name} <span style={{ color: '#64748b', fontWeight: 600 }}>· {member.id}</span></div>
+                      <div style={{ fontSize: '0.85rem', color: '#475569' }}>
+                        {lang === 'th' ? 'แต้มคงเหลือ' : 'Points'} {Number(member.points || 0).toLocaleString()}{member.tier ? ` · ${member.tier}` : ''}{member.phone ? ` · ${member.phone}` : ''}
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setMember(null)} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700 }}>
+                      {lang === 'th' ? 'เปลี่ยน' : 'Change'}
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <label htmlFor="crm-member" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, fontSize: '0.9rem', marginBottom: '6px' }}>
+                      <UserRound size={18} /> {lang === 'th' ? 'สมาชิก (สะสมแต้ม)' : 'Member (earn points)'}
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        id="crm-member" value={memberQuery} autoComplete="off"
+                        onChange={e => { setMemberQuery(e.target.value); setMemberErr(''); }}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); findMember(); } }}
+                        placeholder={lang === 'th' ? 'สแกน QR บัตรสมาชิก / เบอร์โทร / เลขสมาชิก' : 'Scan member QR / phone / member no.'}
+                        style={{ flex: 1, minWidth: 0, border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px 12px', fontSize: '1rem' }}
+                      />
+                      <button type="button" onClick={findMember} disabled={memberBusy || !memberQuery.trim()}
+                        style={{ border: 0, background: '#0f172a', color: '#fff', borderRadius: '8px', padding: '0 16px', fontWeight: 800, opacity: memberBusy || !memberQuery.trim() ? 0.5 : 1 }}>
+                        {memberBusy ? '…' : (lang === 'th' ? 'ค้นหา' : 'Find')}
+                      </button>
+                    </div>
+                    {memberErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: '6px', fontWeight: 600 }}>{memberErr}</div>}
+                  </>
+                )}
+              </div>
+            )}
             <button
               onClick={() => setPaymentStep('discount')}
               className="confirm-btn"

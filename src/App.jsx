@@ -1150,6 +1150,9 @@ function App() {
       clientRef,
       branchId: branchKey,
       rows: rowsToSend,
+      // ระบบสมาชิก: เลขสมาชิกที่สแกน/ค้นตอนปิดบิล + ส่วนลดร้าน (แต้มคิดจากยอดหลังส่วนลด ก่อนค่าบริการ/VAT)
+      memberId: printInfo.member ? printInfo.member.id : undefined,
+      storeDiscount: Number(printInfo.discountAmount) || 0,
       payment: {
         orderNumber: newOrderNumber,
         tableNo: String(tableNumber),
@@ -1161,9 +1164,11 @@ function App() {
       }
     };
     let finalNo = '';
+    let crm = null;
     try {
       const json = await postOrderPayload(orderPayload);
       finalNo = (json && json.orderNumber) || newOrderNumber;
+      crm = json && json.crm;
     } catch (error) {
       console.error('Error saving order:', error);
       // เก็บบิลที่บันทึกไม่สำเร็จไว้ในเครื่อง เพื่อไม่ให้ข้อมูลหาย + ให้ retry/ตรวจสอบภายหลังได้
@@ -1190,6 +1195,12 @@ function App() {
       const base = printInfo.receiptOrder
         ? { ...printInfo.receiptOrder, id: receiptNo, orderNumber: receiptNo }
         : { ...newOrder, id: receiptNo, orderNumber: receiptNo };
+      // แต้มที่ได้จากบิลนี้ (ระบบสมาชิกตอบทันเวลา) · ไม่ทัน = แต้มเข้าภายหลังและลูกค้าได้ข้อความแจ้งทาง LINE
+      if (printInfo.member && Array.isArray(base.summary)) {
+        base.summary = [...base.summary, crm && crm.sent
+          ? { label: 'แต้มที่ได้', value: `+${Number(crm.points || 0).toLocaleString()}${crm.balance != null ? ` (คงเหลือ ${Number(crm.balance).toLocaleString()})` : ''}` }
+          : { label: 'แต้ม', value: 'เข้าบัญชีภายหลัง แจ้งทาง LINE' }];
+      }
       if (receiptPrinter) {
         sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: { ...base, paid: !!finalNo } })
           .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
@@ -1368,7 +1379,7 @@ function App() {
 
   // ── ลูกค้าแจ้งโอน (หน้าคีออส) → รอพนักงานหน้าขายกดยืนยัน ──
   // ส่งออเดอร์ทั้งก้อนไปเก็บไว้ก่อน บิลจริงออกตอนพนักงานกด "ได้รับเงินแล้ว" (respondKioskPayment)
-  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel) => {
+  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel, memberId) => {
     const cartForServer = cartItems.map(item => {
       let unitPrice = Number(item.food.price) || 0;
       if (item.allPopups && item.allPopups.length > 0) {
@@ -1384,7 +1395,8 @@ function App() {
       sessionId: String(paySessionId),
       items: cartForServer,
       total: Number(total) || 0,
-      timestamp: getThaiTimeISO()
+      timestamp: getThaiTimeISO(),
+      memberId: memberId || undefined
     };
     let lastError = '';
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -1568,8 +1580,8 @@ function App() {
             }}
           />
         } />
-        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} />} />
-        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} />} />
+        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} branchId={branchKey} />} />
+        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} branchId={branchKey} />} />
 
         <Route path="/table-orders" element={
           !tableNumber ? <Navigate to="/index" replace /> :
@@ -1799,6 +1811,7 @@ function App() {
             discounts={posDiscounts}
             categories={allCategories.length > 0 ? allCategories : categories}
             initialDiscount={checkoutDiscount}
+            branchId={branchKey}
             users={users}
             currentUser={currentUser}
             tableNo={tableNumber}
