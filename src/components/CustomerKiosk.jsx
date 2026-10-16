@@ -142,6 +142,7 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
         food={food}
         alt={alt}
         placeholderSize="4rem"
+        width={1080}
         draggable={false}
         style={{
           maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
@@ -934,7 +935,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
         background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '16px', padding: '0.65rem',
         display: 'flex', gap: '0.7rem', boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
       }}>
-        <MenuImage food={item.food} alt="" loading="lazy" placeholderSize="1.8rem"
+        <MenuImage food={item.food} width={256} alt="" loading="lazy" placeholderSize="1.8rem"
           style={{ width: 68, height: 68, borderRadius: '12px', objectFit: 'cover', flexShrink: 0, background: '#f1f5f9' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 800, fontSize: '0.93rem', lineHeight: 1.3, color: '#0f172a' }}>

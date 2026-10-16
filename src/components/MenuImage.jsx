@@ -3,11 +3,11 @@ import { menuImageCandidates } from '../utils/menuImage';
 
 // รูปเมนูที่ลองโหลดไล่ตามลำดับ — ถ้าไฟล์ไหนโหลดไม่ได้ก็ขยับไปไฟล์ถัดไป
 // ลองครบทุกไฟล์แล้วยังไม่ได้ = โชว์ 🍽️ แทน (ไม่วนโหลดรูปเสียซ้ำไม่จบ)
-const MenuImage = ({ food, style, className, placeholderClassName, placeholderSize = '2.2rem', ref, ...imgProps }) => {
+const MenuImage = ({ food, width = 640, style, className, placeholderClassName, placeholderSize = '2.2rem', ref, ...imgProps }) => {
   const candidates = useMemo(
-    () => menuImageCandidates(food),
+    () => menuImageCandidates(food, width),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [food?.image, food?.name, food?.category, food?.id, food?.baseId]
+    [food?.image, food?.name, food?.category, food?.id, food?.baseId, width]
   );
   const key = candidates.join('|');
   const [state, setState] = useState({ key, idx: 0 });
