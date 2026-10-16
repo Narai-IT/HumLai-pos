@@ -40,6 +40,32 @@ const optimizedUrl = (url, width) => {
   return `/_vercel/image?url=${encodeURIComponent(url)}&w=${w}&q=75`;
 };
 
+// ลิงก์ Google Drive (เช่น drive.google.com/file/d/<ID>/view, open?id=<ID>, uc?id=<ID>)
+// → ขอฉบับย่อจากตัวย่อรูปของ Google เอง ต้องแชร์ไฟล์เป็น "ทุกคนที่มีลิงก์" ไว้
+const DRIVE_HOSTS = ['drive.google.com', 'docs.google.com', 'drive.usercontent.google.com', 'lh3.googleusercontent.com'];
+
+const driveFileId = (url) => {
+  try {
+    const u = new URL(url);
+    if (!DRIVE_HOSTS.includes(u.hostname)) return null;
+    const m = u.pathname.match(/\/d\/([\w-]{20,})/);
+    if (m) return m[1];
+    const id = u.searchParams.get('id');
+    return id && /^[\w-]{20,}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+};
+
+const driveResizedUrls = (url, width) => {
+  const id = driveFileId(url);
+  if (!id) return [];
+  return [
+    `https://lh3.googleusercontent.com/d/${id}=w${width}`,
+    `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`
+  ];
+};
+
 // ลำดับรูปที่จะลองโหลด (เน้นรูปภาพถ่ายเหมือนจริงก่อน)
 // width = ความกว้างที่ต้องใช้จริงโดยประมาณ (px รวมความคมจอแล้ว)
 // .webp = ไฟล์ย่อของรูปถ่าย (กว้างไม่เกิน 800px) โหลดเร็วกว่า PNG ต้นฉบับมาก — ลองก่อนเสมอ
@@ -57,6 +83,7 @@ export const menuImageCandidates = (food, width = 640) => {
     // ฉบับย่อก่อน — ถ้าย่อไม่ได้ (เช่นรันในเครื่อง ไม่มีตัวย่อของ Vercel) ค่อยใช้ไฟล์ต้นฉบับ
     const small = optimizedUrl(url, width);
     if (small) list.push(small);
+    list.push(...driveResizedUrls(url, width));
     list.push(url);
   }
   if (fileName) {
