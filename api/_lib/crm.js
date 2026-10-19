@@ -77,13 +77,15 @@ export async function lookupMember({ query: q, branchId, staff }) {
   const body = raw.startsWith('QR.') ? { qrToken: raw } : { query: raw };
   const r = await call('/api/pos/members/resolve', body, branchId);
   if (!r.ok) {
-    if (r.status === 404) return { success: false, notFound: true, error: 'ไม่พบสมาชิก' };
+    if (r.status === 404) return { success: false, notFound: true, error: /^(CP\.)?[A-Z0-9]{2}-/i.test(raw) ? 'ไม่พบคูปองนี้' : 'ไม่พบสมาชิก' };
     if (r.status === 410) return { success: false, error: 'QR หมดอายุ ให้ลูกค้าเปิดบัตรสมาชิกใหม่แล้วสแกนอีกครั้ง' };
     return { success: false, offline: !!r.retry, error: r.error };
   }
   const m = r.data.member || {};
   if (!staff) return { success: true, member: { id: m.id, name: maskName(m.name) } };
-  return { success: true, member: { id: m.id, name: m.name, phone: m.phone, points: r.data.balance, tier: r.data.tier }, coupons: (r.data.coupons || []).length };
+  // สแกน QR คูปอง (CP.xxx) → ส่งคูปองที่สแกนกลับไปด้วย ให้หน้าขายใช้กับบิลนี้ทันที
+  return { success: true, member: { id: m.id, name: m.name, phone: m.phone, points: r.data.balance, tier: r.data.tier }, coupons: (r.data.coupons || []).length,
+    scannedCoupon: r.data.scannedCoupon || null };
 }
 
 // ── คูปองและแลกแต้ม (ระยะ 2) ──

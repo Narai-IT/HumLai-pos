@@ -14,7 +14,7 @@ import { lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, re
 import { branchForWrite } from './branch.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-10-19-crm-join';
+export const BUILD = '2026-10-19-crm-scan';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
