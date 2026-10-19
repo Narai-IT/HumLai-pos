@@ -202,6 +202,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const kioskRef = useRef(readSession(REF_KEY) || (() => { const r = newCouponRef('kiosk'); saveSession(REF_KEY, r); return r; })());
   const [verifyToken, setVerifyToken] = useState(() => readSession(VERIFY_KEY));
   const [cardUrl, setCardUrl] = useState('');
+  // ร้านเปิด "ยืนยันตัวตนก่อนใช้คูปอง" ไว้ไหม (CRM_KIOSK_VERIFY ที่เครื่อง API) — รู้จากคำตอบครั้งแรกที่ขอรหัส · ปิดอยู่ = แสดงคูปองทันที
+  const [needVerify, setNeedVerify] = useState(false);
+  const verified = !!verifyToken || !needVerify;
   const [codeInput, setCodeInput] = useState('');
   const [kWallet, setKWallet] = useState(null);
   const [kCoupon, setKCoupon] = useState(() => readSession(COUPON_KEY, true));
@@ -217,7 +220,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const finishCoupon = () => { setKCoupon(null); saveSession(COUPON_KEY, null); kioskRef.current = newCouponRef('kiosk'); saveSession(REF_KEY, kioskRef.current); setKWallet(null); };
   const kioskCall = async (action, extra) => {
     const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, ...extra });
-    if (!res.success && res.verify) { setVerifyToken(''); saveSession(VERIFY_KEY, null); }
+    if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); }
     return res;
   };
   const checkMember = async () => {
@@ -327,7 +330,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   // ฟังก์ชันคูปอง (ใช้ cartSubtotal จึงต้องอยู่หลังคำนวณยอด)
   const loadKWallet = async () => {
-    if (!member || !verifyToken) return;
+    if (!member || !verified) return;
     setKMsg('');
     const res = await kioskCall('crmKioskWallet', { subtotal: cartSubtotal });
     if (res.success) setKWallet(res); else setKMsg(res.error || (lang === 'th' ? 'โหลดคูปองไม่สำเร็จ' : 'Could not load coupons'));
@@ -335,7 +338,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // ยืนยันตัวตนด้วยรหัส 6 หลักในบัตรสมาชิก LINE (เปลี่ยนทุกนาที) — ไม่ส่งข้อความ จึงไม่เสียโควต้า LINE OA
   // ถามระบบสมาชิกครั้งเดียวเพื่อเอาลิงก์เปิดบัตรสมาชิก และเช็กว่าสมาชิกคนนี้ผูก LINE แล้ว
   useEffect(() => {
-    if (!crmOn || !member || verifyToken || cardUrl || cart.length === 0) return;
+    if (!crmOn || !member || verified || cardUrl || cart.length === 0) return;
     let alive = true;
     crmCall('crmKioskSendCode', { memberId: member.id, branchId }).then(res => {
       if (!alive) return;
@@ -343,7 +346,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       else setKMsg(res.error || '');
     });
     return () => { alive = false; };
-  }, [crmOn, member && member.id, verifyToken, cardUrl, cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [crmOn, member && member.id, verified, cardUrl, cart.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const checkCode = async () => {
     if (kBusy || codeInput.length !== 6) return;
     setKBusy('check'); setKMsg('');
@@ -369,10 +372,10 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setKBusy('');
     if (res.success) { keepCoupon(res.coupon); loadKWallet(); } else setKMsg(res.error || 'แลกแต้มไม่สำเร็จ');
   };
-  // ยืนยันตัวตนแล้ว → โหลดคูปอง · ยอดในตะกร้าเปลี่ยน → คำนวณส่วนลดของคูปองที่ใช้อยู่ใหม่ (ไม่ถึงขั้นต่ำแล้วเอาออก)
-  useEffect(() => { if (crmOn && member && verifyToken) loadKWallet(); }, [crmOn, member && member.id, verifyToken]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ยืนยันตัวตนแล้ว (หรือร้านไม่บังคับยืนยัน) → โหลดคูปอง · ยอดในตะกร้าเปลี่ยน → คำนวณส่วนลดของคูปองที่ใช้อยู่ใหม่ (ไม่ถึงขั้นต่ำแล้วเอาออก)
+  useEffect(() => { if (crmOn && member && verified) loadKWallet(); }, [crmOn, member && member.id, verified]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (!kCoupon || !member || !verifyToken || cartSubtotal <= 0 || payStage) return;
+    if (!kCoupon || !member || !verified || cartSubtotal <= 0 || payStage) return;
     let alive = true;
     kioskCall('crmKioskReserve', { couponId: kCoupon.id, subtotal: cartSubtotal }).then(res => {
       if (!alive) return;
@@ -1014,7 +1017,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const box = { margin: '0 1rem 1rem', border: '2px solid #fed7aa', background: '#fff7ed', borderRadius: 16, padding: '0.9rem' };
     const btn = (on) => ({ border: on ? '2px solid #16a34a' : 'none', background: on ? '#dcfce7' : '#ea580c', color: on ? '#166534' : '#fff', borderRadius: 10, padding: '0.45rem 0.8rem', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap' });
     const head = <b style={{ display: 'block', marginBottom: '0.4rem' }}>🎁 {th ? `คูปองและแต้มของคุณ${member.name}` : 'Your coupons & points'}</b>;
-    if (!verifyToken) {
+    if (!verified) {
       return (
         <div style={box}>
           {head}

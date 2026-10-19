@@ -84,7 +84,7 @@ const POST_ACTIONS = {
   crmReserveCoupon:  async (data) => reserveCoupon(data, await branchForWrite(data), false),
   crmReleaseCoupon:  async (data) => releaseCoupon(data, await branchForWrite(data)),
   crmRedeem:         async (data) => redeemReward(data, await branchForWrite(data), false),
-  // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (ต้องยืนยันรหัสที่ส่งเข้า LINE ก่อน ระบบสมาชิกตรวจ verifyToken เอง)
+  // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
   crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),
   crmKioskCheckCode: async (data) => checkMemberCode(data, await branchForWrite(data)),
   crmKioskWallet:    async (data) => memberWallet(data, await branchForWrite(data), true),

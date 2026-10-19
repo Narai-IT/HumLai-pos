@@ -87,12 +87,14 @@ export async function lookupMember({ query: q, branchId, staff }) {
 }
 
 // ── คูปองและแลกแต้ม (ระยะ 2) ──
-// kiosk = หน้าลูกค้าสั่งเอง: ต้องยืนยันตัวตนด้วยรหัสที่ส่งเข้า LINE ก่อน (verifyToken) · จองคูปองนานกว่า เพราะรอพนักงานยืนยันยอดโอน
+// kiosk = หน้าลูกค้าสั่งเอง · จองคูปองนานกว่า เพราะรอพนักงานยืนยันยอดโอน
+// CRM_KIOSK_VERIFY=1 → ต้องยืนยันตัวตนด้วยรหัส 6 หลักในบัตรสมาชิก LINE ก่อน (verifyToken) · ไม่ตั้ง = แสดงคูปองและแลกแต้มได้ทันทีหลังใส่เลขสมาชิก
 const MEMBER_RE = MEMBER_ID;
+const kioskVerify = () => process.env.CRM_KIOSK_VERIFY === '1';
 function memberBody(data, kiosk) {
   const memberId = String(data.memberId || '');
   if (!MEMBER_RE.test(memberId)) return null;
-  return kiosk ? { memberId, requireVerify: true, verifyToken: String(data.verifyToken || '') } : { memberId };
+  return kiosk && kioskVerify() ? { memberId, requireVerify: true, verifyToken: String(data.verifyToken || '') } : { memberId };
 }
 const ref = (v) => String(v || '').replace(/[^\w.:-]/g, '').slice(0, 80);
 async function crmAction(path, body, branchId) {
