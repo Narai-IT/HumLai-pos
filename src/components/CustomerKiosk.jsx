@@ -186,6 +186,15 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
+  // ปุ่มสมัครสมาชิก: ขอลิงก์ LINE ไว้ก่อน (เปิดแท็บใหม่ทันทีที่กด ไม่โดนบล็อกป๊อปอัป)
+  const [joinUrl, setJoinUrl] = useState('');
+  const [joinOpened, setJoinOpened] = useState(false);
+  useEffect(() => {
+    if (!crmOn || member) return;
+    let alive = true;
+    crmCall('crmKioskJoinLink', { branchId }).then(res => { if (alive && res.success && res.url) setJoinUrl(res.url); });
+    return () => { alive = false; };
+  }, [crmOn, !!member, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   const keepMember = (m) => {
     if (!m || !member || m.id !== member.id) { dropCoupon(); saveSession(VERIFY_KEY, null); setVerifyToken(''); setKWallet(null); setCardUrl(''); setCodeInput(''); }
     setMember(m); saveSession(MEMBER_KEY, m);
@@ -231,7 +240,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setMemberBusy(false);
     if (res.success) { keepMember(res.member); setMemberInput(''); }
     else setMemberErr(res.notFound
-      ? (lang === 'th' ? 'ไม่พบสมาชิก ตรวจเลขอีกครั้ง หรือสมัครได้ที่ LINE ของร้าน' : 'Member not found')
+      ? (lang === 'th' ? 'ไม่พบสมาชิก ตรวจเลขอีกครั้ง หรือกดสมัครผ่าน LINE ด้านล่าง' : 'Member not found')
       : (res.error || (lang === 'th' ? 'ตรวจสอบไม่สำเร็จ ลองอีกครั้ง' : 'Please try again')));
   };
   // ห่อกลับบ้านโดยไม่มีเลขโต๊ะ → ลงโต๊ะโซน Takehome ตัวแรกของร้าน (ไม่มีก็ใช้ชื่อ Takehome)
@@ -987,6 +996,19 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                   </button>
                 </div>
                 {memberErr && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{memberErr}</div>}
+                {joinUrl && (
+                  <div style={{ borderTop: '1px dashed #fdba74', marginTop: '0.8rem', paddingTop: '0.8rem' }}>
+                    <a href={joinUrl} target="_blank" rel="noopener noreferrer" onClick={() => setJoinOpened(true)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', background: '#06c755', color: '#fff', borderRadius: 12, padding: '0.75rem', fontWeight: 800, textDecoration: 'none' }}>
+                      {lang === 'th' ? 'ยังไม่เป็นสมาชิก? สมัครฟรีผ่าน LINE' : 'Not a member? Join free on LINE'}
+                    </a>
+                    <span style={{ display: 'block', fontSize: '0.8rem', color: joinOpened ? '#166534' : '#9a3412', marginTop: '0.4rem', textAlign: 'center', fontWeight: joinOpened ? 700 : 400 }}>
+                      {joinOpened
+                        ? (lang === 'th' ? 'สมัครเสร็จแล้วกลับมาหน้านี้ ใส่เบอร์โทรที่สมัครในช่องด้านบน แล้วกดตรวจสอบ' : 'After joining, come back and enter your phone above')
+                        : (lang === 'th' ? 'กรอกชื่อ เบอร์โทร ใน LINE ไม่ถึง 1 นาที รับแต้มและคูปองสมาชิกใหม่ แล้วสะสมแต้มบิลนี้ได้เลย' : 'Takes under a minute · get welcome points & coupon')}
+                    </span>
+                  </div>
+                )}
               </>
             )}
           </div>
