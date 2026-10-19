@@ -10,11 +10,11 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
-import { lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode } from './crm.js';
+import { lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-10-16-crm-coupons';
+export const BUILD = '2026-10-19-crm-join';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -85,6 +85,7 @@ const POST_ACTIONS = {
   crmReleaseCoupon:  async (data) => releaseCoupon(data, await branchForWrite(data)),
   crmRedeem:         async (data) => redeemReward(data, await branchForWrite(data), false),
   // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
+  crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
   crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),
   crmKioskCheckCode: async (data) => checkMemberCode(data, await branchForWrite(data)),
   crmKioskWallet:    async (data) => memberWallet(data, await branchForWrite(data), true),

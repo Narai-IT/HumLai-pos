@@ -133,6 +133,16 @@ export async function checkMemberCode(data, branchId) {
   return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 6) }, branchId);
 }
 
+// ลิงก์สมัครสมาชิกผ่าน LINE ของสาขานี้ (ปุ่มที่หน้าลูกค้าสั่งเอง) · จำไว้ 10 นาที ไม่ต้องถาม CRM ทุกครั้งที่ลูกค้าเปิดหน้า
+const joinCache = new Map();
+export async function joinLink(branchId) {
+  const hit = joinCache.get(branchId);
+  if (hit && hit.until > Date.now()) return { success: true, url: hit.url };
+  const r = await crmAction('/api/pos/join-link', {}, branchId);
+  if (r.success) joinCache.set(branchId, { url: r.url || null, until: Date.now() + 10 * 60 * 1000 });
+  return r.success ? { success: true, url: r.url || null } : r;
+}
+
 // ── ส่งบิล ──
 // สร้างข้อมูลที่จะส่งจากแถว Orders ของบิล (แถวตัวเลือก ↳ ราคา 0 ไม่นับ)
 //   rows: [{ name, price (ราคารวมของแถว), qty }]
