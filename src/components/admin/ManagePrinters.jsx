@@ -17,6 +17,7 @@ import {
   getReceiptHeader
 } from '../../utils/printServer';
 import { API_URL, apiUrlAbsolute } from '../../utils/api';
+import PrintQueuePanel from './PrintQueuePanel';
 
 const PRINTER_TYPES = [
   { value: 'kitchen', label: 'ครัว (Kitchen)' },
@@ -372,6 +373,8 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
       </div>
 
       <div className="admin-card">
+        {/* ---------- โหมดพิมพ์ของเครื่องนี้ + กล่องพิมพ์ของสาขา (แท็บเล็ต) ---------- */}
+        <PrintQueuePanel branchId={branchId} branchName={branchName} health={health} />
         {/* ---------- Print Server status ---------- */}
         <div style={{
           background: statusStyles.bg,

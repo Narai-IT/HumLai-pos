@@ -12,9 +12,10 @@ import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
 import { lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
 import { branchForWrite } from './branch.js';
+import { enqueuePrint, printJobStatus, retryPrintJob, agentPull, agentReport, printQueueStatus } from './printQueue.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-10-19-crm-scan';
+export const BUILD = '2026-10-19-print-queue';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 const POST_ACTIONS = {
@@ -86,6 +87,12 @@ const POST_ACTIONS = {
   crmRedeem:         async (data) => redeemReward(data, await branchForWrite(data), false),
   // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
   crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
+  // คิวงานพิมพ์: แท็บเล็ตส่งงาน/ถามสถานะ · กล่องพิมพ์ของสาขาดึงงาน/รายงานผล (ยืนยันด้วย PRINT_AGENT_KEY)
+  printEnqueue:      enqueuePrint,
+  printJobStatus,
+  printJobRetry:     retryPrintJob,
+  printAgentPull:    agentPull,
+  printAgentReport:  agentReport,
   crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),
   crmKioskCheckCode: async (data) => checkMemberCode(data, await branchForWrite(data)),
   crmKioskWallet:    async (data) => memberWallet(data, await branchForWrite(data), true),
@@ -105,6 +112,7 @@ async function handleExtraGet(action, params = {}) {
     case 'getKioskPayment':         return await getKioskPayment(params);
     case 'getPendingKioskPayments': return await getPendingKioskPayments(params);
     case 'getCrmStatus':      return { success: true, ...(await crmStatus()) };
+    case 'getPrintQueueStatus': return await printQueueStatus(params);
     case 'getTaxInvoices':    return { success: true, invoices: await listTaxInvoices() };
     case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };
     case 'getStock':          return await getStockLevels(String(params.branch || '').trim());

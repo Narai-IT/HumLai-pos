@@ -38,7 +38,8 @@ import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining
 import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
-import { sendPrintJob, setReceiptHeader } from './utils/printServer';
+import { sendPrintJob, setReceiptHeader, setPrintBranch } from './utils/printServer';
+import PrintStatusToast from './components/PrintStatusToast';
 import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
@@ -376,6 +377,9 @@ function App() {
       }
     } catch {}
   }, [serverPrinters, tablesBranch]);
+
+  // สาขาของเครื่องนี้ — งานพิมพ์ที่ส่งผ่านคิวจะออกที่กล่องพิมพ์ของสาขานี้
+  React.useEffect(() => { setPrintBranch(tablesBranch); }, [tablesBranch]);
 
   // หัวใบเสร็จของสาขานี้ — แนบไปกับทุกงานพิมพ์
   React.useEffect(() => {
@@ -1829,6 +1833,9 @@ function App() {
         </Suspense>
         </ChunkErrorBoundary>
       )}
+
+      {/* สถานะงานพิมพ์ (พิมพ์สำเร็จ / ไม่สำเร็จ) — พนักงานเห็นทุกหน้า */}
+      {!isKioskPath && <PrintStatusToast />}
 
       {/* แจ้งเตือนคำขออนุมัติ QR — เฉพาะแอดมิน/แคชเชียร์ */}
       {(isAdmin || isCashier) && (

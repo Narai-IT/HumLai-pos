@@ -8,6 +8,8 @@
 // ใช้ค่า URL เดียวกัน และแสดงข้อความ error แบบเดียวกัน
 // ===============================================================
 
+import { API_URL } from './api';
+
 const STORAGE_KEY = 'print_server_url';
 const DEFAULT_PORT = 3001;
 
@@ -146,10 +148,104 @@ let receiptHeader = null;
 export const setReceiptHeader = (header) => { receiptHeader = header || null; };
 export const getReceiptHeader = () => receiptHeader;
 
+// ── โหมดพิมพ์ของเครื่องนี้ ──
+//   direct = มี Print Server ในเครื่องนี้ (คอม Windows ที่ร้าน) ส่งตรงเหมือนเดิม
+//   queue  = แท็บเล็ต/มือถือ ส่งงานเข้าคิวที่ API ให้ "กล่องพิมพ์" ของสาขาดึงไปพิมพ์
+const MODE_KEY = 'print_mode';
+export const getPrintMode = () => { try { return localStorage.getItem(MODE_KEY) === 'queue' ? 'queue' : 'direct'; } catch { return 'direct'; } };
+export const setPrintMode = (mode) => { try { localStorage.setItem(MODE_KEY, mode === 'queue' ? 'queue' : 'direct'); } catch { /* ไม่มีที่เก็บ */ } };
+// สาขาของเครื่องนี้ — App ตั้งให้ (งานในคิวต้องรู้ว่าจะออกที่กล่องพิมพ์ของสาขาไหน)
+let printBranch = '';
+export const setPrintBranch = (branchId) => { printBranch = branchId || ''; };
+
+// แจ้งสถานะงานพิมพ์ให้หน้าจอ (PrintStatusToast) — ทุกโหมด
+//   { key, state: 'sending' | 'done' | 'failed', printerType, ip, label, error, jobId }
+export const PRINT_STATUS_EVENT = 'print_status';
+let printSeq = 0;
+const emitStatus = (detail) => { try { window.dispatchEvent(new CustomEvent(PRINT_STATUS_EVENT, { detail })); } catch { /* ไม่มี window */ } };
+const jobLabel = (printerType, orderData) => {
+  const kind = { receipt: 'ใบเสร็จ', kitchen: 'ใบครัว', bar: 'ใบบาร์', prebill: 'ใบแจ้งยอด', closeday: 'สรุปปิดวัน', taxinvoice: 'ใบกำกับภาษี', test: 'ทดสอบพิมพ์' }[printerType] || 'งานพิมพ์';
+  const no = orderData && (orderData.orderNumber || orderData.id);
+  return no ? `${kind} ${no}` : kind;
+};
+
+const apiPost = async (body, timeoutMs = 10000) => {
+  const response = await fetchWithTimeout(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }, timeoutMs);
+  return response.json();
+};
+
+// รอผลงานในคิว: กล่องพิมพ์ปกติพิมพ์เสร็จใน 2-3 วิ · ถ้ากล่องออฟไลน์ เซิร์ฟเวอร์ยกเลิกงานเองใน 30 วิ
+const QUEUE_WAIT_MS = 35000;
+export const watchPrintJob = async (jobId, key, meta) => {
+  const until = Date.now() + QUEUE_WAIT_MS;
+  let delay = 700;
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, delay));
+    delay = Math.min(1500, delay + 200);
+    try {
+      const res = await apiPost({ action: 'printJobStatus', ids: [jobId], branchId: printBranch }, 8000);
+      const job = res && res.jobs && res.jobs[0];
+      if (job && job.status === 'done') { emitStatus({ ...meta, key, jobId, state: 'done' }); return { success: true, error: null, jobId }; }
+      if (job && job.status === 'failed') {
+        const error = job.error || 'พิมพ์ไม่สำเร็จ';
+        emitStatus({ ...meta, key, jobId, state: 'failed', error });
+        return { success: false, error, jobId };
+      }
+      if (job && meta && res.agent && !res.agent.online) emitStatus({ ...meta, key, jobId, state: 'sending', note: 'กล่องพิมพ์ของสาขายังไม่ตอบ…' });
+    } catch { /* เน็ตสะดุด ลองถามใหม่รอบถัดไป */ }
+  }
+  const error = 'ยังไม่ได้รับผลจากกล่องพิมพ์ — ตรวจว่ากล่องพิมพ์ของสาขาเปิดอยู่';
+  emitStatus({ ...meta, key, jobId, state: 'failed', error });
+  return { success: false, error, jobId };
+};
+
+// ส่งงานที่ล้มเหลวกลับเข้าคิวอีกครั้ง (ปุ่ม "ลองใหม่" บนแจ้งเตือน)
+export const retryQueuedJob = async (jobId, key, meta) => {
+  emitStatus({ ...meta, key, jobId, state: 'sending', error: null });
+  try {
+    const res = await apiPost({ action: 'printJobRetry', id: jobId, branchId: printBranch });
+    if (!res || !res.success) {
+      const error = (res && res.error) || 'ส่งงานใหม่ไม่สำเร็จ';
+      emitStatus({ ...meta, key, jobId, state: 'failed', error });
+      return { success: false, error };
+    }
+  } catch {
+    emitStatus({ ...meta, key, jobId, state: 'failed', error: 'ติดต่อเซิร์ฟเวอร์ไม่ได้' });
+    return { success: false, error: 'ติดต่อเซิร์ฟเวอร์ไม่ได้' };
+  }
+  return watchPrintJob(jobId, key, meta);
+};
+
+const sendViaQueue = async ({ ip, printerType, orderData }, key, meta) => {
+  let res;
+  try {
+    res = await apiPost({ action: 'printEnqueue', branchId: printBranch, ip, printerType, orderData });
+  } catch {
+    res = { success: false, error: 'ส่งงานพิมพ์ไม่ได้ — เน็ตของเครื่องนี้หลุดหรือเซิร์ฟเวอร์ปิดอยู่' };
+  }
+  if (!res || !res.success) {
+    const error = (res && res.error) || 'ส่งงานพิมพ์ไม่สำเร็จ';
+    emitStatus({ ...meta, key, state: 'failed', error });
+    return { success: false, error };
+  }
+  emitStatus({ ...meta, key, jobId: res.jobId, state: 'sending', note: res.agent && !res.agent.online ? 'กล่องพิมพ์ของสาขาดูเหมือนปิดอยู่…' : null });
+  return watchPrintJob(res.jobId, key, meta);
+};
+
 export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: rawOrderData }, timeoutMs = 15000) => {
   const orderData = receiptHeader && rawOrderData && !rawOrderData.header
     ? { ...rawOrderData, header: receiptHeader }
     : rawOrderData;
+  const key = `p${Date.now()}-${++printSeq}`;
+  const meta = { printerType, ip, label: jobLabel(printerType, orderData) };
+  if (getPrintMode() === 'queue') return sendViaQueue({ ip, printerType, orderData }, key, meta);
+  emitStatus({ ...meta, key, state: 'sending' });
+  const result = await sendDirect({ ip, printerType, orderData }, timeoutMs);
+  emitStatus({ ...meta, key, state: result.success ? 'done' : 'failed', error: result.error });
+  return result;
+};
+
+const sendDirect = async ({ ip, printerType, orderData }, timeoutMs) => {
   const url = getPrintServerUrl();
   if (isMixedContentBlocked(url)) return { success: false, error: MIXED_CONTENT_MSG };
 
@@ -210,3 +306,11 @@ export const saveAutoPrint = (payload) => autoPrintFetch('/auto-print', {
 
 // สั่งให้ดึงออเดอร์เดี๋ยวนี้เลยหนึ่งรอบ ไม่ต้องรอครบเวลา
 export const runAutoPrintNow = () => autoPrintFetch('/auto-print/run', { method: 'POST' }, 30000);
+
+// ── กล่องพิมพ์ของสาขา (Print Server ที่รับงานจากคิว) ──
+export const supportsPrintQueue = (healthInfo) =>
+  Array.isArray(healthInfo?.features) && healthInfo.features.includes('printQueue');
+export const getPrintQueueAgent = () => autoPrintFetch('/print-queue');
+export const savePrintQueueAgent = (patch) => autoPrintFetch('/print-queue', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch)
+});

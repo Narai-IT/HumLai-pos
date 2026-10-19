@@ -646,3 +646,33 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CrmBills_Pending' AND object_id = OBJECT_ID('dbo.CrmBills'))
   CREATE INDEX IX_CrmBills_Pending ON dbo.CrmBills ([Status], NextAttempt);
 GO
+
+-- ── คิวงานพิมพ์ (แท็บเล็ต/มือถือที่ไม่มี Print Server) ──
+-- แท็บเล็ตส่งงานพิมพ์มาเก็บที่นี่พร้อมสาขา → "กล่องพิมพ์" ของสาขานั้น (Print Server ที่เปิดค้างไว้ในร้าน)
+-- ดึงไปพิมพ์แล้วรายงานผล แท็บเล็ตดูผลจาก [Status] (pending → printing → done / failed)
+IF OBJECT_ID('dbo.PrintJobs', 'U') IS NULL
+CREATE TABLE dbo.PrintJobs (
+  JobId        BIGINT IDENTITY(1,1) PRIMARY KEY,
+  BranchId     NVARCHAR(60)  NOT NULL,
+  PrinterIp    NVARCHAR(100) NOT NULL,
+  PrinterType  NVARCHAR(30)  NOT NULL DEFAULT 'receipt',
+  PayloadJson  NVARCHAR(MAX) NOT NULL,
+  [Status]     NVARCHAR(20)  NOT NULL DEFAULT 'pending',
+  Attempts     INT           NOT NULL DEFAULT 0,
+  LastError    NVARCHAR(500) NULL,
+  CreatedAt    DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  ClaimedAt    DATETIME2(0)  NULL,
+  DoneAt       DATETIME2(0)  NULL
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PrintJobs_Pending' AND object_id = OBJECT_ID('dbo.PrintJobs'))
+  CREATE INDEX IX_PrintJobs_Pending ON dbo.PrintJobs (BranchId, [Status], JobId);
+GO
+-- กล่องพิมพ์ของแต่ละสาขา: เห็นล่าสุดเมื่อไร (ดูว่าออนไลน์ไหม)
+IF OBJECT_ID('dbo.PrintAgents', 'U') IS NULL
+CREATE TABLE dbo.PrintAgents (
+  BranchId     NVARCHAR(60)  NOT NULL PRIMARY KEY,
+  AgentName    NVARCHAR(100) NULL,
+  LastSeen     DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO

@@ -4,12 +4,13 @@ import os from 'os';
 import net from 'net';
 import { printTicket } from './print-ticket.js';
 import { registerAutoPrint } from './auto-print.js';
+import { registerPrintQueue } from './print-queue-agent.js';
 
 const SERVER_NAME = 'humlai-print-server';
-const SERVER_VERSION = '1.3.0';
+const SERVER_VERSION = '1.4.0';
 // ความสามารถที่ Print Server ตัวนี้มี — หน้าเว็บใช้เช็คว่าเครื่องนี้รันโค้ดเวอร์ชันใหม่พอไหม
 // (เครื่องที่ยังรันตัวเก่าจะไม่มี features กลับมา หน้าเว็บจะได้บอกให้อัปเดตแทนที่จะฟ้อง 404 เฉย ๆ)
-const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice'];
+const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice', 'printQueue'];
 const DEFAULT_PRINTER_PORT = 9100;
 
 const app = express();
@@ -168,6 +169,9 @@ app.post('/print', async (req, res) => {
 // ── ดึงออเดอร์จากชีตมาพิมพ์เอง (ออเดอร์ที่ลูกค้าสั่งผ่าน QR) ──
 // เพิ่ม endpoint /auto-print (GET ดูสถานะ, POST ตั้งค่า, POST /auto-print/run สั่งดึงเดี๋ยวนี้)
 registerAutoPrint(app);
+
+// ── กล่องพิมพ์ของสาขา: รับงานพิมพ์จากแท็บเล็ตผ่านคิวของ API (GET/POST /print-queue) ──
+registerPrintQueue(app);
 
 const PORT = 3001;
 // ผูกข้อความไว้กับ event 'listening' ไม่ใช่ callback ของ app.listen
