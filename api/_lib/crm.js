@@ -87,12 +87,14 @@ export async function lookupMember({ query: q, branchId, staff }) {
 }
 
 // ── คูปองและแลกแต้ม (ระยะ 2) ──
-// kiosk = หน้าลูกค้าสั่งเอง: ต้องยืนยันตัวตนด้วยรหัสที่ส่งเข้า LINE ก่อน (verifyToken) · จองคูปองนานกว่า เพราะรอพนักงานยืนยันยอดโอน
+// kiosk = หน้าลูกค้าสั่งเอง · จองคูปองนานกว่า เพราะรอพนักงานยืนยันยอดโอน
+// CRM_KIOSK_VERIFY=1 → ต้องยืนยันตัวตนด้วยรหัส 6 หลักในบัตรสมาชิก LINE ก่อน (verifyToken) · ไม่ตั้ง = แสดงคูปองและแลกแต้มได้ทันทีหลังใส่เลขสมาชิก
 const MEMBER_RE = MEMBER_ID;
+const kioskVerify = () => process.env.CRM_KIOSK_VERIFY === '1';
 function memberBody(data, kiosk) {
   const memberId = String(data.memberId || '');
   if (!MEMBER_RE.test(memberId)) return null;
-  return kiosk ? { memberId, requireVerify: true, verifyToken: String(data.verifyToken || '') } : { memberId };
+  return kiosk && kioskVerify() ? { memberId, requireVerify: true, verifyToken: String(data.verifyToken || '') } : { memberId };
 }
 const ref = (v) => String(v || '').replace(/[^\w.:-]/g, '').slice(0, 80);
 async function crmAction(path, body, branchId) {
@@ -120,7 +122,7 @@ export async function redeemReward(data, branchId, kiosk) {
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
   return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30 }, branchId);
 }
-// รหัสยืนยัน 4 หลักเข้าแชท LINE ของสมาชิก (หน้าลูกค้าสั่งเอง)
+// ยืนยันตัวตนที่หน้าลูกค้าสั่งเอง: รหัส 6 หลักในบัตรสมาชิก LINE (ไม่ส่งข้อความ) · send = ขอลิงก์เปิดบัตรสมาชิก
 export async function sendMemberCode(data, branchId) {
   if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
   if (rateLimited(30)) return { success: false, error: 'ขอรหัสถี่เกินไป ลองใหม่ในอีกสักครู่' };
@@ -128,7 +130,7 @@ export async function sendMemberCode(data, branchId) {
 }
 export async function checkMemberCode(data, branchId) {
   if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
-  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 4) }, branchId);
+  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 6) }, branchId);
 }
 
 // ── ส่งบิล ──
