@@ -35,6 +35,9 @@ const CheckoutModal = ({
   // แปลงเป็นชื่อหมวดให้แคชเชียร์อ่านออกก่อนแสดง
   const categoryLabel = (slug) => categories.find(c => c.slug === slug)?.name || slug;
   const [paymentStep, setPaymentStep] = useState('summary');
+  // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
+  // (ต้องประกาศก่อนส่วนคูปองสมาชิก ที่ใช้ค่านี้ใน useEffect ด้านล่าง ไม่งั้นพังตอนเปิดหน้าชำระเงิน)
+  const [selectedDiscount, setSelectedDiscount] = useState(initialDiscount);
   // ── ระบบสมาชิก: สแกน QR บัตรสมาชิก (เครื่องยิงพิมพ์ลงช่องแล้วกด Enter ให้เอง) หรือพิมพ์เบอร์/เลขสมาชิก ──
   const [crmOn, setCrmOn] = useState(false);
   const [member, setMember] = useState(null);
@@ -113,8 +116,6 @@ const CheckoutModal = ({
     setMember(null); setWallet(null); setWalletMsg('');
   };
   const [cashInput, setCashInput] = useState('');
-  // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
-  const [selectedDiscount, setSelectedDiscount] = useState(initialDiscount);
 
   const [qrApproved, setQrApproved] = useState(true);
   const [approverName] = useState('');
