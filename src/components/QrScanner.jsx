@@ -78,7 +78,7 @@ const QrScanner = ({ open, onResult, onClose, title = 'สแกน QR' }) => {
           <b>{title}</b>
           <button type="button" onClick={onClose} aria-label="ปิด" style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 4 }}><X size={22} /></button>
         </div>
-        <div style={{ position: 'relative', background: '#000', aspectRatio: '1 / 1' }}>
+        <div style={{ position: 'relative', overflow: 'hidden', background: '#000', aspectRatio: '1 / 1' }}>
           <video ref={videoRef} muted playsInline style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
           <div aria-hidden="true" style={{ position: 'absolute', inset: '18%', border: '3px solid rgba(255,255,255,0.9)', borderRadius: '16px', boxShadow: '0 0 0 9999px rgba(0,0,0,0.35)' }} />
         </div>
