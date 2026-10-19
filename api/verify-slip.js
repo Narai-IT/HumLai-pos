@@ -9,7 +9,7 @@
 const SLIPOK_ENDPOINT = 'https://api.slipok.com/api/line/apikey';
 
 export default async function handler(req, res) {
-  const apiKey   = process.env.SLIPOK_API_KEY || 'SLIPOKDP6B53D';
+  const apiKey   = process.env.SLIPOK_API_KEY || '';
   const branchId = process.env.SLIPOK_BRANCH_ID || '74167';
 
   // เปิด /api/verify-slip ในเบราว์เซอร์เพื่อเช็กว่าฟังก์ชันถูก deploy แล้วจริง
@@ -19,13 +19,16 @@ export default async function handler(req, res) {
       ok: true,
       service: 'slipok-verify',
       branchId,
-      hasApiKey: !!apiKey,
-      keyFrom: process.env.SLIPOK_API_KEY ? 'env' : 'fallback-in-code'
+      hasApiKey: !!apiKey
     });
   }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
+  }
+  // คีย์อยู่ใน Vercel Environment Variables เท่านั้น (ห้ามใส่ในโค้ด repo นี้เปิดสาธารณะ)
+  if (!apiKey) {
+    return res.status(503).json({ success: false, message: 'ยังไม่ได้ตั้งค่า SLIPOK_API_KEY ใน Vercel' });
   }
 
   try {
