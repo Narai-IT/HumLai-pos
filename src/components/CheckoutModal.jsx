@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound } from 'lucide-react';
+import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound, QrCode } from 'lucide-react';
 import { crmEnabled, lookupMember, maskPhone, crmCall, newCouponRef } from '../utils/crm';
+import QrScanner from './QrScanner';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
@@ -41,15 +42,25 @@ const CheckoutModal = ({
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
-  const findMember = async () => {
-    const q = memberQuery.trim();
+  // text = ผลจากกล้อง (ไม่ส่ง = ใช้ที่พิมพ์/ยิงลงช่อง) · QR คูปอง (CP.xxx) ได้ทั้งสมาชิกและคูปองที่ใช้กับบิลนี้
+  const findMember = async (text) => {
+    const q = String(typeof text === 'string' ? text : memberQuery).trim();
     if (!q || memberBusy) return;
+    const fail = (msg) => (member ? setWalletMsg(msg) : setMemberErr(msg));
     setMemberBusy(true); setMemberErr('');
     const res = await lookupMember(q, branchId);
     setMemberBusy(false);
-    if (res.success) { setMember(res.member); setMemberQuery(''); loadWallet(res.member); }
-    else setMemberErr(res.error || 'ค้นหาสมาชิกไม่สำเร็จ');
+    if (!res.success) return fail(res.error || 'ค้นหาสมาชิกไม่สำเร็จ');
+    if (member && member.id !== res.member.id) return fail(`QR นี้เป็นของ ${res.member.name} (${res.member.id}) ไม่ใช่สมาชิกที่เลือกไว้ กด "เปลี่ยน" ก่อนถ้าจะใช้`);
+    if (!member) { setMember(res.member); setMemberQuery(''); loadWallet(res.member); }
+    const sc = res.scannedCoupon;
+    if (sc && sc.usable) pickCoupon(sc, res.member);
+    else if (sc) setWalletMsg(`คูปอง ${sc.code}: ${sc.reason} · สะสมแต้มให้สมาชิกแล้ว`);
   };
+  const [scanOpen, setScanOpen] = useState(false);
+  const findRef = useRef(findMember);
+  useEffect(() => { findRef.current = findMember; });
+  const onScan = useCallback((text) => { setScanOpen(false); findRef.current(text); }, []);
 
   // ── คูปองสมาชิก / แลกแต้ม: คูปองที่เลือกถูกจองไว้กับบิลนี้ (couponRef) จนกว่าจะจ่ายหรือเปลี่ยนใจ ──
   const couponRef = useRef(newCouponRef('pos'));
@@ -68,10 +79,10 @@ const CheckoutModal = ({
     id: 'crm-' + c.id, name: `คูปอง ${c.title}`, type: 'baht', value: Number(c.discount) || 0,
     crmCoupon: { id: String(c.id), code: c.code, title: c.title }
   });
-  const pickCoupon = async (c) => {
+  const pickCoupon = async (c, m = member) => {
     if (couponBusy) return;
     setCouponBusy('c' + c.id); setWalletMsg('');
-    const res = await crmCall('crmReserveCoupon', { memberId: member.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId });
+    const res = await crmCall('crmReserveCoupon', { memberId: m.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId });
     setCouponBusy('');
     if (res.success) applyCoupon(res.coupon);
     else { setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ'); loadWallet(); }
@@ -417,6 +428,7 @@ const CheckoutModal = ({
             <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '1rem' }}>
               <PriceBreakdown />
             </div>
+            {crmOn && <QrScanner open={scanOpen} onResult={onScan} onClose={() => setScanOpen(false)} title={member ? 'สแกน QR คูปอง' : 'สแกน QR บัตรสมาชิก / คูปอง'} />}
             {crmOn && (
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem 1rem', marginBottom: '1rem', background: member ? '#f0fdf4' : '#ffffff' }}>
                 {member ? (
@@ -435,6 +447,10 @@ const CheckoutModal = ({
                 ) : null}
                 {member && (
                   <div style={{ marginTop: '0.6rem' }}>
+                    <button type="button" onClick={() => setScanOpen(true)} disabled={memberBusy}
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', border: '1px dashed #94a3b8', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700, marginBottom: '6px', cursor: 'pointer' }}>
+                      <QrCode size={16} /> {memberBusy ? '…' : (lang === 'th' ? 'สแกน QR คูปอง' : 'Scan coupon QR')}
+                    </button>
                     {!wallet && !walletMsg && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>กำลังโหลดคูปอง…</div>}
                     {walletMsg && (
                       <div role="alert" style={{ color: '#dc2626', fontSize: '0.85rem', fontWeight: 600, marginBottom: '6px' }}>
@@ -486,10 +502,14 @@ const CheckoutModal = ({
                         id="crm-member" value={memberQuery} autoComplete="off"
                         onChange={e => { setMemberQuery(e.target.value); setMemberErr(''); }}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); findMember(); } }}
-                        placeholder={lang === 'th' ? 'สแกน QR บัตรสมาชิก / เบอร์โทร / เลขสมาชิก' : 'Scan member QR / phone / member no.'}
+                        placeholder={lang === 'th' ? 'สแกน QR บัตรสมาชิก/คูปอง · เบอร์โทร · เลขสมาชิก' : 'Member/coupon QR · phone · member no.'}
                         style={{ flex: 1, minWidth: 0, border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px 12px', fontSize: '1rem' }}
                       />
-                      <button type="button" onClick={findMember} disabled={memberBusy || !memberQuery.trim()}
+                      <button type="button" onClick={() => setScanOpen(true)} disabled={memberBusy} aria-label={lang === 'th' ? 'เปิดกล้องสแกน QR' : 'Scan QR with camera'}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #0f172a', background: '#fff', color: '#0f172a', borderRadius: '8px', padding: '0 12px', fontWeight: 800 }}>
+                        <QrCode size={18} /> {lang === 'th' ? 'สแกน' : 'Scan'}
+                      </button>
+                      <button type="button" onClick={() => findMember()} disabled={memberBusy || !memberQuery.trim()}
                         style={{ border: 0, background: '#0f172a', color: '#fff', borderRadius: '8px', padding: '0 16px', fontWeight: 800, opacity: memberBusy || !memberQuery.trim() ? 0.5 : 1 }}>
                         {memberBusy ? '…' : (lang === 'th' ? 'ค้นหา' : 'Find')}
                       </button>
