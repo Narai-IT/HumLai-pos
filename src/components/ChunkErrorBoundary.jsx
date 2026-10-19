@@ -62,11 +62,13 @@ class ChunkErrorBoundary extends React.Component {
     const isTh = this.props.lang !== 'en';
     const chunk = isChunkLoadError(error);
 
+    // overlay = หน้าต่างลอย (เช่น หน้าชำระเงิน) พังแล้วโชว์ทับทั้งจอ ไม่ใช่ไปโผล่ท้ายหน้าที่มองไม่เห็น
     return (
       <div style={{
         minHeight: '60vh', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
-        padding: '2rem 1.25rem', textAlign: 'center'
+        padding: '2rem 1.25rem', textAlign: 'center',
+        ...(this.props.overlay ? { position: 'fixed', inset: 0, zIndex: 2000, background: '#ffffff' } : {})
       }}>
         <div style={{ fontSize: '2rem' }}>{reloading ? '⏳' : '⚠️'}</div>
         <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-main, #0f172a)' }}>

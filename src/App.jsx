@@ -1806,7 +1806,9 @@ function App() {
         </Suspense>
       )}
 
+      {/* หน้าชำระเงินอยู่นอกกรอบกันจอขาวของหน้าหลัก ต้องมีกรอบของตัวเอง (ไฟล์เวอร์ชันเก่าหายหลังอัปเดต → รีโหลดให้เอง) */}
       {isCheckoutOpen && (
+        <ChunkErrorBoundary lang={lang} overlay>
         <Suspense fallback={null}>
           <CheckoutModal
             tableOrderItems={checkoutItems}
@@ -1825,6 +1827,7 @@ function App() {
             tableNo={tableNumber}
           />
         </Suspense>
+        </ChunkErrorBoundary>
       )}
 
       {/* แจ้งเตือนคำขออนุมัติ QR — เฉพาะแอดมิน/แคชเชียร์ */}
