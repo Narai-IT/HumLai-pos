@@ -9,7 +9,7 @@ import express from 'express';
 import cors from 'cors';
 import { route } from './api/_lib/router.js';
 import { query } from './api/_lib/db.js';
-import { flushCrmQueue } from './api/_lib/crm.js';
+import { flushCrmQueue, syncMenuToCrm } from './api/_lib/crm.js';
 
 const app = express();
 const PORT = Number(process.env.API_PORT || 8080);
@@ -46,6 +46,12 @@ app.get('/api/image', async (req, res) => {
 
 // ระบบสมาชิก: ส่งบิลที่ค้างในคิว (ตอนเน็ตหลุด/CRM ปิด) ทุก 1 นาที
 if (process.env.CRM_URL) setInterval(() => { flushCrmQueue(50).catch((e) => console.error('[crm]', e)); }, 60 * 1000);
+// ส่งเมนูให้ระบบสมาชิก (เลือกของฟรี/เงื่อนไขสินค้าในคูปอง) ตอนเปิดเครื่องและทุก 30 นาที
+if (process.env.CRM_URL) {
+  const syncMenu = () => syncMenuToCrm().then((r) => { if (!r.success && !r.skipped) console.error('[crm] ส่งเมนูไม่สำเร็จ:', r.error); }).catch((e) => console.error('[crm]', e));
+  setTimeout(syncMenu, 15 * 1000);
+  setInterval(syncMenu, 30 * 60 * 1000);
+}
 
 app.listen(PORT, () => {
   console.log(`POS API พร้อมใช้งานที่ http://localhost:${PORT}/api/pos`);

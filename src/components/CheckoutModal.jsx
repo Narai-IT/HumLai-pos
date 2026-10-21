@@ -71,10 +71,14 @@ const CheckoutModal = ({
   const [wallet, setWallet] = useState(null);
   const [walletMsg, setWalletMsg] = useState('');
   const [couponBusy, setCouponBusy] = useState('');
+  // รายการในบิลให้ระบบสมาชิกตรวจคูปองของฟรี/เงื่อนไขสินค้า (แถวตัวเลือก ↳ ไม่นับ)
+  const crmItems = tableOrderItems
+    .filter(i => i && i.ItemName && !String(i.ItemName).startsWith('↳'))
+    .map(i => ({ name: i.ItemName, price: Number(i.ItemPrice) || 0, qty: Number(i.Quantity) || 1 }));
   const loadWallet = async (m = member) => {
     if (!m) return;
     setWalletMsg('');
-    const res = await crmCall('crmWallet', { memberId: m.id, subtotal: total, ref: couponRef.current, branchId });
+    const res = await crmCall('crmWallet', { memberId: m.id, subtotal: total, ref: couponRef.current, branchId, items: crmItems });
     if (res.success) { setWallet(res); setMember(prev => (prev && prev.id === m.id ? { ...prev, points: res.balance } : prev)); }
     else setWalletMsg(res.error || 'โหลดคูปองไม่สำเร็จ');
   };
@@ -85,7 +89,7 @@ const CheckoutModal = ({
   const pickCoupon = async (c, m = member) => {
     if (couponBusy) return;
     setCouponBusy('c' + c.id); setWalletMsg('');
-    const res = await crmCall('crmReserveCoupon', { memberId: m.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId });
+    const res = await crmCall('crmReserveCoupon', { memberId: m.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
     setCouponBusy('');
     if (res.success) applyCoupon(res.coupon);
     else { setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ'); loadWallet(); }
@@ -94,7 +98,7 @@ const CheckoutModal = ({
     if (couponBusy) return;
     if (!window.confirm(`แลก "${r.name}" ใช้ ${Number(r.cost).toLocaleString()} แต้ม แล้วใช้กับบิลนี้เลย?\n(ตัดแต้มทันที ถ้ายกเลิกบิล ลูกค้ายังมีคูปองนี้ไว้ใช้ครั้งหน้า)`)) return;
     setCouponBusy('r' + r.id); setWalletMsg('');
-    const res = await crmCall('crmRedeem', { memberId: member.id, rewardId: r.id, ref: couponRef.current, subtotal: total, branchId });
+    const res = await crmCall('crmRedeem', { memberId: member.id, rewardId: r.id, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
     setCouponBusy('');
     if (res.success) { applyCoupon(res.coupon); loadWallet(); }
     else setWalletMsg(res.error || 'แลกแต้มไม่สำเร็จ');

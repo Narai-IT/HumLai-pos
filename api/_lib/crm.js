@@ -8,6 +8,7 @@
 //   CRM_KEYS={"XUM":"crm_xxx"}        กุญแจเครื่อง POS ของแต่ละสาขา (ออกจากเครื่อง CRM: scripts/manage.js pos-key <สาขา>)
 //   CRM_ACCESS_CLIENT_ID / CRM_ACCESS_CLIENT_SECRET   Service Token ของ Cloudflare Access (ถ้า CRM อยู่หลัง Access)
 // ไม่ตั้ง CRM_URL = ปิดการเชื่อมทั้งหมด POS ทำงานเหมือนเดิมทุกอย่าง
+import crypto from 'node:crypto';
 import { query } from './db.js';
 
 const TIMEOUT_MS = 6000;
@@ -99,6 +100,11 @@ function memberBody(data, kiosk) {
   return kiosk && kioskVerify() ? { memberId, requireVerify: true, verifyToken: String(data.verifyToken || '') } : { memberId };
 }
 const ref = (v) => String(v || '').replace(/[^\w.:-]/g, '').slice(0, 80);
+// รายการในตะกร้า ให้ CRM ตรวจคูปองของฟรี/เงื่อนไขสินค้า · menuId มีเฉพาะหน้าลูกค้าสั่งเอง (หน้าพนักงาน CRM จับคู่จากชื่อเมนู)
+const cartItems = (list) => (Array.isArray(list) ? list.slice(0, 300).map((i) => ({
+  ...(i.menuId ? { menuId: String(i.menuId).slice(0, 60) } : {}), name: String(i.name || '').slice(0, 300),
+  price: Math.max(0, Number(i.price) || 0), qty: Math.max(0, Number(i.qty) || 0), ...(i.category ? { category: String(i.category).slice(0, 100) } : {})
+})).filter((i) => i.name && i.qty > 0) : undefined);
 async function crmAction(path, body, branchId) {
   if (!crmEnabled(branchId)) return { success: false, error: 'สาขานี้ยังไม่ได้เชื่อมระบบสมาชิก' };
   const r = await call(path, body, branchId);
@@ -108,12 +114,12 @@ async function crmAction(path, body, branchId) {
 export async function memberWallet(data, branchId, kiosk) {
   const m = memberBody(data, kiosk);
   if (!m) return { success: false, error: 'ไม่พบเลขสมาชิก' };
-  return crmAction('/api/pos/members/wallet', { ...m, subtotal: Number(data.subtotal) || 0, ref: ref(data.ref) }, branchId);
+  return crmAction('/api/pos/members/wallet', { ...m, subtotal: Number(data.subtotal) || 0, ref: ref(data.ref), items: cartItems(data.items) }, branchId);
 }
 export async function reserveCoupon(data, branchId, kiosk) {
   const m = memberBody(data, kiosk);
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
-  return crmAction('/api/pos/coupons/reserve', { ...m, couponId: String(data.couponId || ''), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30 }, branchId);
+  return crmAction('/api/pos/coupons/reserve', { ...m, couponId: String(data.couponId || ''), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items) }, branchId);
 }
 export async function releaseCoupon(data, branchId) {
   if (!data.couponId || !ref(data.ref)) return { success: true, released: false };
@@ -122,7 +128,7 @@ export async function releaseCoupon(data, branchId) {
 export async function redeemReward(data, branchId, kiosk) {
   const m = memberBody(data, kiosk);
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
-  return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30 }, branchId);
+  return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items) }, branchId);
 }
 // ยืนยันตัวตนที่หน้าลูกค้าสั่งเอง: รหัส 6 หลักในบัตรสมาชิก LINE (ไม่ส่งข้อความ) · send = ขอลิงก์เปิดบัตรสมาชิก
 export async function sendMemberCode(data, branchId) {
@@ -143,6 +149,29 @@ export async function joinLink(branchId) {
   const r = await crmAction('/api/pos/join-link', {}, branchId);
   if (r.success) joinCache.set(branchId, { url: r.url || null, until: Date.now() + 10 * 60 * 1000 });
   return r.success ? { success: true, url: r.url || null } : r;
+}
+
+// ── ส่งเมนูไป CRM (ใช้เลือกของฟรี/เงื่อนไขสินค้าในหน้าคูปองของ CRM) ──
+// เรียกหลังแก้เมนู/หมวด และทุก 30 นาที · เมนูไม่เปลี่ยนไม่ส่งซ้ำ (ยกเว้นครบ 6 ชั่วโมง)
+let menuSent = { hash: '', at: 0 };
+let menuBusy = null;
+export function syncMenuToCrm({ force = false } = {}) {
+  if (!menuBusy) menuBusy = sendMenu(force).finally(() => { menuBusy = null; });
+  return menuBusy;
+}
+async function sendMenu(force) {
+  const branch = Object.keys(keys()).find((k) => keys()[k]);
+  if (!base() || !branch) return { success: false, skipped: true, error: 'ยังไม่ได้ตั้งค่า CRM_URL / CRM_KEYS' };
+  const [menu, cats] = await Promise.all([query('SELECT id, name, category, price, isActive FROM dbo.Menu'), query('SELECT slug, name FROM dbo.Categories')]);
+  const catName = new Map(cats.recordset.map((c) => [c.slug, c.name]));
+  const items = menu.recordset.filter((m) => m.id && m.name).map((m) => ({ id: String(m.id), name: String(m.name), category: m.category || null,
+    categoryName: catName.get(m.category) || m.category || null, price: Number(m.price) || 0, active: m.isActive !== false }));
+  const hash = crypto.createHash('sha1').update(JSON.stringify(items)).digest('hex');
+  if (!force && hash === menuSent.hash && Date.now() - menuSent.at < 6 * 3600 * 1000) return { success: true, unchanged: true, count: items.length };
+  const r = await call('/api/pos/menu', { items }, branch, 20000);
+  if (!r.ok) return { success: false, error: r.error };
+  menuSent = { hash, at: Date.now() };
+  return { success: true, count: r.data.count };
 }
 
 // ── ส่งบิล ──
