@@ -10,13 +10,16 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
-import { lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
+import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-10-19-crm-scan';
+export const BUILD = '2026-10-21-crm-coupon-items';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
+// แก้เมนู/หมวดแล้วส่งเมนูล่าสุดไปให้ระบบสมาชิก
+const MENU_ACTIONS = new Set(['upsertMenu', 'deleteMenu', 'saveMenu', 'upsertCategory', 'deleteCategory', 'saveCategories']);
+
 const POST_ACTIONS = {
   kioskPaidOrder:          write.handleKioskPaidOrder,
   kioskPaymentRequest,
@@ -79,6 +82,7 @@ const POST_ACTIONS = {
   crmMemberLookup:   async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: true }),
   crmKioskMember:    async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: false }),
   crmRetry:          async () => ({ success: true, sent: await flushCrmQueue(100) }),
+  crmSyncMenu:       async () => syncMenuToCrm({ force: true }),
   // คูปอง/แลกแต้ม — หน้าขายของพนักงาน
   crmWallet:         async (data) => memberWallet(data, await branchForWrite(data), false),
   crmReserveCoupon:  async (data) => reserveCoupon(data, await branchForWrite(data), false),
@@ -168,6 +172,7 @@ export async function route({ method, params = {}, body }) {
     const auth = await authorize(action, token, data, null);
     if (!auth.ok) return auth.response;
     const result = await handler(data);
+    if (MENU_ACTIONS.has(action) && result && result.success !== false) syncMenuToCrm().catch(() => {});   // CRM ใช้เลือกของฟรี/เงื่อนไขสินค้าในคูปอง
     if (action === 'saveSettings') clearEnforceCache(); // เปิด/ปิดบังคับล็อกอินมีผลทันที
     return result;
   }

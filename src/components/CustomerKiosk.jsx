@@ -228,7 +228,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // ใช้คูปองไปแล้ว (พนักงานยืนยันยอด) → ออเดอร์ถัดไปเริ่มรหัสอ้างอิงใหม่
   const finishCoupon = () => { setKCoupon(null); saveSession(COUPON_KEY, null); kioskRef.current = newCouponRef('kiosk'); saveSession(REF_KEY, kioskRef.current); setKWallet(null); };
   const kioskCall = async (action, extra) => {
-    const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, ...extra });
+    const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, items: kioskItems, ...extra });
     if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); }
     return res;
   };
@@ -317,6 +317,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const qrType = settings?.qrType || 'kshop_dynamic';
   const kshopRawPayload = settings?.kshopRawPayload || '00020101021130810016A00000067701011201150107536000315080214KB0000016416840320KPS004KB00000164168431690016A00000067701011301030040214KB0000016416840420KPS004KB00000164168453037645802TH6304A14E';
   const staticQrUrl = settings?.staticQrUrl || '/kshop_qr.png';
+
+  // รายการในตะกร้าให้ระบบสมาชิกตรวจคูปองของฟรี/เงื่อนไขสินค้า (ราคารวมตัวเลือกเสริม)
+  const kioskItems = cart.map(item => {
+    let price = Number(item.food.price) || 0;
+    if (item.allPopups) item.allPopups.forEach(p => price += Number(p.price || 0));
+    return { menuId: item.food.id, name: item.food.name, price, qty: item.quantity, category: item.food.category };
+  });
 
   // Calculate cart subtotal
   const cartSubtotal = cart.reduce((sum, item) => {
