@@ -79,20 +79,33 @@ const CheckoutModal = ({
     if (!m) return;
     setWalletMsg('');
     const res = await crmCall('crmWallet', { memberId: m.id, subtotal: total, ref: couponRef.current, branchId, items: crmItems });
-    if (res.success) { setWallet(res); setMember(prev => (prev && prev.id === m.id ? { ...prev, points: res.balance } : prev)); }
-    else setWalletMsg(res.error || 'โหลดคูปองไม่สำเร็จ');
+    if (!res.success) { setWalletMsg(res.error || 'โหลดคูปองไม่สำเร็จ'); return; }
+    setWallet(res); setMember(prev => (prev && prev.id === m.id ? { ...prev, points: res.balance } : prev));
+    // คูปองที่ใช้กับบิลนี้ (ได้หลายใบ) รวมเป็นส่วนลดเดียว · ระบบสมาชิกคิดและแบ่งรายการในบิลให้แต่ละใบแล้ว
+    if (Array.isArray(res.applied)) applyCoupons(res.applied, res.appliedTotal);
+    if (res.dropped && res.dropped.length) setWalletMsg('เอาคูปองออกแล้ว: ' + res.dropped.map(d => `${d.title} (${d.reason})`).join(', '));
   };
-  const applyCoupon = (c) => setSelectedDiscount({
-    id: 'crm-' + c.id, name: `คูปอง ${c.title}`, type: 'baht', value: Number(c.discount) || 0,
-    crmCoupon: { id: String(c.id), code: c.code, title: c.title }
-  });
+  const applyCoupons = (list, total) => {
+    if (!list.length) { setSelectedDiscount(prev => (prev && prev.crmCoupons ? null : prev)); return; }
+    setSelectedDiscount({
+      id: 'crm', name: `คูปอง ${list.map(c => c.title).join(' + ')}`, type: 'baht', value: Number(total) || 0,
+      crmCoupons: list.map(c => ({ id: String(c.id), code: c.code, title: c.title, discount: Number(c.discount) || 0 }))
+    });
+  };
   const pickCoupon = async (c, m = member) => {
     if (couponBusy) return;
     setCouponBusy('c' + c.id); setWalletMsg('');
     const res = await crmCall('crmReserveCoupon', { memberId: m.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
     setCouponBusy('');
-    if (res.success) applyCoupon(res.coupon);
-    else { setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ'); loadWallet(); }
+    if (!res.success) setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ');
+    loadWallet(m);
+  };
+  const removeCoupon = async (c) => {
+    if (couponBusy) return;
+    setCouponBusy('x' + c.id); setWalletMsg('');
+    await crmCall('crmReleaseCoupon', { couponId: c.id, ref: couponRef.current, branchId });
+    setCouponBusy('');
+    loadWallet();
   };
   const redeem = async (r) => {
     if (couponBusy) return;
@@ -100,23 +113,22 @@ const CheckoutModal = ({
     setCouponBusy('r' + r.id); setWalletMsg('');
     const res = await crmCall('crmRedeem', { memberId: member.id, rewardId: r.id, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
     setCouponBusy('');
-    if (res.success) { applyCoupon(res.coupon); loadWallet(); }
+    if (res.success) loadWallet();
     else setWalletMsg(res.error || 'แลกแต้มไม่สำเร็จ');
   };
-  // เปลี่ยนจากคูปองเป็นส่วนลดอื่น / ไม่ใช้ส่วนลด → ปล่อยคูปองที่จองไว้
-  const heldCoupon = useRef(null);
+  // เปลี่ยนจากคูปองเป็นส่วนลดอื่น / ไม่ใช้ส่วนลด → ปล่อยคูปองที่จองไว้ทุกใบ
+  const heldCoupons = useRef([]);
   useEffect(() => {
-    const now = selectedDiscount && selectedDiscount.crmCoupon ? selectedDiscount.crmCoupon.id : null;
-    const prev = heldCoupon.current;
-    if (prev && prev !== now) crmCall('crmReleaseCoupon', { couponId: prev, ref: couponRef.current, branchId });
-    heldCoupon.current = now;
+    const now = selectedDiscount && selectedDiscount.crmCoupons ? selectedDiscount.crmCoupons.map(c => c.id) : [];
+    heldCoupons.current.filter(id => !now.includes(id)).forEach(id => crmCall('crmReleaseCoupon', { couponId: id, ref: couponRef.current, branchId }));
+    heldCoupons.current = now;
   }, [selectedDiscount, branchId]);
   // ปิดหน้าต่างโดยไม่จ่าย → ปล่อยคูปอง (ถ้าปล่อยไม่ทัน ระบบปล่อยเองเมื่อหมดเวลาจอง)
   useEffect(() => () => {
-    if (!completedRef.current && heldCoupon.current) crmCall('crmReleaseCoupon', { couponId: heldCoupon.current, ref: couponRef.current, branchId });
+    if (!completedRef.current) heldCoupons.current.forEach(id => crmCall('crmReleaseCoupon', { couponId: id, ref: couponRef.current, branchId }));
   }, [branchId]);
   const removeMember = () => {
-    if (selectedDiscount && selectedDiscount.crmCoupon) setSelectedDiscount(null);
+    if (selectedDiscount && selectedDiscount.crmCoupons) setSelectedDiscount(null);
     setMember(null); setWallet(null); setWalletMsg('');
   };
   const [cashInput, setCashInput] = useState('');
@@ -344,8 +356,8 @@ const CheckoutModal = ({
   const finalizeComplete = (print = false) => {
     const pc = pendingComplete || { method: 'เงินสด' };
     completedRef.current = true;
-    const crmCoupon = member && selectedDiscount && selectedDiscount.crmCoupon
-      ? { ids: [selectedDiscount.crmCoupon.id], ref: couponRef.current, discount: discountAmount } : null;
+    const crmCoupon = member && selectedDiscount && selectedDiscount.crmCoupons
+      ? { ids: selectedDiscount.crmCoupons.map(c => c.id), ref: couponRef.current, discount: discountAmount } : null;
     onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount, crmCoupon });
   };
 
@@ -463,23 +475,30 @@ const CheckoutModal = ({
                       </div>
                     )}
                     {wallet && (() => {
-                      const chosen = selectedDiscount && selectedDiscount.crmCoupon ? selectedDiscount.crmCoupon.id : null;
+                      const applied = (selectedDiscount && selectedDiscount.crmCoupons) || [];
                       const coupons = wallet.coupons || [];
                       const rewards = (wallet.rewards || []).filter(r => r.affordable);
                       const btn = (active) => ({ border: active ? '2px solid #16a34a' : '1px solid #cbd5e1', background: active ? '#dcfce7' : '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 800, whiteSpace: 'nowrap', cursor: 'pointer' });
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
-                          {coupons.length === 0 && rewards.length === 0 && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ยังไม่มีคูปอง และแต้มยังไม่พอแลกของรางวัล</div>}
+                          {applied.map(c => (
+                            <div key={'a' + c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '2px solid #16a34a', borderRadius: '10px', background: '#f0fdf4' }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
+                                <div style={{ fontSize: '0.75rem', color: '#15803d' }}>✓ ใช้อยู่ · {c.discount > 0 ? `ลด ฿${Number(c.discount).toLocaleString()}` : 'ใบรับของ (ไม่ลดเงิน)'} · {c.code}</div>
+                              </div>
+                              <button type="button" style={btn(true)} disabled={!!couponBusy} onClick={() => removeCoupon(c)}>{couponBusy === 'x' + c.id ? '…' : 'เอาออก'}</button>
+                            </div>
+                          ))}
+                          {applied.length === 0 && coupons.length === 0 && rewards.length === 0 && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ยังไม่มีคูปอง และแต้มยังไม่พอแลกของรางวัล</div>}
                           {coupons.map(c => (
                             <div key={'c' + c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: '10px', background: '#fff', opacity: c.usable ? 1 : 0.55 }}>
                               <span style={{ minWidth: '52px', textAlign: 'center', fontWeight: 900, color: '#ea580c' }}>{c.big}</span>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
-                                <div style={{ fontSize: '0.75rem', color: c.usable ? '#475569' : '#dc2626' }}>{c.usable ? `ลด ฿${Number(c.discount).toLocaleString()} · ${c.code}` : c.reason}</div>
+                                <div style={{ fontSize: '0.75rem', color: c.usable ? '#475569' : '#dc2626' }}>{c.usable ? (c.voucher ? `ใบรับของ (ไม่ลดเงิน) · ${c.code}` : `ลด ฿${Number(c.discount).toLocaleString()} · ${c.code}`) : c.reason}</div>
                               </div>
-                              {c.usable && (chosen === String(c.id)
-                                ? <button type="button" style={btn(true)} onClick={() => setSelectedDiscount(null)}>✓ ใช้อยู่</button>
-                                : <button type="button" style={btn(false)} disabled={!!couponBusy} onClick={() => pickCoupon(c)}>{couponBusy === 'c' + c.id ? '…' : 'ใช้'}</button>)}
+                              {c.usable && <button type="button" style={btn(false)} disabled={!!couponBusy} onClick={() => pickCoupon(c)}>{couponBusy === 'c' + c.id ? '…' : (applied.length ? 'ใช้เพิ่ม' : 'ใช้')}</button>}
                             </div>
                           ))}
                           {rewards.length > 0 && <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', marginTop: '4px' }}>แลกแต้ม (มี {Number(wallet.balance || 0).toLocaleString()} แต้ม)</div>}

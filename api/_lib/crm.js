@@ -193,7 +193,7 @@ export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDisco
     channel: channel === 'kiosk' ? 'kiosk' : 'pos',
     // คูปองสมาชิกที่จองไว้กับบิลนี้ + ยอดส่วนลดที่ให้ลูกค้าไปจริง (CRM ใช้ยอดนี้แม้คูปองมีปัญหาตอนบิลมาถึง)
     ...(Array.isArray(couponIds) && couponIds.length && MEMBER_ID.test(String(memberId || ''))
-      ? { couponIds: couponIds.map(String).slice(0, 3), couponRef: ref(couponRef), couponDiscount: Math.max(0, Number(couponDiscount) || 0) }
+      ? { couponIds: couponIds.map(String).slice(0, 5), couponRef: ref(couponRef), couponDiscount: Math.max(0, Number(couponDiscount) || 0) }
       : {}),
     staffId: staff ? String(staff).slice(0, 60) : undefined
   };
