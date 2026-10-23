@@ -389,7 +389,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (res.success) { keepCoupon(res.coupon); loadKWallet(); } else setKMsg(res.error || 'แลกแต้มไม่สำเร็จ');
   };
   // ยืนยันตัวตนแล้ว (หรือร้านไม่บังคับยืนยัน) → โหลดคูปอง · ยอดในตะกร้าเปลี่ยน → คำนวณส่วนลดของคูปองที่ใช้อยู่ใหม่ (ไม่ถึงขั้นต่ำแล้วเอาออก)
-  useEffect(() => { if (crmOn && member && verified) loadKWallet(); }, [crmOn, member && member.id, verified]); // eslint-disable-line react-hooks/exhaustive-deps
+  // โหลดใหม่ทุกครั้งที่ตะกร้าเปลี่ยน (รอให้หยุดกดสักครู่) · คูปองของฟรี/เงื่อนไขสินค้า/ขั้นต่ำ ตรวจจากตะกร้าปัจจุบัน
+  const kItemsKey = JSON.stringify(kioskItems.map(i => [i.menuId, i.price, i.qty]));
+  useEffect(() => {
+    if (!crmOn || !member || !verified || payStage) return undefined;
+    const t = setTimeout(loadKWallet, 400);
+    return () => clearTimeout(t);
+  }, [crmOn, member && member.id, verified, kItemsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!kCoupon || !member || !verified || cartSubtotal <= 0 || payStage) return;
     let alive = true;
@@ -1099,9 +1105,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             <div key={'r' + r.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#fff', borderRadius: 12, padding: '0.5rem 0.6rem', border: '1px dashed #fdba74' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{r.name}</div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.big === 'ฟรี' ? (th ? `ของฟรี มูลค่า ฿${r.value}` : `Free (฿${r.value})`) : (th ? `ส่วนลด ฿${r.value}` : `-฿${r.value}`)}{r.minSpend ? (th ? ` · ขั้นต่ำ ฿${r.minSpend}` : ` · min ฿${r.minSpend}`) : ''}</div>
+                <div style={{ fontSize: '0.75rem', color: r.fits === false ? '#b91c1c' : '#64748b' }}>{r.fits === false ? r.reason : r.discount ? (th ? `แลกแล้วใช้กับออเดอร์นี้ทันที · ลด ฿${money(r.discount)}` : `Applies now · -฿${money(r.discount)}`) : (<>{r.big === 'ฟรี' ? (th ? `ของฟรี มูลค่า ฿${r.value}` : `Free (฿${r.value})`) : (th ? `ส่วนลด ฿${r.value}` : `-฿${r.value}`)}{r.minSpend ? (th ? ` · ขั้นต่ำ ฿${r.minSpend}` : ` · min ฿${r.minSpend}`) : ''}</>)}</div>
               </div>
-              <button onClick={() => redeemK(r)} disabled={!!kBusy} style={btn(false)}>{kBusy === 'r' + r.id ? '…' : (th ? `แลก ${Number(r.cost).toLocaleString()} แต้ม` : `${r.cost} pts`)}</button>
+              <button onClick={() => redeemK(r)} disabled={!!kBusy || r.fits === false} style={btn(false)}>{kBusy === 'r' + r.id ? '…' : (th ? `แลก ${Number(r.cost).toLocaleString()} แต้ม` : `${r.cost} pts`)}</button>
             </div>
           ))}
         </div>
