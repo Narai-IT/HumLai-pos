@@ -389,7 +389,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (res.success) { keepCoupon(res.coupon); loadKWallet(); } else setKMsg(res.error || 'แลกแต้มไม่สำเร็จ');
   };
   // ยืนยันตัวตนแล้ว (หรือร้านไม่บังคับยืนยัน) → โหลดคูปอง · ยอดในตะกร้าเปลี่ยน → คำนวณส่วนลดของคูปองที่ใช้อยู่ใหม่ (ไม่ถึงขั้นต่ำแล้วเอาออก)
-  useEffect(() => { if (crmOn && member && verified) loadKWallet(); }, [crmOn, member && member.id, verified]); // eslint-disable-line react-hooks/exhaustive-deps
+  // โหลดใหม่ทุกครั้งที่ตะกร้าเปลี่ยน (รอให้หยุดกดสักครู่) · คูปองของฟรี/เงื่อนไขสินค้า/ขั้นต่ำ ตรวจจากตะกร้าปัจจุบัน
+  const kItemsKey = JSON.stringify(kioskItems.map(i => [i.menuId, i.price, i.qty]));
+  useEffect(() => {
+    if (!crmOn || !member || !verified || payStage) return undefined;
+    const t = setTimeout(loadKWallet, 400);
+    return () => clearTimeout(t);
+  }, [crmOn, member && member.id, verified, kItemsKey]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!kCoupon || !member || !verified || cartSubtotal <= 0 || payStage) return;
     let alive = true;
