@@ -487,9 +487,10 @@ const CheckoutModal = ({
                             <div key={'r' + r.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '1px dashed #cbd5e1', borderRadius: '10px', background: '#fff' }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{r.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: '#475569' }}>{r.big === 'ฟรี' ? `ของฟรี มูลค่า ฿${r.value}` : `ส่วนลด ฿${r.value}`}{r.minSpend ? ` · ขั้นต่ำ ฿${r.minSpend}` : ''}</div>
+                                <div style={{ fontSize: '0.75rem', color: r.fits === false ? '#dc2626' : '#475569' }}>{r.fits === false ? r.reason
+                                  : r.discount ? `แลกแล้วใช้กับบิลนี้ทันที · ลด ฿${Number(r.discount).toLocaleString()}` : `${r.big === 'ฟรี' ? `ของฟรี มูลค่า ฿${r.value}` : `ส่วนลด ฿${r.value}`}${r.minSpend ? ` · ขั้นต่ำ ฿${r.minSpend}` : ''}`}</div>
                               </div>
-                              <button type="button" style={btn(false)} disabled={!!couponBusy} onClick={() => redeem(r)}>{couponBusy === 'r' + r.id ? '…' : `แลก ${Number(r.cost).toLocaleString()} แต้ม`}</button>
+                              <button type="button" style={btn(false)} disabled={!!couponBusy || r.fits === false} onClick={() => redeem(r)}>{couponBusy === 'r' + r.id ? '…' : `แลก ${Number(r.cost).toLocaleString()} แต้ม`}</button>
                             </div>
                           ))}
                         </div>
