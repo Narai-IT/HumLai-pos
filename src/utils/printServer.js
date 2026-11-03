@@ -139,7 +139,7 @@ export const scanPrinters = async (options = {}, timeoutMs = 120000) => {
   return data;
 };
 
-// สั่งพิมพ์ผ่าน Print Server — คืนค่า { success, error }
+// สั่งพิมพ์ผ่าน Print Server — คืนค่า { success, error, warning }
 // หัวใบเสร็จของสาขาที่เครื่องนี้ทำงานอยู่ — App ตั้งให้ตามสาขาของผู้ใช้ที่ล็อกอิน
 // ทุกงานพิมพ์แนบไปใน orderData.header ให้ Print Server พิมพ์ชื่อร้าน/ที่อยู่ของสาขานั้น
 let receiptHeader = null;
@@ -161,7 +161,7 @@ export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: raw
     }, timeoutMs);
     const result = await response.json().catch(() => null);
     if (!result) return { success: false, error: `Print Server ตอบกลับ HTTP ${response.status}` };
-    return { success: !!result.success, error: result.error || null };
+    return { success: !!result.success, error: result.error || null, warning: result.warning || null };
   } catch (e) {
     return { success: false, error: PRINT_SERVER_OFFLINE_MSG };
   }

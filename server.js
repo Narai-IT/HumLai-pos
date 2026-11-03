@@ -6,10 +6,10 @@ import { printTicket } from './print-ticket.js';
 import { registerAutoPrint } from './auto-print.js';
 
 const SERVER_NAME = 'humlai-print-server';
-const SERVER_VERSION = '1.3.0';
+const SERVER_VERSION = '1.4.0';
 // ความสามารถที่ Print Server ตัวนี้มี — หน้าเว็บใช้เช็คว่าเครื่องนี้รันโค้ดเวอร์ชันใหม่พอไหม
 // (เครื่องที่ยังรันตัวเก่าจะไม่มี features กลับมา หน้าเว็บจะได้บอกให้อัปเดตแทนที่จะฟ้อง 404 เฉย ๆ)
-const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice'];
+const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice', 'printerStatus'];
 const DEFAULT_PRINTER_PORT = 9100;
 
 const app = express();
@@ -162,7 +162,7 @@ app.post('/print', async (req, res) => {
   if (!result.success) {
     return res.status(500).json({ success: false, error: result.error });
   }
-  res.json({ success: true });
+  res.json({ success: true, warning: result.warning || null });
 });
 
 // ── ดึงออเดอร์จากชีตมาพิมพ์เอง (ออเดอร์ที่ลูกค้าสั่งผ่าน QR) ──

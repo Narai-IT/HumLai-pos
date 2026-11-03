@@ -7,6 +7,7 @@
 // ===============================================================
 
 import pkg from 'node-thermal-printer';
+import { sendToPrinter } from './printer-net.js';
 
 const { printer: ThermalPrinter, types: PrinterTypes } = pkg;
 
@@ -251,19 +252,25 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       }
     });
 
-    const isConnected = await printer.isPrinterConnected();
-    if (!isConnected) {
-      return { success: false, error: 'Printer is not connected or reachable at ' + ip };
-    }
+    // ใช้ node-thermal-printer จัดหน้าอย่างเดียว ส่วนการส่งไปเครื่องทำเองใน printer-net.js
+    // (เปิด socket ครั้งเดียว ถามสถานะกระดาษ/ฝา แล้วปิดแบบรอข้อมูลออกครบ)
+    const send = async (label) => {
+      const buffer = typeof printer.getBuffer === 'function' ? printer.getBuffer() : printer.buffer;
+      const result = await sendToPrinter(ip, Buffer.from(buffer || []));
+      if (result.success) {
+        console.log(`${label} sent to ${ip} (${result.bytes} bytes)${result.warning ? ` — ${result.warning}` : ''}`);
+        return { success: true, warning: result.warning || null };
+      }
+      console.error(`${label} to ${ip} failed: ${result.error}`);
+      return { success: false, error: result.error };
+    };
 
     // ใบกำกับภาษีเต็มรูป — รูปแบบของตัวเอง ไม่ใช้หัวใบเสร็จ และไม่เปิดลิ้นชัก
     if (printerType === 'taxinvoice') {
       if (!orderData.taxInvoice) return { success: false, error: 'ไม่มีข้อมูลใบกำกับภาษี' };
       printTaxInvoice(printer, orderData.taxInvoice, !!orderData.copy);
       printer.cut();
-      await printer.execute();
-      console.log(`Tax invoice ${orderData.taxInvoice.invoiceNo} sent to ${ip}`);
-      return { success: true };
+      return send(`Tax invoice ${orderData.taxInvoice.invoiceNo}`);
     }
 
     // รายงานปิดยอดประจำวัน — ไม่เปิดลิ้นชัก
@@ -271,9 +278,7 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       if (!orderData.closeDay) return { success: false, error: 'ไม่มีข้อมูลรายงานปิดยอด' };
       printDailyClose(printer, orderData.closeDay);
       printer.cut();
-      await printer.execute();
-      console.log(`Daily close report sent to ${ip}`);
-      return { success: true };
+      return send('Daily close report');
     }
 
     // ใบแจ้งยอด = ให้ลูกค้าตรวจก่อนจ่าย หน้าตาเหมือนใบเสร็จแต่ยังไม่ใช่ใบเสร็จ
@@ -416,9 +421,7 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       printer.openCashDrawer();
     }
 
-    await printer.execute();
-    console.log(`Print job sent successfully to ${ip}`);
-    return { success: true };
+    return send(`Print job ${orderData.orderNumber || ''}`.trim());
   } catch (error) {
     console.error('Print failed:', error);
     return { success: false, error: error.message };

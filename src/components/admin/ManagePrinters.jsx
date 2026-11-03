@@ -312,7 +312,9 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
     setTestStatus(prev => ({
       ...prev,
       [printer.id]: result.success
-        ? { status: 'success', msg: 'พิมพ์ทดสอบสำเร็จ!' }
+        ? (result.warning
+          ? { status: 'warning', msg: result.warning }
+          : { status: 'success', msg: 'พิมพ์ทดสอบสำเร็จ! (เครื่องพิมพ์ตอบว่าพร้อม)' })
         : { status: 'error', msg: result.error || 'Failed' }
     }));
     if (!result.success) runHealthCheck();
@@ -929,10 +931,10 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                       ทดสอบพิมพ์
                     </button>
                     {ts && (
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', color: ts.status === 'success' ? '#16a34a' : ts.status === 'error' ? '#dc2626' : '#d97706' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', color: ts.status === 'success' ? '#16a34a' : ts.status === 'error' ? '#dc2626' : '#d97706', lineHeight: 1.45 }}>
                         {ts.status === 'success' && <CheckCircle size={15} />}
                         {ts.status === 'error' && <XCircle size={15} />}
-                        {ts.status === 'loading' && <AlertCircle size={15} />}
+                        {(ts.status === 'loading' || ts.status === 'warning') && <AlertCircle size={15} style={{ flexShrink: 0 }} />}
                         {ts.msg}
                       </span>
                     )}
