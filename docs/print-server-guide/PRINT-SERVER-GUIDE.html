@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<!--
+  คู่มือติดตั้ง Print Server — ไฟล์นี้ถูกใส่ไว้ใน zip ที่ดาวน์โหลดจากหน้า "ตั้งค่าเครื่องพิมพ์" (ชื่อ README-GUIDE.html)
+  และเปิดอ่านบนเว็บได้ที่ /downloads/print-server-guide.html (สร้างโดย scripts/build-print-server-package.mjs)
+-->
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>คู่มือติดตั้ง Print Server — HumLai POS</title>
+<style>
+  :root {
+    --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb; --accent: #ea580c; --accent-soft: #fff7ed;
+    --ok: #15803d; --ok-soft: #f0fdf4; --warn: #b45309; --warn-soft: #fffbeb; --bad: #b91c1c; --bad-soft: #fef2f2;
+    --info: #1d4ed8; --info-soft: #eff6ff; --code-bg: #f3f4f6; --page: #f8fafc; --card: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--page); color: var(--ink);
+    font-family: "Sarabun", "Leelawadee UI", "Tahoma", "Noto Sans Thai", sans-serif;
+    font-size: 16px; line-height: 1.7;
+  }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  header.hero {
+    background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%); color: #fff;
+    border-radius: 16px; padding: 24px; margin-bottom: 20px;
+  }
+  header.hero h1 { margin: 0 0 4px; font-size: 1.7rem; line-height: 1.3; }
+  header.hero p { margin: 0; opacity: .95; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px; margin-bottom: 20px; }
+  nav.toc b { display: block; margin-bottom: 4px; }
+  nav.toc ol { margin: 0; padding-left: 22px; columns: 2; column-gap: 24px; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; margin-bottom: 18px; }
+  h2 { margin: 0 0 10px; font-size: 1.3rem; color: var(--accent); }
+  h3 { margin: 18px 0 6px; font-size: 1.08rem; }
+  p { margin: 6px 0; }
+  ol, ul { margin: 6px 0 8px; padding-left: 24px; }
+  li { margin: 4px 0; }
+  code { font-family: Consolas, "Courier New", monospace; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; font-size: .92em; }
+  kbd { font-family: inherit; border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; background: #fff; font-size: .9em; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: .95rem; }
+  th, td { border: 1px solid var(--line); padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { background: #f9fafb; }
+  .box { border-radius: 10px; padding: 10px 14px; margin: 10px 0; border: 1px solid; }
+  .box b.t { display: block; margin-bottom: 2px; }
+  .note { background: var(--accent-soft); border-color: #fed7aa; }
+  .warn { background: var(--warn-soft); border-color: #fde68a; }
+  .danger { background: var(--bad-soft); border-color: #fecaca; }
+  .ok { background: var(--ok-soft); border-color: #bbf7d0; }
+  .info { background: var(--info-soft); border-color: #bfdbfe; }
+  .steps { counter-reset: s; list-style: none; padding-left: 0; }
+  .steps > li { counter-increment: s; position: relative; padding-left: 44px; margin: 14px 0; }
+  .steps > li::before {
+    content: counter(s); position: absolute; left: 0; top: 0; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--accent); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center;
+  }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+  .flow .n { background: var(--info-soft); border: 1px solid #bfdbfe; border-radius: 10px; padding: 8px 12px; font-weight: 700; }
+  .flow .n small { display: block; font-weight: 400; color: var(--muted); }
+  .flow .a { color: var(--muted); font-weight: 800; }
+  .st { display: inline-block; min-width: 22px; text-align: center; border-radius: 999px; font-weight: 800; font-size: .85em; padding: 0 6px; }
+  .st.ok { background: #dcfce7; color: var(--ok); border: none; }
+  .st.warn { background: #fef3c7; color: var(--warn); border: none; }
+  .st.bad { background: #fee2e2; color: var(--bad); border: none; }
+  .muted { color: var(--muted); }
+  .table-scroll { overflow-x: auto; }
+  @media (max-width: 600px) {
+    nav.toc ol { columns: 1; }
+    section { padding: 16px; }
+    header.hero h1 { font-size: 1.4rem; }
+  }
+  @media print {
+    body { background: #fff; font-size: 11pt; }
+    .wrap { padding: 0; }
+    section, nav.toc { break-inside: avoid-page; border-color: #ddd; }
+    header.hero { background: #fff; color: var(--accent); border: 2px solid var(--accent); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>🖨️ คู่มือติดตั้ง Print Server</h1>
+  <p>HumLai POS — โปรแกรมตัวกลางที่ส่งงานพิมพ์จากหน้าเว็บไปเครื่องพิมพ์ใบเสร็จ/ใบครัวในร้าน</p>
+</header>
+
+<nav class="toc">
+  <b>สารบัญ</b>
+  <ol>
+    <li><a href="#what">Print Server คืออะไร</a></li>
+    <li><a href="#need">สิ่งที่ต้องมี</a></li>
+    <li><a href="#install">ติดตั้งครั้งแรก</a></li>
+    <li><a href="#printers">ตั้งค่าและทดสอบเครื่องพิมพ์</a></li>
+    <li><a href="#status">อ่านสถานะการพิมพ์</a></li>
+    <li><a href="#update">อัปเดตเวอร์ชันใหม่</a></li>
+    <li><a href="#trouble">แก้ปัญหาที่พบบ่อย</a></li>
+    <li><a href="#files">ไฟล์ในโฟลเดอร์</a></li>
+    <li><a href="#remove">ถอนการติดตั้ง</a></li>
+  </ol>
+</nav>
+
+<section id="what">
+  <h2>1. Print Server คืออะไร ทำไมต้องมี</h2>
+  <p>เครื่องพิมพ์ใบเสร็จในวงแลน (LAN) รับงานผ่านพอร์ต <code>9100</code> ซึ่ง<b>เบราว์เซอร์ติดต่อเองไม่ได้</b>
+  จึงต้องมีโปรแกรมตัวกลางเล็ก ๆ รันอยู่ในคอมพิวเตอร์ของร้าน คอยรับงานจากหน้าเว็บแล้วส่งต่อให้เครื่องพิมพ์</p>
+  <div class="flow">
+    <div class="n">หน้าเว็บ POS<small>เบราว์เซอร์</small></div>
+    <div class="a">→</div>
+    <div class="n">Print Server<small>คอมในร้าน พอร์ต 3001</small></div>
+    <div class="a">→</div>
+    <div class="n">เครื่องพิมพ์<small>วงแลนร้าน พอร์ต 9100</small></div>
+  </div>
+  <p>Print Server ยังคอย<b>ดึงออเดอร์ที่ลูกค้าสั่งเองผ่าน QR</b> มาพิมพ์ใบครัวให้อัตโนมัติด้วย (ถ้าเปิดสวิตช์ไว้ในหน้าตั้งค่าเครื่องพิมพ์)</p>
+  <div class="box note"><b class="t">ติดตั้งสาขาละ 1 เครื่อง</b>
+  ใช้เครื่องแคชเชียร์ก็ได้ — ขอให้เป็นเครื่องที่เปิดตลอดเวลาที่ร้านเปิด และต่อวงแลน/Wi-Fi เดียวกับเครื่องพิมพ์</div>
+</section>
+
+<section id="need">
+  <h2>2. สิ่งที่ต้องมี</h2>
+  <table>
+    <tr><th>รายการ</th><th>รายละเอียด</th></tr>
+    <tr><td>คอมพิวเตอร์ Windows</td><td>Windows 10 หรือ 11 อยู่วงแลนเดียวกับเครื่องพิมพ์</td></tr>
+    <tr><td>Node.js</td><td>รุ่น LTS (ฟรี) จาก <code>https://nodejs.org</code> — ติดตั้งครั้งเดียว</td></tr>
+    <tr><td>อินเทอร์เน็ต</td><td>ต้องใช้ตอนติดตั้งครั้งแรก (โหลดส่วนประกอบ ~5 MB) และตอนสั่งพิมพ์จากหน้าเว็บ</td></tr>
+    <tr><td>เครื่องพิมพ์</td><td>เครื่องพิมพ์ความร้อน ESC/POS แบบต่อแลน (เช่น Epson TM, Xprinter) ตั้ง IP ไว้แล้ว</td></tr>
+    <tr><td>สิทธิ์ผู้ดูแล</td><td>บัญชีที่ล็อกอินหลังบ้านได้ และเข้าเมนู <b>ตั้งค่าเครื่องพิมพ์</b> ได้</td></tr>
+  </table>
+</section>
+
+<section id="install">
+  <h2>3. ติดตั้งครั้งแรก</h2>
+  <ol class="steps">
+    <li><b>ติดตั้ง Node.js</b><br>
+      เข้า <code>https://nodejs.org</code> → กดปุ่มดาวน์โหลดรุ่น <b>LTS</b> → เปิดไฟล์ที่ได้ → กด <kbd>Next</kbd> ไปเรื่อย ๆ จนเสร็จ (ค่าเริ่มต้นใช้ได้เลย)</li>
+    <li><b>ดาวน์โหลด Print Server</b><br>
+      เปิดหน้าเว็บ POS → <b>หลังบ้าน → ตั้งค่าเครื่องพิมพ์</b> → กดปุ่ม <b>⬇️ ดาวน์โหลด Print Server</b>
+      จะได้ไฟล์ <code>humlai-print-server.zip</code></li>
+    <li><b>แตกไฟล์</b><br>
+      คลิกขวาที่ไฟล์ zip → <b>Extract All… (แตกไฟล์ทั้งหมด)</b> → ตั้งที่เก็บเป็น <code>C:\</code> → กด Extract<br>
+      จะได้โฟลเดอร์ <code>C:\HumLai-Print-Server</code>
+      <div class="box warn"><b class="t">อย่าดับเบิลคลิกไฟล์ในหน้าต่าง zip ตรง ๆ</b>
+      ต้องแตกไฟล์ก่อนเสมอ และไม่ควรเก็บไว้ในโฟลเดอร์ Downloads หรือ OneDrive (อาจถูกลบ/ย้าย)</div></li>
+    <li><b>ตั้งให้เปิดเองอัตโนมัติ (แนะนำ)</b><br>
+      ในโฟลเดอร์ <code>C:\HumLai-Print-Server</code> ดับเบิลคลิก <code>install-autostart.bat</code><br>
+      ครั้งแรกจะติดตั้งส่วนประกอบ 1–3 นาที แล้วขึ้นคำว่า <b>เสร็จสิ้น</b> — จากนี้ Print Server จะเปิดเองทุกครั้งที่เปิดเครื่อง
+      ทำงานเบื้องหลังไม่มีหน้าต่าง และถ้าดับเองจะเปิดใหม่ให้ภายใน 5 วินาที
+      <div class="box info"><b class="t">ถ้า Windows ขึ้น “Windows protected your PC”</b>
+      กด <b>More info</b> → <b>Run anyway</b> (ไฟล์ .bat มาจากระบบของร้านเอง)</div>
+      <div class="box info"><b class="t">ถ้า Windows Firewall ถามสิทธิ์ให้ Node.js</b>
+      ติ๊ก <b>Private networks</b> แล้วกด <b>Allow access</b> — จำเป็นถ้าจะสั่งพิมพ์จากแท็บเล็ต/เครื่องอื่นในร้าน</div>
+      <p class="muted">ถ้าไม่อยากให้เปิดอัตโนมัติ ใช้ <code>start-printer.bat</code> แทน (ต้องเปิดเองทุกครั้ง และห้ามปิดหน้าต่างดำ)</p></li>
+    <li><b>เชื่อมหน้าเว็บกับ Print Server</b><br>
+      กลับไปหน้า <b>ตั้งค่าเครื่องพิมพ์</b> (เปิดจากเครื่องเดียวกับที่ติดตั้ง) → กด <b>ตรวจสอบอีกครั้ง</b><br>
+      กล่อง Print Server ต้องขึ้นสีเขียว <b>เชื่อมต่อแล้ว</b> และที่อยู่เป็น <code>http://127.0.0.1:3001</code>
+      <div class="box note"><b class="t">ถ้าขึ้นสีแดง “ถูกเบราว์เซอร์บล็อก”</b>
+      กดปุ่ม <b>ใช้ http://127.0.0.1:3001 แทน</b> ในกล่องนั้น — หน้าเว็บ https ติดต่อได้เฉพาะ Print Server ในเครื่องเดียวกัน
+      Chrome อาจถามสิทธิ์ “เข้าถึงอุปกรณ์ในเครือข่าย” ให้กด <b>อนุญาต</b></div></li>
+  </ol>
+</section>
+
+<section id="printers">
+  <h2>4. ตั้งค่าและทดสอบเครื่องพิมพ์</h2>
+  <ol class="steps">
+    <li>กด <b>🔍 ค้นหาเครื่องพิมพ์ในวงแลน</b> — ระบบสแกนหาเครื่องที่เปิดพอร์ต 9100 (ใช้เวลาไม่เกิน 1 นาที)</li>
+    <li>กด <b>เพิ่ม</b> ที่เครื่องที่ต้องการ แล้วตั้ง <b>ชื่อ</b> และ <b>ประเภท</b> (ใบเสร็จ / ครัว / บาร์)
+      <div class="box warn"><b class="t">สแกนเจอหลายเครื่อง ไม่แน่ใจว่าเครื่องไหน?</b>
+      ปิดเครื่องพิมพ์ → กดปุ่ม <b>FEED</b> ค้างไว้ → เปิดเครื่อง → ปล่อยปุ่มเมื่อกระดาษเริ่มออก
+      เครื่องจะพิมพ์ใบ Self-test ที่มี <b>IP Address</b> ของตัวเอง เอา IP นั้นมาใส่ให้ตรง</div></li>
+    <li>กด <b>ทดสอบพิมพ์</b> ใต้เครื่องพิมพ์แต่ละเครื่อง — ใต้ปุ่มจะแสดงผลทีละขั้น (ดูหัวข้อถัดไป)</li>
+    <li>กด <b>บันทึกการตั้งค่า</b></li>
+    <li>ถ้าต้องการให้ออเดอร์ที่ลูกค้าสั่งผ่าน QR พิมพ์ใบครัวเอง กด <b>เปิดการพิมพ์อัตโนมัติ</b> ในกล่อง “พิมพ์ออเดอร์ลูกค้าสั่งเอง (QR) อัตโนมัติ”</li>
+  </ol>
+</section>
+
+<section id="status">
+  <h2>5. อ่านสถานะการพิมพ์</h2>
+  <p>ทุกครั้งที่สั่งพิมพ์ จะมีกล่องสถานะขึ้นที่<b>มุมล่างขวาของจอ</b> และปุ่มทดสอบพิมพ์จะแสดงรายการขั้นตอนใต้ปุ่ม</p>
+  <table>
+    <tr><th>กล่องสถานะ</th><th>ความหมาย</th></tr>
+    <tr><td>🟢 พิมพ์เสร็จแล้ว ✓</td><td>เครื่องพิมพ์ยืนยันว่าพิมพ์ออกแล้ว (กล่องหายเองใน 4 วินาที)</td></tr>
+    <tr><td>🟡 ส่งถึงเครื่องพิมพ์แล้ว — ไม่ได้รับการยืนยัน</td><td>งานไปถึงเครื่องแล้ว แต่เครื่องรุ่นนี้ไม่ตอบกลับ ให้ดูที่เครื่องว่ากระดาษออกไหม</td></tr>
+    <tr><td>🔴 พิมพ์ไม่ออก ✕</td><td>ค้างไว้จนกดปิด บอกว่า<b>ติดที่ขั้นไหน</b> พร้อมวิธีแก้</td></tr>
+  </table>
+  <h3>5 ขั้นของการพิมพ์ — ติดขั้นไหน แก้ตรงนั้น</h3>
+  <div class="table-scroll">
+  <table>
+    <tr><th>ขั้น</th><th>ตรวจอะไร</th><th>ถ้าขึ้น <span class="st bad">✕</span> ให้แก้</th></tr>
+    <tr><td>1. หน้าเว็บ → Print Server</td><td>Print Server เปิดอยู่และหน้าเว็บติดต่อได้</td><td>ดับเบิลคลิก <code>restart-print-server.bat</code> หรือ <code>start-printer.bat</code> · ตรวจที่อยู่ Print Server (ข้อ 3.5)</td></tr>
+    <tr><td>2. Print Server → เครื่องพิมพ์</td><td>ต่อเข้า IP ของเครื่องพิมพ์ได้</td><td>เครื่องพิมพ์เปิดอยู่ไหม · สายแลนแน่นไหม · IP ถูกไหม (พิมพ์ Self-test ดู)</td></tr>
+    <tr><td>3. เครื่องพิมพ์พร้อม</td><td>กระดาษ / ฝา / ข้อผิดพลาดของเครื่อง</td><td>ใส่กระดาษ · ปิดฝาให้สนิท · ปิด-เปิดเครื่องพิมพ์</td></tr>
+    <tr><td>4. ส่งงานพิมพ์</td><td>ข้อมูลส่งถึงเครื่องครบ</td><td>ปิด-เปิดเครื่องพิมพ์แล้วสั่งใหม่</td></tr>
+    <tr><td>5. ยืนยันพิมพ์เสร็จ</td><td>เครื่องตอบกลับหลังพิมพ์จบ</td><td><span class="st warn">!</span> = เครื่องไม่ตอบ ให้ดูที่เครื่อง · “กระดาษหมดระหว่างพิมพ์” = ใส่กระดาษ เครื่องจะพิมพ์ต่อเอง</td></tr>
+  </table>
+  </div>
+  <div class="box warn"><b class="t">ขั้น 3 ขึ้น <span class="st warn">!</span> “อุปกรณ์ที่ IP นี้ไม่ตอบสถานะแบบเครื่องพิมพ์ใบเสร็จ”</b>
+  มักแปลว่าใส่ IP ผิดเครื่อง (เช่นไปโดนเครื่องพิมพ์เอกสารหรืออุปกรณ์อื่นที่เปิดพอร์ต 9100) ให้พิมพ์ Self-test เพื่อดู IP จริง</div>
+</section>
+
+<section id="update">
+  <h2>6. อัปเดตเวอร์ชันใหม่</h2>
+  <p>หน้า <b>ตั้งค่าเครื่องพิมพ์</b> จะขึ้นแถบสีเหลือง <b>“มี Print Server เวอร์ชันใหม่”</b> เมื่อเครื่องในร้านยังใช้เวอร์ชันเก่า</p>
+  <ol class="steps">
+    <li>กด <b>⬇️ ดาวน์โหลด Print Server</b> ได้ไฟล์ zip ใหม่</li>
+    <li>คลิกขวา → <b>Extract All…</b> → เลือก <code>C:\</code> ที่เดิม → ถ้าถามว่าแทนที่ไฟล์ไหม กด <b>Replace the files in the destination</b></li>
+    <li>ในโฟลเดอร์ <code>C:\HumLai-Print-Server</code> ดับเบิลคลิก <code>restart-print-server.bat</code></li>
+    <li>กลับไปหน้าตั้งค่าเครื่องพิมพ์ → กด <b>ตรวจสอบอีกครั้ง</b> → เลขเวอร์ชันต้องเป็นตัวใหม่</li>
+  </ol>
+  <div class="box ok"><b class="t">ค่าที่ตั้งไว้ไม่หาย</b>
+  การตั้งค่าพิมพ์อัตโนมัติเก็บอยู่ในไฟล์ <code>print-auto-config.json</code> ซึ่งไม่อยู่ใน zip จึงไม่ถูกเขียนทับ</div>
+</section>
+
+<section id="trouble">
+  <h2>7. แก้ปัญหาที่พบบ่อย</h2>
+  <p>เครื่องมือแรกที่ควรใช้: ดับเบิลคลิก <code>check-printer.bat</code> — ตรวจ Node.js, ส่วนประกอบ, พอร์ต 3001 และแสดง log ล่าสุดให้</p>
+  <div class="table-scroll">
+  <table>
+    <tr><th>อาการ</th><th>สาเหตุ / วิธีแก้</th></tr>
+    <tr><td>หน้าเว็บขึ้น “ไม่พบ Print Server”</td><td>Print Server ไม่ได้เปิด → <code>restart-print-server.bat</code> · ถ้ายังไม่ได้ ดู <code>logs\print-server.log</code> หรือรัน <code>check-printer.bat</code></td></tr>
+    <tr><td>“ถูกเบราว์เซอร์บล็อก”</td><td>หน้าเว็บ https ติดต่อ IP วงแลนไม่ได้ → ใช้ <code>127.0.0.1:3001</code> และเปิดหน้าเว็บจากเครื่องที่ติดตั้ง Print Server</td></tr>
+    <tr><td>ติดตั้งแล้วขึ้น “ไม่พบ Node.js”</td><td>ติดตั้ง Node.js ก่อน (ข้อ 3.1) แล้ว<b>ปิดหน้าต่างเดิม</b> เปิด .bat ใหม่ (หรือรีสตาร์ตเครื่อง)</td></tr>
+    <tr><td>“ติดตั้งส่วนประกอบไม่สำเร็จ”</td><td>เครื่องไม่ได้ต่ออินเทอร์เน็ต หรือ Firewall/Antivirus บล็อก npm → ต่อเน็ตแล้วลองใหม่</td></tr>
+    <tr><td>ทดสอบพิมพ์สำเร็จแต่กระดาษไม่ออก</td><td>IP ผิดเครื่อง → พิมพ์ Self-test (กด FEED ค้างตอนเปิดเครื่อง) แล้วแก้ IP</td></tr>
+    <tr><td>“ติดต่อเครื่องพิมพ์ไม่ได้ภายใน 5 วินาที”</td><td>เครื่องพิมพ์ปิด / สายหลุด / IP เปลี่ยน (เราเตอร์แจก IP ใหม่) → ตั้ง IP ของเครื่องพิมพ์ให้คงที่</td></tr>
+    <tr><td>“กระดาษหมด” / “ฝาเปิดอยู่”</td><td>ใส่กระดาษ ปิดฝาให้สนิท แล้วสั่งพิมพ์ใหม่</td></tr>
+    <tr><td>ภาษาไทยออกมาเป็นตัวแปลก</td><td>ตั้งชุดตัวอักษรของเครื่องพิมพ์เป็นภาษาไทย (Code page Thai) ด้วยโปรแกรมของยี่ห้อเครื่องพิมพ์</td></tr>
+    <tr><td>QR สั่งแล้วใบครัวไม่ออก</td><td>ดูกล่อง “พิมพ์ออเดอร์ลูกค้าสั่งเอง (QR) อัตโนมัติ” ว่ากำลังทำงาน และกด “ส่งรายการเครื่องพิมพ์ล่าสุดไปให้ Print Server”</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="files">
+  <h2>8. ไฟล์ในโฟลเดอร์</h2>
+  <div class="table-scroll">
+  <table>
+    <tr><th>ไฟล์</th><th>ใช้ทำอะไร</th></tr>
+    <tr><td><code>install-autostart.bat</code></td><td>ติดตั้งส่วนประกอบ + ตั้งให้เปิดเองทุกครั้งที่เปิดเครื่อง (ใช้ครั้งเดียว)</td></tr>
+    <tr><td><code>start-printer.bat</code></td><td>เปิด Print Server แบบมีหน้าต่าง (ปิดหน้าต่าง = หยุดทำงาน)</td></tr>
+    <tr><td><code>restart-print-server.bat</code></td><td>ปิด-เปิด Print Server ใหม่ ใช้หลังอัปเดต</td></tr>
+    <tr><td><code>check-printer.bat</code></td><td>ตรวจหาสาเหตุเมื่อ Print Server ไม่ทำงาน</td></tr>
+    <tr><td><code>uninstall-autostart.bat</code></td><td>ยกเลิกการเปิดอัตโนมัติ</td></tr>
+    <tr><td><code>print-server-daemon.vbs</code></td><td>ตัวเฝ้าที่รันเบื้องหลัง (ไม่ต้องเปิดเอง)</td></tr>
+    <tr><td><code>server.js</code>, <code>print-ticket.js</code>, <code>printer-net.js</code>, <code>auto-print.js</code></td><td>ตัวโปรแกรม Print Server</td></tr>
+    <tr><td><code>logs\print-server.log</code></td><td>บันทึกการทำงาน (เกิดขึ้นหลังเปิดอัตโนมัติ) — ส่งให้ผู้ดูแลเมื่อมีปัญหา</td></tr>
+    <tr><td><code>print-auto-config.json</code></td><td>ค่าการพิมพ์อัตโนมัติที่หน้าเว็บส่งมา (สร้างเอง ห้ามลบ)</td></tr>
+  </table>
+  </div>
+</section>
+
+<section id="remove">
+  <h2>9. ถอนการติดตั้ง</h2>
+  <ol>
+    <li>ดับเบิลคลิก <code>uninstall-autostart.bat</code> — หยุด Print Server และยกเลิกการเปิดอัตโนมัติ</li>
+    <li>ลบโฟลเดอร์ <code>C:\HumLai-Print-Server</code></li>
+  </ol>
+  <div class="box danger"><b class="t">หมายเหตุ</b>
+  <code>uninstall-autostart.bat</code> ปิดโปรแกรม Node.js ทุกตัวในเครื่อง ถ้าเครื่องนี้รัน API Server ด้วย ต้องเปิด API Server ใหม่</div>
+</section>
+
+<p class="muted" style="text-align:center">HumLai POS · คู่มือ Print Server</p>
+</div>
+</body>
+</html>

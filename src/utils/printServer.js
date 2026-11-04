@@ -249,7 +249,7 @@ export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: raw
 // Print Server ที่ยังรันโค้ดเวอร์ชันเก่าจะไม่มี route /auto-print → ตอบ 404
 // ต้องบอกให้ชัดว่าต้องอัปเดตแล้วรีสตาร์ท ไม่ใช่ปล่อยให้เห็นแค่เลข error
 export const PRINT_SERVER_OUTDATED_MSG =
-  'Print Server เครื่องนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มีระบบพิมพ์อัตโนมัติ) — อัปเดตโค้ดในเครื่องที่รัน Print Server (git pull) แล้วปิด-เปิด Print Server ใหม่';
+  'Print Server เครื่องนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มีระบบพิมพ์อัตโนมัติ) — ดาวน์โหลด Print Server ตัวใหม่ในหน้าตั้งค่าเครื่องพิมพ์ แตกไฟล์ทับ แล้วรัน restart-print-server.bat';
 
 // Print Server รองรับการพิมพ์อัตโนมัติไหม — ดูจาก features ที่ /health ตอบกลับมา
 export const supportsAutoPrint = (healthInfo) =>

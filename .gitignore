@@ -31,3 +31,6 @@ print-auto-state.json
 .env
 .env.local
 .env.*.local
+
+# ไฟล์ดาวน์โหลด Print Server — สร้างเองตอน build (scripts/build-print-server-package.mjs)
+public/downloads/
