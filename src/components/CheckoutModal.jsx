@@ -89,7 +89,7 @@ const CheckoutModal = ({
     if (!list.length) { setSelectedDiscount(prev => (prev && prev.crmCoupons ? null : prev)); return; }
     setSelectedDiscount({
       id: 'crm', name: `คูปอง ${list.map(c => c.title).join(' + ')}`, type: 'baht', value: Number(total) || 0,
-      crmCoupons: list.map(c => ({ id: String(c.id), code: c.code, title: c.title, discount: Number(c.discount) || 0 }))
+      crmCoupons: list.map(c => ({ id: String(c.id), code: c.code, title: c.title, discount: Number(c.discount) || 0, cancel: c.cancel || null }))
     });
   };
   const pickCoupon = async (c, m = member) => {
@@ -99,6 +99,17 @@ const CheckoutModal = ({
     setCouponBusy('');
     if (!res.success) setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ');
     loadWallet(m);
+  };
+  // ยกเลิกการแลกแต้ม → คืนแต้มเข้าบัตร (วันหมดอายุเดิม) และถอดออกจากบิล
+  const cancelRedeem = async (c) => {
+    if (couponBusy || !c.cancel) return;
+    if (!window.confirm(`ยกเลิกการแลก "${c.title}"?\nคืน ${Number(c.cancel.restore).toLocaleString()} แต้มเข้าบัตรสมาชิก${c.cancel.lost ? ` (อีก ${c.cancel.lost} แต้มหมดอายุไปแล้ว คืนไม่ได้)` : ''}\nคูปองใบนี้จะใช้ไม่ได้แล้ว`)) return;
+    setCouponBusy('v' + c.id); setWalletMsg('');
+    const res = await crmCall('crmCancelRedeem', { memberId: member.id, couponId: c.id, branchId });
+    setCouponBusy('');
+    if (res.success) setWalletMsg(`ยกเลิกการแลกแล้ว คืน ${Number(res.restored).toLocaleString()} แต้ม`);
+    else setWalletMsg(res.error || 'ยกเลิกการแลกไม่สำเร็จ');
+    loadWallet();
   };
   const removeCoupon = async (c) => {
     if (couponBusy) return;
@@ -487,7 +498,10 @@ const CheckoutModal = ({
                                 <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
                                 <div style={{ fontSize: '0.75rem', color: '#15803d' }}>✓ ใช้อยู่ · {c.discount > 0 ? `ลด ฿${Number(c.discount).toLocaleString()}` : 'ใบรับของ (ไม่ลดเงิน)'} · {c.code}</div>
                               </div>
-                              <button type="button" style={btn(true)} disabled={!!couponBusy} onClick={() => removeCoupon(c)}>{couponBusy === 'x' + c.id ? '…' : 'เอาออก'}</button>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <button type="button" style={btn(true)} disabled={!!couponBusy} onClick={() => removeCoupon(c)}>{couponBusy === 'x' + c.id ? '…' : 'เอาออก'}</button>
+                                {c.cancel && <button type="button" style={{ ...btn(false), borderColor: '#fca5a5', color: '#b91c1c', background: '#fef2f2' }} disabled={!!couponBusy} onClick={() => cancelRedeem(c)}>{couponBusy === 'v' + c.id ? '…' : `ยกเลิกแลก คืน ${Number(c.cancel.restore).toLocaleString()} แต้ม`}</button>}
+                              </div>
                             </div>
                           ))}
                           {applied.length === 0 && coupons.length === 0 && rewards.length === 0 && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ยังไม่มีคูปอง และแต้มยังไม่พอแลกของรางวัล</div>}

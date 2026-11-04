@@ -124,10 +124,10 @@ export async function login(data) {
 // ไม่ต้องล็อกอิน: หน้าลูกค้าสแกน QR สั่งเอง และ Print Server (ไม่มีคนล็อกอิน)
 // kioskPaidOrder (ออกบิลทันทีไม่ผ่านพนักงาน) ไม่เปิดสาธารณะแล้ว — ลูกค้าแจ้งโอน (kioskPaymentRequest) แล้วพนักงานยืนยันเป็นคนออกบิล
 const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskPaymentRequest', 'getKioskPayment', 'crmKioskMember',
-  'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem']);
+  'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem', 'crmKioskCancelRedeem']);
 
 // ข้อมูลสมาชิก (ชื่อ เบอร์ แต้ม) ต้องล็อกอินพนักงานเสมอ แม้ร้านไม่ได้เปิด "บังคับล็อกอิน" — กันคนนอกไล่ค้นข้อมูลลูกค้าจากเบอร์
-const ALWAYS_LOGIN = new Set(['crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
+const ALWAYS_LOGIN = new Set(['crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
 
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([

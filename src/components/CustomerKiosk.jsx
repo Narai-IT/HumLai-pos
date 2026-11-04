@@ -403,6 +403,21 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const t = setTimeout(loadKWallet, 400);
     return () => clearTimeout(t);
   }, [crmOn, member && member.id, verified, kItemsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ยกเลิกการแลกแต้ม → คืนแต้มเข้าบัตร (วันหมดอายุเดิม) และเอาออกจากออเดอร์
+  const [kOk, setKOk] = useState('');
+  const cancelKRedeem = async (c) => {
+    if (kBusy || !c.cancel) return;
+    const th = lang === 'th';
+    if (!window.confirm(th
+      ? `ยกเลิกการแลก "${c.title}"?\nคืน ${Number(c.cancel.restore).toLocaleString()} แต้มเข้าบัตรสมาชิกทันที${c.cancel.lost ? ` (อีก ${c.cancel.lost} แต้มหมดอายุไปแล้ว)` : ''}\nคูปองใบนี้จะถูกยกเลิก และเอาออกจากออเดอร์นี้`
+      : `Cancel "${c.title}" and get ${c.cancel.restore} points back?`)) return;
+    setKBusy('v' + c.id); setKMsg(''); setKOk('');
+    const res = await kioskCall('crmKioskCancelRedeem', { couponId: c.id });
+    setKBusy('');
+    if (res.success) setKOk(th ? `ยกเลิกการแลกแล้ว คืน ${Number(res.restored).toLocaleString()} แต้ม` : `Cancelled · ${res.restored} points returned`);
+    else setKMsg(res.error || (th ? 'ยกเลิกการแลกไม่สำเร็จ' : 'Could not cancel'));
+    loadKWallet();
+  };
   // เอาคูปองใบหนึ่งออก
   const removeKCoupon = async (c) => {
     if (kBusy) return;
@@ -1077,7 +1092,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               style={{ width: 140, letterSpacing: '0.3em', textAlign: 'center', fontSize: '1.2rem', border: '1px solid #fdba74', borderRadius: 10, padding: '0.5rem', fontFamily: 'inherit' }} />
             <button onClick={checkCode} disabled={kBusy === 'check' || codeInput.length !== 6} style={{ ...btn(false), opacity: codeInput.length === 6 ? 1 : 0.5 }}>{kBusy === 'check' ? '…' : (th ? 'ยืนยัน' : 'Verify')}</button>
           </div>
-          {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
+        {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
         </div>
       );
     }
@@ -1097,7 +1112,10 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
                 <div style={{ fontSize: '0.75rem', color: '#15803d' }}>{c.voucher ? (th ? 'ใบรับของ · แจ้งพนักงานรับของ' : 'Voucher · ask staff') : (th ? `✓ ใช้อยู่ · ลด ฿${money(c.discount)}` : `✓ Applied · -฿${money(c.discount)}`)}</div>
               </div>
-              <button onClick={() => removeKCoupon(c)} disabled={!!kBusy} style={btn(true)}>{kBusy === 'x' + c.id ? '…' : (th ? 'เอาออก' : 'Remove')}</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <button onClick={() => removeKCoupon(c)} disabled={!!kBusy} style={btn(true)}>{kBusy === 'x' + c.id ? '…' : (th ? 'เอาออก' : 'Remove')}</button>
+                {c.cancel && <button onClick={() => cancelKRedeem(c)} disabled={!!kBusy} style={{ ...btn(false), background: '#fef2f2', color: '#b91c1c', border: '1.5px solid #fca5a5' }}>{kBusy === 'v' + c.id ? '…' : (th ? 'ยกเลิกแลก คืนแต้ม' : 'Cancel · refund')}</button>}
+              </div>
             </div>
           ))}
           {coupons.map(c => {
@@ -1126,6 +1144,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             </div>
           ))}
         </div>
+        {kOk && <div role="status" style={{ color: '#166534', background: '#dcfce7', borderRadius: 10, padding: '0.4rem 0.6rem', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 700 }}>{kOk}</div>}
         {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
       </div>
     );

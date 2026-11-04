@@ -10,7 +10,7 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
-import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
+import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
@@ -88,6 +88,7 @@ const POST_ACTIONS = {
   crmReserveCoupon:  async (data) => reserveCoupon(data, await branchForWrite(data), false),
   crmReleaseCoupon:  async (data) => releaseCoupon(data, await branchForWrite(data)),
   crmRedeem:         async (data) => redeemReward(data, await branchForWrite(data), false),
+  crmCancelRedeem:   async (data) => cancelRedeem(data, await branchForWrite(data), false),
   // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
   crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
   crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),
@@ -95,7 +96,8 @@ const POST_ACTIONS = {
   crmKioskWallet:    async (data) => memberWallet(data, await branchForWrite(data), true),
   crmKioskReserve:   async (data) => reserveCoupon(data, await branchForWrite(data), true),
   crmKioskRelease:   async (data) => releaseCoupon(data, await branchForWrite(data)),
-  crmKioskRedeem:    async (data) => redeemReward(data, await branchForWrite(data), true)
+  crmKioskRedeem:    async (data) => redeemReward(data, await branchForWrite(data), true),
+  crmKioskCancelRedeem: async (data) => cancelRedeem(data, await branchForWrite(data), true)
 };
 
 // คำสั่งอ่านที่ไม่ได้อยู่ใน read.handleGet (ของเบ็ดเตล็ด/ของที่ใช้ตรวจระบบ)

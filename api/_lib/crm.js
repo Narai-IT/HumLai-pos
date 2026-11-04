@@ -121,6 +121,12 @@ export async function reserveCoupon(data, branchId, kiosk) {
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
   return crmAction('/api/pos/coupons/reserve', { ...m, couponId: String(data.couponId || ''), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items) }, branchId);
 }
+// ยกเลิกการแลกแต้ม (คูปองจากการแลกที่ยังไม่ใช้) → CRM คืนแต้มเข้าก้อนเดิมและถอดออกจากบิล
+export async function cancelRedeem(data, branchId, kiosk) {
+  const m = memberBody(data, kiosk);
+  if (!m || !data.couponId) return { success: false, error: 'ข้อมูลไม่ครบ' };
+  return crmAction('/api/pos/coupons/cancel-redeem', { ...m, couponId: String(data.couponId) }, branchId);
+}
 export async function releaseCoupon(data, branchId) {
   if (!data.couponId || !ref(data.ref)) return { success: true, released: false };
   return crmAction('/api/pos/coupons/release', { couponId: String(data.couponId), ref: ref(data.ref) }, branchId);
