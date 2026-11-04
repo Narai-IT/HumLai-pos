@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import PrintSteps from '../PrintSteps';
 import { Printer, Save, CheckCircle, XCircle, AlertCircle, Plus, Trash2, Search, RefreshCw, Wifi, Server, Settings2, Copy } from 'lucide-react';
 import {
   checkPrintServer,
@@ -301,6 +302,7 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
     }
     setTestStatus(prev => ({ ...prev, [printer.id]: { status: 'loading', msg: 'กำลังทดสอบ...' } }));
     const result = await sendPrintJob({
+      silent: true, // หน้านี้แสดงขั้นตอนใต้ปุ่มเองแล้ว ไม่ต้องขึ้นกล่องมุมจอซ้ำ
       ip: printer.ip,
       printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
       orderData: {
@@ -311,11 +313,13 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
     });
     setTestStatus(prev => ({
       ...prev,
-      [printer.id]: result.success
-        ? (result.warning
-          ? { status: 'warning', msg: result.warning }
-          : { status: 'success', msg: 'พิมพ์ทดสอบสำเร็จ! (เครื่องพิมพ์ตอบว่าพร้อม)' })
-        : { status: 'error', msg: result.error || 'Failed' }
+      [printer.id]: {
+        status: !result.success ? 'error' : result.confirmed ? 'success' : 'warning',
+        msg: !result.success
+          ? 'พิมพ์ไม่ออก — ดูขั้นที่ติดด้านล่าง'
+          : result.confirmed ? 'พิมพ์เสร็จแล้ว! เครื่องพิมพ์ยืนยัน' : 'ส่งถึงเครื่องพิมพ์แล้ว แต่ไม่ได้รับการยืนยัน — ดูที่เครื่องว่ากระดาษออกไหม',
+        result
+      }
     }));
     if (!result.success) runHealthCheck();
   };
@@ -939,6 +943,16 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                       </span>
                     )}
                   </div>
+                  {ts && (ts.status === 'loading' || ts.result) && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <PrintSteps
+                        steps={ts.result?.steps}
+                        stage={ts.result?.stage}
+                        error={ts.result?.error}
+                        printing={ts.status === 'loading'}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}

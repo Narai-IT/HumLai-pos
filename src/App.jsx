@@ -4,6 +4,7 @@ import OrderWizardModal from './components/OrderWizardModal';
 import PosSalesScreen from './components/PosSalesScreen';
 import PaymentApprovalListener from './components/PaymentApprovalListener';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
+import PrintStatusToast from './components/PrintStatusToast';
 import TableOrderView from './components/TableOrderView';
 import LoginScreen from './components/LoginScreen';
 import BranchPicker from './components/BranchPicker';
@@ -1571,6 +1572,8 @@ function App() {
           </div>
         </div>
       )}
+      {/* สถานะทุกงานพิมพ์ (พิมพ์เสร็จ / พิมพ์ไม่ออกติดขั้นไหน) — ไม่ขึ้นบนหน้าลูกค้าสั่งเอง */}
+      {!isKioskPath && <PrintStatusToast />}
       {/* key = เส้นทางปัจจุบัน — เปลี่ยนหน้าแล้วกล่องดักพังรีเซ็ตตัวเอง ไม่ค้างจอ error ข้ามหน้า */}
       <ChunkErrorBoundary lang={lang} key={location.pathname}>
       <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>{lang === 'th' ? 'กำลังโหลด...' : 'Loading...'}</div>}>

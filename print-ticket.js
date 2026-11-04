@@ -238,7 +238,7 @@ const printDailyClose = (printer, r) => {
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
 // ให้ผู้เรียกตัดสินใจเองว่าจะตอบ HTTP อะไรหรือจะลองใหม่ไหม
 export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' }) => {
-  if (!ip) return { success: false, error: 'Printer IP address is required' };
+  if (!ip) return { success: false, stage: 'connect', error: 'ยังไม่ได้ระบุ IP ของเครื่องพิมพ์' };
 
   try {
     const printer = new ThermalPrinter({
@@ -258,16 +258,17 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       const buffer = typeof printer.getBuffer === 'function' ? printer.getBuffer() : printer.buffer;
       const result = await sendToPrinter(ip, Buffer.from(buffer || []));
       if (result.success) {
-        console.log(`${label} sent to ${ip} (${result.bytes} bytes)${result.warning ? ` — ${result.warning}` : ''}`);
-        return { success: true, warning: result.warning || null };
+        const how = result.confirmed ? 'printed (confirmed by printer)' : 'sent';
+        console.log(`${label} ${how} — ${ip} (${result.bytes} bytes)${result.warning ? ` — ${result.warning}` : ''}`);
+      } else {
+        console.error(`${label} to ${ip} failed at "${result.stage}": ${result.error}`);
       }
-      console.error(`${label} to ${ip} failed: ${result.error}`);
-      return { success: false, error: result.error };
+      return result;
     };
 
     // ใบกำกับภาษีเต็มรูป — รูปแบบของตัวเอง ไม่ใช้หัวใบเสร็จ และไม่เปิดลิ้นชัก
     if (printerType === 'taxinvoice') {
-      if (!orderData.taxInvoice) return { success: false, error: 'ไม่มีข้อมูลใบกำกับภาษี' };
+      if (!orderData.taxInvoice) return { success: false, stage: 'format', error: 'ไม่มีข้อมูลใบกำกับภาษี' };
       printTaxInvoice(printer, orderData.taxInvoice, !!orderData.copy);
       printer.cut();
       return send(`Tax invoice ${orderData.taxInvoice.invoiceNo}`);
@@ -275,7 +276,7 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
 
     // รายงานปิดยอดประจำวัน — ไม่เปิดลิ้นชัก
     if (printerType === 'closeday') {
-      if (!orderData.closeDay) return { success: false, error: 'ไม่มีข้อมูลรายงานปิดยอด' };
+      if (!orderData.closeDay) return { success: false, stage: 'format', error: 'ไม่มีข้อมูลรายงานปิดยอด' };
       printDailyClose(printer, orderData.closeDay);
       printer.cut();
       return send('Daily close report');
@@ -423,7 +424,8 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
 
     return send(`Print job ${orderData.orderNumber || ''}`.trim());
   } catch (error) {
+    // พังตอนจัดหน้าใบ (ข้อมูลออเดอร์แปลก) — ยังไม่ได้ส่งอะไรไปเครื่องพิมพ์
     console.error('Print failed:', error);
-    return { success: false, error: error.message };
+    return { success: false, stage: 'format', error: `จัดหน้าใบพิมพ์ไม่สำเร็จ: ${error.message}` };
   }
 };
