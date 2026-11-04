@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import PrintSteps from '../PrintSteps';
+import PrintServerDownload from './PrintServerDownload';
 import { Printer, Save, CheckCircle, XCircle, AlertCircle, Plus, Trash2, Search, RefreshCw, Wifi, Server, Settings2, Copy } from 'lucide-react';
 import {
   checkPrintServer,
@@ -301,6 +303,7 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
     }
     setTestStatus(prev => ({ ...prev, [printer.id]: { status: 'loading', msg: 'กำลังทดสอบ...' } }));
     const result = await sendPrintJob({
+      silent: true, // หน้านี้แสดงขั้นตอนใต้ปุ่มเองแล้ว ไม่ต้องขึ้นกล่องมุมจอซ้ำ
       ip: printer.ip,
       printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
       orderData: {
@@ -311,9 +314,13 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
     });
     setTestStatus(prev => ({
       ...prev,
-      [printer.id]: result.success
-        ? { status: 'success', msg: 'พิมพ์ทดสอบสำเร็จ!' }
-        : { status: 'error', msg: result.error || 'Failed' }
+      [printer.id]: {
+        status: !result.success ? 'error' : result.confirmed ? 'success' : 'warning',
+        msg: !result.success
+          ? 'พิมพ์ไม่ออก — ดูขั้นที่ติดด้านล่าง'
+          : result.confirmed ? 'พิมพ์เสร็จแล้ว! เครื่องพิมพ์ยืนยัน' : 'ส่งถึงเครื่องพิมพ์แล้ว แต่ไม่ได้รับการยืนยัน — ดูที่เครื่องว่ากระดาษออกไหม',
+        result
+      }
     }));
     if (!result.success) runHealthCheck();
   };
@@ -454,6 +461,9 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
               {!health.blocked && (
                 <div style={{ background: '#ffffff', border: '1px dashed #fecaca', borderRadius: '10px', padding: '0.85rem 1rem', color: '#475569' }}>
                   <strong style={{ color: '#0f172a' }}>วิธีเปิด Print Server:</strong>
+                  <div style={{ margin: '0.35rem 0 0.25rem', fontSize: '0.84rem' }}>
+                    ยังไม่เคยติดตั้งในเครื่องนี้? กด <strong>ดาวน์โหลด Print Server</strong> ในกล่องด้านล่าง แล้วทำตามวิธีติดตั้งแบบย่อ
+                  </div>
                   <ol style={{ margin: '0.5rem 0 0 1.2rem', padding: 0, lineHeight: 1.7 }}>
                     <li>
                       <strong style={{ color: '#0f172a' }}>แนะนำ — ตั้งครั้งเดียวจบ:</strong> ดับเบิลคลิก <code>install-autostart.bat</code> ครั้งเดียว
@@ -483,7 +493,7 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                       <strong style={{ color: '#0f172a' }}>เปิด Print Server แล้วแต่ยังแดงอยู่?</strong> หน้านี้เปิดผ่าน https
                       Chrome จึงขออนุญาตก่อนติดต่ออุปกรณ์ในเครือข่าย — ถ้ามีป๊อปอัพถามให้กด “อนุญาต”
                       และเครื่องที่รัน Print Server ต้องเป็นเวอร์ชัน 1.3.0 ขึ้นไป (เวอร์ชันเก่าจะถูก Chrome บล็อกเงียบ ๆ)
-                      ให้ <code>git pull</code> แล้วเปิด Print Server ใหม่
+                      ให้ดาวน์โหลด Print Server ตัวใหม่ด้านล่าง แตกไฟล์ทับ แล้วรัน <code>restart-print-server.bat</code>
                     </div>
                   )}
                   <div style={{ marginTop: '0.6rem', fontSize: '0.82rem' }}>
@@ -530,6 +540,9 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
           )}
         </div>
 
+        {/* ---------- ดาวน์โหลด Print Server + คู่มือ (+ แจ้งเมื่อมีเวอร์ชันใหม่) ---------- */}
+        <PrintServerDownload health={health} />
+
         {/* ---------- Auto print: Print Server ดึงออเดอร์ QR มาพิมพ์เอง ---------- */}
         <div style={{
           background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '14px',
@@ -563,9 +576,9 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
               <div style={{ fontWeight: 600 }}>
                 ที่<strong>เครื่องที่รัน Print Server</strong> ให้ทำตามนี้แล้วค่อยกลับมาหน้านี้:
                 <ol style={{ margin: '0.4rem 0 0', paddingLeft: '1.1rem' }}>
-                  <li>ปิด Print Server ที่เปิดค้างอยู่ (ปิดหน้าต่าง start-printer หรือจบ process node)</li>
-                  <li>อัปเดตโค้ดในโฟลเดอร์โปรเจกต์ — <code>git pull</code> (หรือคัดลอกไฟล์ชุดใหม่ทับ ต้องมี <code>server.js</code>, <code>print-ticket.js</code>, <code>auto-print.js</code> ครบ)</li>
-                  <li>เปิดใหม่ด้วย <code>start-printer.bat</code> หรือ <code>node server.js</code></li>
+                  <li>กด <strong>ดาวน์โหลด Print Server</strong> ในกล่องด้านบน (หรือ <code>git pull</code> ถ้าติดตั้งด้วย Git)</li>
+                  <li>แตกไฟล์ทับโฟลเดอร์เดิม (กด Replace)</li>
+                  <li>ดับเบิลคลิก <code>restart-print-server.bat</code> แล้วกลับมากด “ตรวจสอบอีกครั้ง”</li>
                 </ol>
               </div>
             </div>
@@ -929,14 +942,24 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                       ทดสอบพิมพ์
                     </button>
                     {ts && (
-                      <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', color: ts.status === 'success' ? '#16a34a' : ts.status === 'error' ? '#dc2626' : '#d97706' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', color: ts.status === 'success' ? '#16a34a' : ts.status === 'error' ? '#dc2626' : '#d97706', lineHeight: 1.45 }}>
                         {ts.status === 'success' && <CheckCircle size={15} />}
                         {ts.status === 'error' && <XCircle size={15} />}
-                        {ts.status === 'loading' && <AlertCircle size={15} />}
+                        {(ts.status === 'loading' || ts.status === 'warning') && <AlertCircle size={15} style={{ flexShrink: 0 }} />}
                         {ts.msg}
                       </span>
                     )}
                   </div>
+                  {ts && (ts.status === 'loading' || ts.result) && (
+                    <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.9rem', borderRadius: 10, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <PrintSteps
+                        steps={ts.result?.steps}
+                        stage={ts.result?.stage}
+                        error={ts.result?.error}
+                        printing={ts.status === 'loading'}
+                      />
+                    </div>
+                  )}
                 </div>
               );
             })}

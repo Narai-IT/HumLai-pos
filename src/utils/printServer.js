@@ -139,32 +139,103 @@ export const scanPrinters = async (options = {}, timeoutMs = 120000) => {
   return data;
 };
 
-// สั่งพิมพ์ผ่าน Print Server — คืนค่า { success, error }
 // หัวใบเสร็จของสาขาที่เครื่องนี้ทำงานอยู่ — App ตั้งให้ตามสาขาของผู้ใช้ที่ล็อกอิน
 // ทุกงานพิมพ์แนบไปใน orderData.header ให้ Print Server พิมพ์ชื่อร้าน/ที่อยู่ของสาขานั้น
 let receiptHeader = null;
 export const setReceiptHeader = (header) => { receiptHeader = header || null; };
 export const getReceiptHeader = () => receiptHeader;
 
-export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: rawOrderData }, timeoutMs = 15000) => {
+// ── สถานะงานพิมพ์ทีละขั้น ──
+// ทุกงานพิมพ์ไล่ 5 ขั้น — ติดขั้นไหนบอกได้ว่าปัญหาอยู่ตรงไหนและต้องแก้อะไร
+// (ขั้น server หน้าเว็บเช็คเอง ขั้นที่เหลือ Print Server 1.5.0 ขึ้นไปส่งกลับมา)
+export const PRINT_STEPS = [
+  { key: 'server', label: 'หน้าเว็บ → Print Server' },
+  { key: 'connect', label: 'Print Server → เครื่องพิมพ์' },
+  { key: 'ready', label: 'เครื่องพิมพ์พร้อม (กระดาษ / ฝา)' },
+  { key: 'send', label: 'ส่งงานพิมพ์' },
+  { key: 'done', label: 'เครื่องพิมพ์ยืนยันพิมพ์เสร็จ' }
+];
+
+// วิธีแก้เมื่อติดแต่ละขั้น
+export const PRINT_STAGE_TIPS = {
+  server: 'เปิด start-printer.bat บนเครื่องที่ต่อวงแลนเดียวกับเครื่องพิมพ์ และตรวจที่อยู่ Print Server ในหน้า ตั้งค่าเครื่องพิมพ์',
+  connect: 'ตรวจว่าเครื่องพิมพ์เปิดอยู่ สายแลนเสียบแน่น และ IP ถูกเครื่อง (ปิดเครื่อง กด FEED ค้างแล้วเปิด จะพิมพ์ใบที่มี IP จริงออกมา)',
+  ready: 'ใส่กระดาษ / ปิดฝาเครื่องพิมพ์ให้สนิท แล้วสั่งพิมพ์ใหม่',
+  send: 'ปิด-เปิดเครื่องพิมพ์ แล้วสั่งพิมพ์ใหม่',
+  format: 'ข้อมูลใบนี้ผิดรูปแบบ — แจ้งผู้ดูแลระบบ',
+  done: 'ดูที่เครื่องพิมพ์ว่ากระดาษออกครบไหม'
+};
+
+export const PRINT_STEP_LABEL = Object.fromEntries(PRINT_STEPS.map(s => [s.key, s.label]));
+PRINT_STEP_LABEL.format = 'จัดหน้าใบพิมพ์';
+
+// ทุกงานพิมพ์ประกาศสถานะผ่าน event นี้ — กล่องสถานะการพิมพ์ (PrintStatusToast) ฟังอยู่
+export const PRINT_JOB_EVENT = 'print_job_status';
+const PRINT_TYPE_LABEL = { receipt: 'ใบเสร็จ', kitchen: 'ใบครัว', prebill: 'ใบแจ้งยอด', taxinvoice: 'ใบกำกับภาษี', closeday: 'รายงานปิดยอด' };
+let printJobSeq = 0;
+const announce = (detail) => {
+  try { window.dispatchEvent(new CustomEvent(PRINT_JOB_EVENT, { detail })); } catch (e) { /* ไม่มี window (เทส) */ }
+};
+
+const serverFailure = (error) => ({
+  success: false, confirmed: false, stage: 'server', error, warning: null,
+  steps: [{ key: 'server', status: 'fail', detail: error }]
+});
+
+// สั่งพิมพ์ — คืนค่า { success, confirmed, stage, error, warning, steps }
+//   confirmed = เครื่องพิมพ์ยืนยันว่าพิมพ์เสร็จจริง · stage = ขั้นที่ติด (ดู PRINT_STEPS)
+// options.silent = ไม่ขึ้นกล่องสถานะมุมจอ (หน้าที่แสดงผลเองอยู่แล้ว เช่น ปุ่มทดสอบพิมพ์)
+export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: rawOrderData, silent = false }, timeoutMs = 25000) => {
   const orderData = receiptHeader && rawOrderData && !rawOrderData.header
     ? { ...rawOrderData, header: receiptHeader }
     : rawOrderData;
-  const url = getPrintServerUrl();
-  if (isMixedContentBlocked(url)) return { success: false, error: MIXED_CONTENT_MSG };
+  const job = {
+    id: ++printJobSeq,
+    ip,
+    printerType,
+    typeLabel: PRINT_TYPE_LABEL[printerType] || 'งานพิมพ์',
+    orderNumber: rawOrderData && rawOrderData.orderNumber ? String(rawOrderData.orderNumber) : '',
+    silent
+  };
+  announce({ ...job, phase: 'printing' });
 
-  try {
-    const response = await fetchWithTimeout(`${url}/print`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ip, printerType, orderData })
-    }, timeoutMs);
-    const result = await response.json().catch(() => null);
-    if (!result) return { success: false, error: `Print Server ตอบกลับ HTTP ${response.status}` };
-    return { success: !!result.success, error: result.error || null };
-  } catch (e) {
-    return { success: false, error: PRINT_SERVER_OFFLINE_MSG };
-  }
+  const result = await (async () => {
+    const url = getPrintServerUrl();
+    if (isMixedContentBlocked(url)) return serverFailure(MIXED_CONTENT_MSG);
+    let response;
+    try {
+      response = await fetchWithTimeout(`${url}/print`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip, printerType, orderData })
+      }, timeoutMs);
+    } catch (e) {
+      return serverFailure(e.name === 'AbortError'
+        ? `Print Server ไม่ตอบภายใน ${Math.round(timeoutMs / 1000)} วินาที — เครื่องที่รัน Print Server อาจค้าง ลองปิด-เปิด Print Server`
+        : PRINT_SERVER_OFFLINE_MSG);
+    }
+    const data = await response.json().catch(() => null);
+    if (!data) return serverFailure(`Print Server ตอบกลับ HTTP ${response.status}`);
+    const serverOk = { key: 'server', status: 'ok', detail: `Print Server ${url} รับงานแล้ว` };
+    // Print Server 1.5.0+ ส่ง steps มาเสมอ (อาจว่างถ้าพังก่อนต่อเครื่องพิมพ์ เช่น จัดหน้าใบไม่สำเร็จ)
+    const steps = Array.isArray(data.steps)
+      ? [serverOk, ...data.steps]
+      // Print Server รุ่นเก่า (ก่อน 1.5.0) ไม่ส่งขั้นตอนกลับมา — รู้แค่สำเร็จ/ไม่สำเร็จ
+      : [serverOk, data.success
+        ? { key: 'send', status: 'ok', detail: 'ส่งงานแล้ว (Print Server รุ่นเก่า ตรวจสถานะเครื่องพิมพ์ไม่ได้ — อัปเดตด้วย update-printer.bat)' }
+        : { key: 'connect', status: 'fail', detail: data.error || 'พิมพ์ไม่สำเร็จ' }];
+    return {
+      success: !!data.success,
+      confirmed: !!data.confirmed,
+      stage: data.stage || (data.success ? 'done' : 'connect'),
+      error: data.error || (data.success ? null : 'พิมพ์ไม่สำเร็จ'),
+      warning: data.warning || null,
+      steps
+    };
+  })();
+
+  announce({ ...job, ...result, phase: result.success ? (result.confirmed ? 'done' : 'sent') : 'error' });
+  return result;
 };
 
 // ===============================================================
@@ -178,7 +249,7 @@ export const sendPrintJob = async ({ ip, printerType = 'receipt', orderData: raw
 // Print Server ที่ยังรันโค้ดเวอร์ชันเก่าจะไม่มี route /auto-print → ตอบ 404
 // ต้องบอกให้ชัดว่าต้องอัปเดตแล้วรีสตาร์ท ไม่ใช่ปล่อยให้เห็นแค่เลข error
 export const PRINT_SERVER_OUTDATED_MSG =
-  'Print Server เครื่องนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มีระบบพิมพ์อัตโนมัติ) — อัปเดตโค้ดในเครื่องที่รัน Print Server (git pull) แล้วปิด-เปิด Print Server ใหม่';
+  'Print Server เครื่องนี้ยังเป็นเวอร์ชันเก่า (ยังไม่มีระบบพิมพ์อัตโนมัติ) — ดาวน์โหลด Print Server ตัวใหม่ในหน้าตั้งค่าเครื่องพิมพ์ แตกไฟล์ทับ แล้วรัน restart-print-server.bat';
 
 // Print Server รองรับการพิมพ์อัตโนมัติไหม — ดูจาก features ที่ /health ตอบกลับมา
 export const supportsAutoPrint = (healthInfo) =>
