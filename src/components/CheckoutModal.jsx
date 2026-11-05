@@ -7,16 +7,11 @@ import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload }
 import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
 import { getReceiptHeader } from '../utils/printServer';
+import { menuCategoryLookup, discountAmount as calcDiscount } from '../utils/discount';
 
-const calcCharges = (subtotal, settings = {}, discount = null) => {
-  let discountAmount = 0;
-  if (discount) {
-    if (discount.type === 'baht') {
-      discountAmount = Math.min(Number(discount.value) || 0, subtotal);
-    } else if (discount.type === 'percent') {
-      discountAmount = Math.round(subtotal * (Number(discount.value) || 0)) / 100;
-    }
-  }
+// discountAmount คิดมาแล้วจาก utils/discount (ส่วนลดเฉพาะหมวด ลดเฉพาะยอดของหมวดนั้น)
+const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
+  const discountAmount = Math.min(Math.max(0, Number(discountAmountIn) || 0), subtotal);
   const afterDiscount = subtotal - discountAmount;
   const scRate = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
   const vatRate = settings?.vat?.enabled ? (settings.vat.rate || 0) : 0;
@@ -29,7 +24,7 @@ const calcCharges = (subtotal, settings = {}, discount = null) => {
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
-  settings = {}, discounts = [], categories = [], initialDiscount = null, branchId = ''
+  settings = {}, discounts = [], categories = [], initialDiscount = null, branchId = '', menu = []
 }) => {
   // ส่วนลดเก็บเป็น "รหัสหมวดหมู่" (HL#####) ซึ่งอ่านไม่รู้เรื่องถ้าโชว์ดิบ ๆ
   // แปลงเป็นชื่อหมวดให้แคชเชียร์อ่านออกก่อนแสดง
@@ -194,7 +189,11 @@ const CheckoutModal = ({
   const [splitTransfer, setSplitTransfer] = useState('');
   const [splitCard, setSplitCard] = useState('');
 
-  const { subtotal, discountAmount, sc, vat, grand } = calcCharges(total, settings, selectedDiscount);
+  // ส่วนลดเฉพาะหมวด: หาหมวดของแต่ละรายการจากชื่อเมนู แล้วลดเฉพาะยอดของหมวดที่เลือกไว้
+  const categoriesOf = React.useMemo(() => menuCategoryLookup(menu), [menu]);
+  const discountLines = tableOrderItems.map(i => ({ name: i.ItemName, amount: (Number(i.ItemPrice) || 0) * (Number(i.Quantity) || 1) }));
+  const discountFor = (d) => calcDiscount(d, discountLines, categoriesOf);
+  const { subtotal, discountAmount, sc, vat, grand } = calcCharges(total, settings, discountFor(selectedDiscount));
   const hasCharges = sc > 0 || vat > 0;
   const hasDiscount = discountAmount > 0;
 
@@ -285,8 +284,9 @@ const CheckoutModal = ({
     const rows = (tableOrderItems || []).map(it => {
       const qty = Number(it.Quantity) || 1;
       const price = (Number(it.ItemPrice) || 0) * qty;
-      const name = it.ItemName || '';
-      const opt = it.Options ? `<div class="opt">${it.Options}</div>` : '';
+      // ชื่อ/ตัวเลือก/หมายเหตุมาจากที่คนพิมพ์ (รวมหมายเหตุที่ลูกค้าพิมพ์เองในหน้าสแกนสั่ง) — ต้อง escape ก่อนใส่เป็น HTML
+      const name = esc(it.ItemName);
+      const opt = it.Options ? `<div class="opt">${esc(it.Options)}</div>` : '';
       return `<div class="it"><div class="row"><span>${qty}× ${name}</span><span>฿${price.toLocaleString()}${isAbb ? ' V' : ''}</span></div>${opt}</div>`;
     }).join('');
     const line = (k, v, cls = '') => `<div class="row ${cls}"><span>${k}</span><span>${v}</span></div>`;
@@ -304,8 +304,8 @@ const CheckoutModal = ({
       ${headLines}
       <div class="c sm">${isAbb ? 'ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)' : 'ใบเสร็จรับเงิน / RECEIPT'}</div>
       <div class="hr"></div>
-      ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', no || '-')}
-      ${tableNo ? line('โต๊ะ', tableNo) : ''}
+      ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', esc(no) || '-')}
+      ${tableNo ? line('โต๊ะ', esc(tableNo)) : ''}
       ${line('วันที่', now)}
       ${paidMethod ? line('ชำระโดย', paidMethod) : ''}
       ${member ? line('สมาชิก', esc(member.id)) : ''}
@@ -313,7 +313,7 @@ const CheckoutModal = ({
       ${rows}
       <div class="hr"></div>
       ${(hasDiscount || hasCharges) ? line('ยอดอาหาร', `฿${subtotal.toLocaleString()}`) : ''}
-      ${hasDiscount ? line(`ส่วนลด ${selectedDiscount?.name || ''}`, `-฿${discountAmount.toLocaleString()}`) : ''}
+      ${hasDiscount ? line(`ส่วนลด ${esc(selectedDiscount?.name)}`, `-฿${discountAmount.toLocaleString()}`) : ''}
       ${sc > 0 ? line(`เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, `+฿${sc.toLocaleString()}`) : ''}
       ${vat > 0 ? line(`VAT ${settings.vat.rate}%`, `+฿${vat.toLocaleString()}`) : ''}
       <div class="hr"></div>
@@ -356,6 +356,8 @@ const CheckoutModal = ({
   // ปิดบิล — เลขที่บิล (= เลขที่ใบกำกับภาษีอย่างย่อ) ออกโดยเซิร์ฟเวอร์ตอนบันทึก หน้าหลักจึงเป็นคนพิมพ์ใบเสร็จหลังได้เลข
   // print = กดปุ่มพิมพ์ใบเสร็จ: เครื่องที่ยังไม่ได้ตั้งเครื่องพิมพ์ใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
   const finalizeComplete = (print = false) => {
+    // กดซ้ำเร็ว ๆ = บิลเดียว
+    if (completedRef.current) return;
     const pc = pendingComplete || { method: 'เงินสด' };
     completedRef.current = true;
     const crmCoupon = member && selectedDiscount && selectedDiscount.crmCoupons
@@ -433,8 +435,9 @@ const CheckoutModal = ({
     </div>
   );
 
+  // แตะนอกกรอบปิดได้เฉพาะหน้าสรุปบิล — ระหว่างรับเงิน/แนบสลิป แตะพลาดแล้วหน้าหายไปพร้อมยอดที่กรอก
   return (
-    <div className="modal-overlay" onClick={paymentStep !== 'success' ? onClose : undefined}>
+    <div className="modal-overlay" onClick={paymentStep === 'summary' ? onClose : undefined}>
       <div className="modal-content" onClick={e => e.stopPropagation()} style={{ background: '#ffffff', borderRadius: '20px', color: '#0f172a', maxHeight: '92vh', overflowY: 'auto', border: '1px solid #e2e8f0', boxShadow: '0 20px 50px rgba(0,0,0,0.2)' }}>
 
         {/* ── Step 1: Summary ── */}
@@ -595,9 +598,7 @@ const CheckoutModal = ({
               ) : (
                 discounts.map(d => {
                   const isSelected = selectedDiscount?.id === d.id;
-                  const previewAmount = d.type === 'baht'
-                    ? Math.min(Number(d.value), subtotal)
-                    : Math.round(subtotal * Number(d.value)) / 100;
+                  const previewAmount = Math.min(discountFor(d), subtotal);
                   const previewGrand = subtotal - previewAmount;
                   return (
                     <button
@@ -971,6 +972,10 @@ const CheckoutModal = ({
                 </div>
                 {qrType === 'static' ? (
                   <img src={staticQrUrl} alt="K Shop QR" style={{ width: '100%', maxWidth: '260px', display: 'block', margin: '0 auto' }} />
+                ) : grand <= 0 ? (
+                  <div style={{ height: '260px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#166534', fontWeight: 800, textAlign: 'center' }}>
+                    {lang === 'th' ? 'ยอด ฿0 — ไม่ต้องโอน กดยืนยันได้เลย' : 'Nothing to pay — just confirm'}
+                  </div>
                 ) : qrDataUrl ? (
                   <img src={qrDataUrl} alt="PromptPay QR" style={{ width: '100%', maxWidth: '260px', display: 'block', margin: '0 auto' }} />
                 ) : (
@@ -1051,7 +1056,8 @@ const CheckoutModal = ({
               <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontWeight: '800' }}>
                 <Camera size={22} color="#2563eb" /> {lang === 'th' ? 'แนบสลิปการโอน' : 'Attach Transfer Slip'}
               </h2>
-              <button className="close-btn" onClick={onClose}><X size={24} color="#0f172a" /></button>
+              {/* ยังไม่ได้บันทึกบิล — ย้อนกลับไปเลือกวิธีชำระ (ปิดหน้าต่างตรงนี้ = บิลไม่ถูกบันทึกแต่พนักงานนึกว่าเสร็จแล้ว) */}
+              <button className="close-btn" onClick={() => setPaymentStep('payment_method')}><ArrowLeft size={22} color="#0f172a" /></button>
             </div>
 
             <div style={{ textAlign: 'center', padding: '0.25rem 0' }}>
