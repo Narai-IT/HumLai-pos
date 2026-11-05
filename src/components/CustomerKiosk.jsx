@@ -1450,6 +1450,21 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 </div>
               );
             })}
+            {/* ส่วนลดคูปองสมาชิก: แยกทีละใบ แล้วสรุปยอดที่ต้องจ่าย */}
+            {couponOff > 0 && (
+              <div style={{ borderTop: '1px dashed #cbd5e1', marginTop: '0.4rem', paddingTop: '0.4rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{th ? 'รวมค่าอาหาร' : 'Subtotal'}</span><b>฿{money(cartSubtotal)}</b></div>
+                {kApplied.filter(c => Number(c.discount) > 0).map(c => (
+                  <div key={'d' + c.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', color: '#16a34a' }}>
+                    <span style={{ minWidth: 0 }}>{th ? 'ส่วนลด' : 'Discount'} · {c.title}</span><b style={{ flexShrink: 0 }}>-฿{money(c.discount)}</b>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, marginTop: '0.2rem' }}><span>{th ? 'ยอดชำระ' : 'Total'}</span><span style={{ color: '#ea580c' }}>฿{money(payTotal)}</span></div>
+              </div>
+            )}
+            {kApplied.filter(c => !(Number(c.discount) > 0)).map(c => (
+              <div key={'v' + c.id} style={{ fontSize: '0.8rem', color: '#15803d', marginTop: '0.2rem' }}>🎁 {c.title} · {th ? 'ใบรับของ แจ้งพนักงานรับของ' : 'voucher, ask staff'}</div>
+            ))}
           </div>
 
           {/* PromptPay QR Code container */}
