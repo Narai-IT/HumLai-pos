@@ -53,7 +53,9 @@ export async function kioskPaymentRequest(data) {
   const total = Math.round((Number(data.total) || 0) * 100) / 100;
   if (!id) return { success: false, error: 'ไม่มีรหัสรายการ' };
   if (items.length === 0) return { success: false, error: 'ไม่มีรายการอาหาร' };
-  if (!(total > 0)) return { success: false, error: 'ยอดชำระไม่ถูกต้อง' };
+  // ยอด 0 ได้เฉพาะตอนคูปองสมาชิกครอบคลุมทั้งบิล (เช่นของฟรีอย่างเดียว) — พนักงานยังกดยืนยันออเดอร์เหมือนเดิม
+  const hasCoupon = Array.isArray(data.couponIds) && data.couponIds.length > 0;
+  if (!(total > 0) && !(total === 0 && hasCoupon)) return { success: false, error: 'ยอดชำระไม่ถูกต้อง' };
 
   const branchId = await branchForWrite(data);
   const payload = JSON.stringify({
