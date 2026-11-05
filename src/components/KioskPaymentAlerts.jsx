@@ -6,9 +6,11 @@ import { runAutoPrintNow } from '../utils/printServer';
 // ── ลูกค้าสแกน QR แจ้งโอนเงิน → เด้งการ์ดที่หน้าขายของสาขานั้น ──
 // หลายโต๊ะพร้อมกัน = การ์ดซ้อนกัน รอนานสุดอยู่บน · การ์ดเต็ม 2 ใบแรก ที่เหลือย่อเป็นแถบ (กดเพื่อขยาย)
 // ทุกเครื่องหน้าขายของสาขาเดียวกันเห็นชุดเดียวกัน ใครกดก่อน เครื่องอื่นหายเองในรอบดึงถัดไป
-// เสียงเตือนดังซ้ำทุก 4 วินาทีจนกว่าจะไม่เหลือรายการ (โต๊ะใหม่เข้ามา = ดังทันที)
+// เสียงเตือนดังต่อเนื่องจนกว่าจะไม่เหลือรายการรอยืนยัน
 
 const POLL_MS = 5000;
+// เสียงหนึ่งชุดยาว ~1 วินาที → เริ่มชุดใหม่ทุก 1.25 วินาที = ดังต่อเนื่อง
+const RING_EVERY_MS = 1250;
 const FULL_CARDS = 2;
 
 const money = (n) => (Number(n) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -142,19 +144,13 @@ export default function KioskPaymentAlerts({ branchId = '', userName = '', allMe
     };
   }, []);
 
-  // เสียงเตือนซ้ำทุก 4 วินาทีจนกว่าจะหมดรายการ · มีโต๊ะใหม่แจ้งเข้ามา = ดังทันที ไม่รอรอบ
+  // เสียงเตือนดังต่อเนื่องไม่หยุด (เว้นแค่ช่วงหายใจสั้น ๆ) จนกว่าจะยืนยัน/ปฏิเสธครบทุกโต๊ะ
+  // แท็บที่กำลังเล่นเสียงอยู่ เบราว์เซอร์ไม่หน่วงตัวจับเวลา จึงดังต่อเนื่องแม้สลับไปหน้าอื่น
   const hasPending = payments.length > 0;
-  const idsKey = payments.map(p => p.id).sort().join(',');
-  const seenIds = useRef(new Set());
-  useEffect(() => {
-    const ids = idsKey ? idsKey.split(',') : [];
-    const fresh = ids.some(id => !seenIds.current.has(id));
-    seenIds.current = new Set(ids);
-    if (fresh) alarm();
-  }, [idsKey]);
   useEffect(() => {
     if (!hasPending) return undefined;
-    const t = setInterval(alarm, 4000);
+    alarm();
+    const t = setInterval(alarm, RING_EVERY_MS);
     return () => clearInterval(t);
   }, [hasPending]);
   // เสียงยังถูกเบราว์เซอร์ปิดอยู่ไหม (ไม่มีใครแตะจอเลยตั้งแต่เปิดหน้า) — โชว์ปุ่มให้กดเปิด
