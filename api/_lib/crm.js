@@ -119,7 +119,9 @@ export async function memberWallet(data, branchId, kiosk) {
 export async function reserveCoupon(data, branchId, kiosk) {
   const m = memberBody(data, kiosk);
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
-  return crmAction('/api/pos/coupons/reserve', { ...m, couponId: String(data.couponId || ''), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items) }, branchId);
+  // หน้าพนักงาน (staff): CRM รับเฉพาะคูปองที่สแกน QR จากบัตรสมาชิกลูกค้า (scanProof) · หน้าลูกค้าสั่งเองกดใช้จากมือถือตัวเองได้
+  return crmAction('/api/pos/coupons/reserve', { ...m, couponId: String(data.couponId || ''), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items),
+    mode: kiosk ? 'kiosk' : 'staff', scanProof: kiosk ? undefined : String(data.scanProof || '') }, branchId);
 }
 // ยกเลิกการแลกแต้ม (คูปองจากการแลกที่ยังไม่ใช้) → CRM คืนแต้มเข้าก้อนเดิมและถอดออกจากบิล
 export async function cancelRedeem(data, branchId, kiosk) {
@@ -134,7 +136,7 @@ export async function releaseCoupon(data, branchId) {
 export async function redeemReward(data, branchId, kiosk) {
   const m = memberBody(data, kiosk);
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
-  return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items) }, branchId);
+  return crmAction('/api/pos/redeem', { ...m, rewardId: Number(data.rewardId), ref: ref(data.ref), subtotal: Number(data.subtotal) || 0, minutes: kiosk ? 120 : 30, items: cartItems(data.items), mode: kiosk ? 'kiosk' : 'staff' }, branchId);
 }
 // ยืนยันตัวตนที่หน้าลูกค้าสั่งเอง: รหัส 6 หลักในบัตรสมาชิก LINE (ไม่ส่งข้อความ) · send = ขอลิงก์เปิดบัตรสมาชิก
 export async function sendMemberCode(data, branchId) {

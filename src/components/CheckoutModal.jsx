@@ -95,7 +95,7 @@ const CheckoutModal = ({
   const pickCoupon = async (c, m = member) => {
     if (couponBusy) return;
     setCouponBusy('c' + c.id); setWalletMsg('');
-    const res = await crmCall('crmReserveCoupon', { memberId: m.id, couponId: c.id, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
+    const res = await crmCall('crmReserveCoupon', { memberId: m.id, couponId: c.id, scanProof: c.scanProof, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
     setCouponBusy('');
     if (!res.success) setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ');
     loadWallet(m);
@@ -117,15 +117,6 @@ const CheckoutModal = ({
     await crmCall('crmReleaseCoupon', { couponId: c.id, ref: couponRef.current, branchId });
     setCouponBusy('');
     loadWallet();
-  };
-  const redeem = async (r) => {
-    if (couponBusy) return;
-    if (!window.confirm(`แลก "${r.name}" ใช้ ${Number(r.cost).toLocaleString()} แต้ม แล้วใช้กับบิลนี้เลย?\n(ตัดแต้มทันที ถ้ายกเลิกบิล ลูกค้ายังมีคูปองนี้ไว้ใช้ครั้งหน้า)`)) return;
-    setCouponBusy('r' + r.id); setWalletMsg('');
-    const res = await crmCall('crmRedeem', { memberId: member.id, rewardId: r.id, ref: couponRef.current, subtotal: total, branchId, items: crmItems });
-    setCouponBusy('');
-    if (res.success) loadWallet();
-    else setWalletMsg(res.error || 'แลกแต้มไม่สำเร็จ');
   };
   // เปลี่ยนจากคูปองเป็นส่วนลดอื่น / ไม่ใช้ส่วนลด → ปล่อยคูปองที่จองไว้ทุกใบ
   const heldCoupons = useRef([]);
@@ -487,8 +478,6 @@ const CheckoutModal = ({
                     )}
                     {wallet && (() => {
                       const applied = (selectedDiscount && selectedDiscount.crmCoupons) || [];
-                      const coupons = wallet.coupons || [];
-                      const rewards = (wallet.rewards || []).filter(r => r.affordable);
                       const btn = (active) => ({ border: active ? '2px solid #16a34a' : '1px solid #cbd5e1', background: active ? '#dcfce7' : '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 800, whiteSpace: 'nowrap', cursor: 'pointer' });
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '220px', overflowY: 'auto' }}>
@@ -504,28 +493,10 @@ const CheckoutModal = ({
                               </div>
                             </div>
                           ))}
-                          {applied.length === 0 && coupons.length === 0 && rewards.length === 0 && <div style={{ fontSize: '0.85rem', color: '#64748b' }}>ยังไม่มีคูปอง และแต้มยังไม่พอแลกของรางวัล</div>}
-                          {coupons.map(c => (
-                            <div key={'c' + c.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '1px solid #e2e8f0', borderRadius: '10px', background: '#fff', opacity: c.usable ? 1 : 0.55 }}>
-                              <span style={{ minWidth: '52px', textAlign: 'center', fontWeight: 900, color: '#ea580c' }}>{c.big}</span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
-                                <div style={{ fontSize: '0.75rem', color: c.usable ? '#475569' : '#dc2626' }}>{c.usable ? (c.voucher ? `ใบรับของ (ไม่ลดเงิน) · ${c.code}` : `ลด ฿${Number(c.discount).toLocaleString()} · ${c.code}`) : c.reason}</div>
-                              </div>
-                              {c.usable && <button type="button" style={btn(false)} disabled={!!couponBusy} onClick={() => pickCoupon(c)}>{couponBusy === 'c' + c.id ? '…' : (applied.length ? 'ใช้เพิ่ม' : 'ใช้')}</button>}
-                            </div>
-                          ))}
-                          {rewards.length > 0 && <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#475569', marginTop: '4px' }}>แลกแต้ม (มี {Number(wallet.balance || 0).toLocaleString()} แต้ม)</div>}
-                          {rewards.map(r => (
-                            <div key={'r' + r.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 8px', border: '1px dashed #cbd5e1', borderRadius: '10px', background: '#fff' }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{r.name}</div>
-                                <div style={{ fontSize: '0.75rem', color: r.fits === false ? '#dc2626' : '#475569' }}>{r.fits === false ? r.reason
-                                  : r.discount ? `แลกแล้วใช้กับบิลนี้ทันที · ลด ฿${Number(r.discount).toLocaleString()}` : `${r.big === 'ฟรี' ? `ของฟรี มูลค่า ฿${r.value}` : `ส่วนลด ฿${r.value}`}${r.minSpend ? ` · ขั้นต่ำ ฿${r.minSpend}` : ''}`}</div>
-                              </div>
-                              <button type="button" style={btn(false)} disabled={!!couponBusy || r.fits === false} onClick={() => redeem(r)}>{couponBusy === 'r' + r.id ? '…' : `แลก ${Number(r.cost).toLocaleString()} แต้ม`}</button>
-                            </div>
-                          ))}
+                          {/* หน้าพนักงาน: ใช้คูปองได้เฉพาะการสแกน QR จากบัตรสมาชิก LINE ของลูกค้า · ลูกค้าแลกแต้มเองในบัตร LINE */}
+                          <div style={{ fontSize: '0.78rem', color: '#64748b', lineHeight: 1.5 }}>
+                            {applied.length === 0 ? 'ยังไม่ได้ใช้คูปอง · ' : ''}ใช้คูปองได้โดยสแกน QR คูปองจากบัตรสมาชิก LINE ของลูกค้า (กด "ใช้คูปอง" ในบัตร) · ลูกค้าแลกแต้มเป็นคูปองเองในบัตร LINE
+                          </div>
                         </div>
                       );
                     })()}
