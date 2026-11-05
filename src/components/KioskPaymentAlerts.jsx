@@ -6,9 +6,11 @@ import { runAutoPrintNow } from '../utils/printServer';
 // ── ลูกค้าสแกน QR แจ้งโอนเงิน → เด้งการ์ดที่หน้าขายของสาขานั้น ──
 // หลายโต๊ะพร้อมกัน = การ์ดซ้อนกัน รอนานสุดอยู่บน · การ์ดเต็ม 2 ใบแรก ที่เหลือย่อเป็นแถบ (กดเพื่อขยาย)
 // ทุกเครื่องหน้าขายของสาขาเดียวกันเห็นชุดเดียวกัน ใครกดก่อน เครื่องอื่นหายเองในรอบดึงถัดไป
-// เสียงเตือนดังซ้ำทุก 5 วินาทีจนกว่าจะไม่เหลือรายการ
+// เสียงเตือนดังต่อเนื่องจนกว่าจะไม่เหลือรายการรอยืนยัน
 
 const POLL_MS = 5000;
+// เสียงหนึ่งชุดยาว ~1 วินาที → เริ่มชุดใหม่ทุก 1.25 วินาที = ดังต่อเนื่อง
+const RING_EVERY_MS = 1250;
 const FULL_CARDS = 2;
 
 const money = (n) => (Number(n) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -28,23 +30,63 @@ const tableLabel = (p) => {
   return /^\d+$/.test(t) ? `โต๊ะ ${t}` : t;
 };
 
-// เสียงเตือนสั้น ๆ 2 จังหวะ — ไม่ต้องมีไฟล์เสียง
+// ── เสียงเตือน (สร้างจากเบราว์เซอร์ ไม่ต้องมีไฟล์เสียง) ──
+// "ติ๊ง-ต่อง-ติ๊ง" 2 รอบ เสียงแหลมช่วง 1–2 kHz ที่ลำโพงแท็บเล็ต/มือถือเล่นได้ดังที่สุด
+// ผ่านตัวบีบเสียง (compressor) ให้ดังเต็มที่โดยไม่แตก
 let audioCtx = null;
-const beep = () => {
+let master = null;
+const getCtx = () => {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    audioCtx = new AC();
+    const comp = audioCtx.createDynamicsCompressor();
+    comp.threshold.value = -18;
+    comp.knee.value = 6;
+    comp.ratio.value = 8;
+    comp.attack.value = 0.002;
+    comp.release.value = 0.15;
+    master = audioCtx.createGain();
+    master.gain.value = 1;
+    // ชดเชยความดังหลังบีบเสียง ให้ยอดเสียงเกือบเต็มสเกล (~0.9) แต่ไม่แตก
+    const boost = audioCtx.createGain();
+    boost.gain.value = 1.7;
+    master.connect(comp).connect(boost).connect(audioCtx.destination);
+  }
+  return audioCtx;
+};
+// เบราว์เซอร์ไม่ให้เล่นเสียงจนกว่าจะมีคนแตะจอสักครั้ง — แตะตรงไหนก็ได้ = ปลดล็อก
+const unlockAudio = () => {
+  const ctx = getCtx();
+  if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+};
+const soundReady = () => !!audioCtx && audioCtx.state === 'running';
+
+const NOTES = [1568, 1175, 1568]; // G6 – D6 – G6
+const tone = (ctx, freq, at, len) => {
+  // 2 เสียงซ้อน (square + triangle คู่แปด) = ชัดและแหลมกว่า sine เดิมมาก
+  [['square', freq, 0.22], ['triangle', freq * 2, 0.35]].forEach(([type, f, vol]) => {
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = type;
+    osc.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, at);
+    g.gain.exponentialRampToValueAtTime(vol, at + 0.01);
+    g.gain.setValueAtTime(vol, at + len * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, at + len);
+    osc.connect(g).connect(master);
+    osc.start(at);
+    osc.stop(at + len + 0.02);
+  });
+};
+const alarm = () => {
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-    [0, 0.28].forEach(offset => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = 880;
-      gain.gain.setValueAtTime(0.0001, audioCtx.currentTime + offset);
-      gain.gain.exponentialRampToValueAtTime(0.35, audioCtx.currentTime + offset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + offset + 0.22);
-      osc.connect(gain).connect(audioCtx.destination);
-      osc.start(audioCtx.currentTime + offset);
-      osc.stop(audioCtx.currentTime + offset + 0.25);
-    });
+    const ctx = getCtx();
+    if (!ctx) return;
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    const t0 = ctx.currentTime + 0.05;
+    [0, 0.85].forEach(round => NOTES.forEach((f, i) => tone(ctx, f, t0 + round + i * 0.22, 0.18)));
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   } catch { /* เบราว์เซอร์ไม่ให้เล่นเสียง */ }
 };
 
@@ -92,13 +134,33 @@ export default function KioskPaymentAlerts({ branchId = '', userName = '', allMe
     return () => clearInterval(t);
   }, [load]);
 
-  // เสียงเตือนซ้ำจนกว่าจะหมดรายการ
+  // ปลดล็อกเสียงตั้งแต่พนักงานแตะจอครั้งแรก (ก่อนมีลูกค้าแจ้งโอน) จะได้ดังทันทีตอนมีรายการเข้า
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockAudio, true);
+    window.addEventListener('keydown', unlockAudio, true);
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio, true);
+      window.removeEventListener('keydown', unlockAudio, true);
+    };
+  }, []);
+
+  // เสียงเตือนดังต่อเนื่องไม่หยุด (เว้นแค่ช่วงหายใจสั้น ๆ) จนกว่าจะยืนยัน/ปฏิเสธครบทุกโต๊ะ
+  // แท็บที่กำลังเล่นเสียงอยู่ เบราว์เซอร์ไม่หน่วงตัวจับเวลา จึงดังต่อเนื่องแม้สลับไปหน้าอื่น
   const hasPending = payments.length > 0;
   useEffect(() => {
-    if (!hasPending) return;
-    beep();
-    const t = setInterval(beep, 5000);
+    if (!hasPending) return undefined;
+    alarm();
+    const t = setInterval(alarm, RING_EVERY_MS);
     return () => clearInterval(t);
+  }, [hasPending]);
+  // เสียงยังถูกเบราว์เซอร์ปิดอยู่ไหม (ไม่มีใครแตะจอเลยตั้งแต่เปิดหน้า) — โชว์ปุ่มให้กดเปิด
+  const [muted, setMuted] = useState(false);
+  useEffect(() => {
+    if (!hasPending) { setMuted(false); return undefined; }
+    const check = () => setMuted(!soundReady());
+    const t = setTimeout(check, 400);
+    const i = setInterval(check, 2000);
+    return () => { clearTimeout(t); clearInterval(i); };
   }, [hasPending]);
 
   const respond = async (p, approve) => {
@@ -157,6 +219,12 @@ export default function KioskPaymentAlerts({ branchId = '', userName = '', allMe
           <span>🔔 ลูกค้าแจ้งโอนชำระเงิน</span>
           <span style={{ background: '#f59e0b', borderRadius: 999, padding: '0.1rem 0.7rem', fontSize: '0.85rem' }}>รอยืนยัน {payments.length} โต๊ะ</span>
         </div>
+        {muted && (
+          <button onClick={() => { unlockAudio(); setTimeout(alarm, 150); setTimeout(() => setMuted(!soundReady()), 500); }}
+            style={{ background: '#fef08a', border: '2px solid #ca8a04', borderRadius: 12, padding: '0.7rem 1rem', fontWeight: 800, fontSize: '0.95rem', color: '#713f12', cursor: 'pointer', fontFamily: 'inherit' }}>
+            🔇 เบราว์เซอร์ปิดเสียงแจ้งเตือนไว้ — แตะตรงนี้เพื่อเปิดเสียง
+          </button>
+        )}
         {notice && <div style={{ background: '#fff', borderRadius: 10, padding: '0.55rem 0.8rem', fontWeight: 700, fontSize: '0.88rem' }}>{notice}</div>}
 
         {payments.map((p, idx) => {
