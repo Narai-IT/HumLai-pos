@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
 import MenuImage from './MenuImage';
+import { menuImageCandidates } from '../utils/menuImage';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
@@ -30,6 +31,18 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
   const imgRef = useRef(null);
   const gesture = useRef(null);
   const lastTap = useRef(0);
+  // แสดงรูปขนาดการ์ด (โหลดไว้แล้ว ขึ้นทันที) ก่อน แล้วค่อยสลับเป็นรูปคมชัดเมื่อโหลดเสร็จ — ไม่ต้องจ้องจอดำระหว่างรอ
+  const [sharp, setSharp] = useState(false);
+  useEffect(() => {
+    const big = menuImageCandidates(food, 1080)[0];
+    if (!big || big === menuImageCandidates(food, 640)[0]) return undefined;
+    let alive = true;
+    const pre = new Image();
+    pre.referrerPolicy = 'no-referrer';
+    pre.onload = () => { if (alive) setSharp(true); };
+    pre.src = big;
+    return () => { alive = false; pre.onload = null; };
+  }, [food]);
 
   const apply = (scale, x, y) => {
     const img = imgRef.current;
@@ -143,7 +156,7 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
         food={food}
         alt={alt}
         placeholderSize="4rem"
-        width={1080}
+        width={sharp ? 1080 : 640}
         draggable={false}
         style={{
           maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
@@ -891,7 +904,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   // การ์ดเมนูหนึ่งใบ — ใช้ร่วมกันทุกหมวด
   const renderFoodCard = (food) => {
-    const inCartItems = cart.filter(c => c.food.id === food.id);
+    // ของแถม ฿0 ที่ติดมากับจานอื่น ไม่นับเป็นจำนวนที่ลูกค้าสั่งเมนูนี้
+    const inCartItems = cart.filter(c => c.food.id === food.id && !c.food.isBundled);
     const inCartQty = inCartItems.reduce((sum, c) => sum + c.quantity, 0);
     const price = Number(food.price) || 0;
 
