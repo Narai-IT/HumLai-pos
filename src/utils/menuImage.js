@@ -1,5 +1,11 @@
 // ที่อยู่รูปเมนู — ใช้ร่วมกันทั้งหน้าขาย (POS) และหน้าลูกค้าสแกนสั่งเอง
 // รูปจริงอยู่ใน public/images/<โฟลเดอร์หมวด>/<ชื่อเมนู>.png (หรือ .jpg/.svg) ไม่ได้อยู่ใน /images/menu/
+import LOCAL_IMAGE_LIST from 'virtual:menu-image-files';
+
+// ไฟล์ใน public/images ที่มีอยู่จริง (รายชื่อสร้างตอน build) — ไม่ลองโหลดชื่อไฟล์ที่ไม่มี
+// รายชื่อว่าง (เช่นรันนอก Vite) = ไม่รู้ว่ามีไฟล์อะไรบ้าง ลองทุกแบบเหมือนเดิม
+const LOCAL_IMAGES = new Set((LOCAL_IMAGE_LIST || []).map(p => String(p).normalize('NFC')));
+const hasLocal = (path) => LOCAL_IMAGES.size === 0 || LOCAL_IMAGES.has(path.normalize('NFC'));
 
 const CATEGORY_FOLDERS = {
   "ชุดอิ่มเดี่ยว": "ชุดอิ่มเดี่ยว",
@@ -26,7 +32,8 @@ const CATEGORY_FOLDERS = {
 
 // รูปที่อัปโหลดไว้บน ImgBB เป็นไฟล์ขนาดเต็ม — ขอฉบับย่อ (WebP) ผ่านตัวย่อรูปของ Vercel
 // ขนาดที่ขอได้ต้องตรงกับ images.sizes ใน vercel.json
-const OPTIMIZABLE_HOSTS = ['i.ibb.co'];
+// lh3.googleusercontent.com = รูปจาก Google Drive (ต้องมีใน remotePatterns ของ vercel.json ด้วย)
+const OPTIMIZABLE_HOSTS = ['i.ibb.co', 'lh3.googleusercontent.com'];
 export const IMAGE_WIDTHS = [256, 640, 1080];
 
 const optimizedUrl = (url, width) => {
@@ -57,10 +64,15 @@ const driveFileId = (url) => {
   }
 };
 
+// โหลดรูป Drive ตรง ๆ จากมือถือลูกค้าทุกคน Google จะจำกัดจำนวนครั้ง (ลูกค้าหลายโต๊ะใช้ Wi-Fi ร้านเดียวกัน
+// = IP เดียวกัน) แล้วรูปไม่ขึ้นบางรูป → ให้ Vercel ดึงจาก Drive ครั้งเดียวแล้วเก็บแคชไว้แจกทุกคน (ข้อแรก)
+// ถ้าตัวย่อของ Vercel ใช้ไม่ได้ ค่อยโหลดตรงจาก Drive (ข้อ 2-3) เหมือนเดิม
 const driveResizedUrls = (url, width) => {
   const id = driveFileId(url);
   if (!id) return [];
+  const viaVercel = optimizedUrl(`https://lh3.googleusercontent.com/d/${id}=w1080`, width);
   return [
+    ...(viaVercel ? [viaVercel] : []),
     `https://lh3.googleusercontent.com/d/${id}=w${width}`,
     `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`
   ];
@@ -86,25 +98,27 @@ export const menuImageCandidates = (food, width = 640) => {
     list.push(...driveResizedUrls(url, width));
     list.push(url);
   }
+  const local = [];
   if (fileName) {
     // 2. Check folder-based real photos (WebP/PNG/JPG)
-    list.push(`/images/${folder}/${fileName}.webp`);
-    list.push(`/images/${folder}/${fileName}.png`);
-    list.push(`/images/${folder}/${fileName}.jpg`);
+    local.push(`/images/${folder}/${fileName}.webp`);
+    local.push(`/images/${folder}/${fileName}.png`);
+    local.push(`/images/${folder}/${fileName}.jpg`);
     // 3. Check root-based real photos (WebP/PNG/JPG)
-    list.push(`/images/${fileName}.webp`);
-    list.push(`/images/${fileName}.png`);
-    list.push(`/images/${fileName}.jpg`);
+    local.push(`/images/${fileName}.webp`);
+    local.push(`/images/${fileName}.png`);
+    local.push(`/images/${fileName}.jpg`);
   }
   // 4. Check ID-based real photos (WebP/PNG/JPG)
-  list.push(`/images/item_${id}.webp`);
-  list.push(`/images/item_${id}.png`);
-  list.push(`/images/item_${id}.jpg`);
+  local.push(`/images/item_${id}.webp`);
+  local.push(`/images/item_${id}.png`);
+  local.push(`/images/item_${id}.jpg`);
   // 5. SVG vector fallback
   if (fileName) {
-    list.push(`/images/${folder}/${fileName}.svg`);
-    list.push(`/images/${fileName}.svg`);
+    local.push(`/images/${folder}/${fileName}.svg`);
+    local.push(`/images/${fileName}.svg`);
   }
-  list.push(`/images/item_${id}.svg`);
-  return list;
+  local.push(`/images/item_${id}.svg`);
+  list.push(...local.filter(hasLocal));
+  return [...new Set(list)];
 };

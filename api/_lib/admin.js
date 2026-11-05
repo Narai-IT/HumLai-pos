@@ -289,4 +289,19 @@ async function saveImage(data, kind, fallbackPrefix) {
 }
 
 export const uploadImage = (data) => saveImage(data, 'menu', 'menu');
+
+// อัปรูปเมนูไปฝากที่ ImgBB ผ่านเครื่อง API — คีย์อยู่ใน .env (IMGBB_API_KEY) ไม่ส่งไปที่หน้าเว็บให้คนอื่นเห็น
+export async function uploadMenuImageHost(data) {
+  const key = String(process.env.IMGBB_API_KEY || '').trim();
+  if (!key) return { success: false, error: 'ยังไม่ได้ตั้ง IMGBB_API_KEY ในไฟล์ .env ของเครื่อง API (แล้วรีสตาร์ท API)' };
+  const base64 = String(data.base64 || '').replace(/^data:[^,]*,/, '');
+  if (!base64) return { success: false, error: 'ไม่พบไฟล์รูป' };
+  if (base64.length > 12 * 1024 * 1024) return { success: false, error: 'ไฟล์ใหญ่เกินไป' };
+  const body = new URLSearchParams({ image: base64, name: String(data.name || 'menu').slice(0, 60) });
+  const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, { method: 'POST', body });
+  const json = await res.json().catch(() => null);
+  const url = json && json.success && json.data && json.data.display_url;
+  if (!url) return { success: false, error: (json && json.error && json.error.message) || `ImgBB ตอบกลับไม่ถูกต้อง (${res.status})` };
+  return { success: true, url };
+}
 export const uploadSlip  = (data) => saveImage(data, 'slip', 'slip');

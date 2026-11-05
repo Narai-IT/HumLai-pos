@@ -70,6 +70,7 @@ const POST_ACTIONS = {
   resetAllSheetData:       admin.resetAllSheetData,
   clearSalesData:          admin.clearSalesData,
   uploadImage:             admin.uploadImage,
+  uploadMenuImageHost:     admin.uploadMenuImageHost,
   uploadSlip:              admin.uploadSlip,
 
   deductStock,

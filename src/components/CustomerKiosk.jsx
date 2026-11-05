@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
 import OrderWizardModal from './OrderWizardModal';
 import MenuImage from './MenuImage';
+import { menuImageCandidates } from '../utils/menuImage';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
@@ -30,6 +31,18 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
   const imgRef = useRef(null);
   const gesture = useRef(null);
   const lastTap = useRef(0);
+  // แสดงรูปขนาดการ์ด (โหลดไว้แล้ว ขึ้นทันที) ก่อน แล้วค่อยสลับเป็นรูปคมชัดเมื่อโหลดเสร็จ — ไม่ต้องจ้องจอดำระหว่างรอ
+  const [sharp, setSharp] = useState(false);
+  useEffect(() => {
+    const big = menuImageCandidates(food, 1080)[0];
+    if (!big || big === menuImageCandidates(food, 640)[0]) return undefined;
+    let alive = true;
+    const pre = new Image();
+    pre.referrerPolicy = 'no-referrer';
+    pre.onload = () => { if (alive) setSharp(true); };
+    pre.src = big;
+    return () => { alive = false; pre.onload = null; };
+  }, [food]);
 
   const apply = (scale, x, y) => {
     const img = imgRef.current;
@@ -143,7 +156,7 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
         food={food}
         alt={alt}
         placeholderSize="4rem"
-        width={1080}
+        width={sharp ? 1080 : 640}
         draggable={false}
         style={{
           maxWidth: '100%', maxHeight: '100%', objectFit: 'contain',
@@ -166,16 +179,36 @@ const ZoomableImage = ({ food, alt, onBackdropTap, hint }) => {
   );
 };
 
+// ── ตะกร้าที่เลือกค้างไว้ (sessionStorage = เฉพาะแท็บนี้ ปิดแท็บแล้วหายเอง) ──
+const DRAFT_KEY = 'kiosk_cart_draft';
+const DRAFT_MAX_AGE = 3 * 60 * 60 * 1000; // เกิน 3 ชั่วโมง = มื้อใหม่ เริ่มตะกร้าใหม่
+function readKioskDraft() {
+  try {
+    const d = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null');
+    if (!d || !Array.isArray(d.cart) || !(Date.now() - Number(d.at) < DRAFT_MAX_AGE)) return null;
+    return { ...d, screen: ['cart', 'pay'].includes(d.screen) && d.cart.length ? d.screen : 'menu' };
+  } catch { return null; }
+}
+function saveKioskDraft(d) {
+  try {
+    if (!d.orderType && !d.cart.length) sessionStorage.removeItem(DRAFT_KEY);
+    else sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ ...d, at: Date.now() }));
+  } catch { /* ที่เก็บเต็ม/ปิดไว้ — ใช้ต่อได้ แค่จำตะกร้าไม่ได้ */ }
+}
+
 // tables = ผังโต๊ะของสาขานี้ (ใช้ตอนเข้าหน้าลูกค้าจากหน้าแรกของเว็บ ที่ไม่มีเลขโต๊ะติดมากับลิงก์)
 const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [], branchId = '' }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   // QR โต๊ะมีเลขโต๊ะในลิงก์ (ส่งไปหลังบ้านให้พนักงานรู้โต๊ะ แต่ไม่แสดงให้ลูกค้าเห็น)
   const tableParam = searchParams.get('table') || searchParams.get('t') || '';
-  const [tableNo, setTableNo] = useState(tableParam);
+  // ตะกร้าที่เลือกค้างไว้ในแท็บนี้ — มือถือมักโหลดหน้าใหม่เองตอนสลับไปแอปธนาคารแล้วกลับมา
+  // ถ้าไม่เก็บไว้ ลูกค้าโอนเงินแล้วกลับมาเจอตะกร้าว่าง กด "ฉันโอนเงินแล้ว" ไม่ได้
+  const [draft] = useState(readKioskDraft);
+  const [tableNo, setTableNo] = useState(tableParam || (draft && draft.tableNo) || '');
 
   // ทานที่ร้าน / ห่อกลับบ้าน — เลือกที่จอแรก ราคาทุกเมนูแสดงตามนี้
-  const [orderType, setOrderType] = useState('');
+  const [orderType, setOrderType] = useState((draft && draft.orderType) || '');
 
   // ── ระบบสมาชิก: ใส่เลขสมาชิก/เบอร์โทรก่อนสั่ง เพื่อสะสมแต้ม (ไม่บังคับ) ──
   // จำไว้ในแท็บนี้ รีเฟรชหน้าแล้วไม่ต้องกรอกใหม่
@@ -285,12 +318,12 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   const [lang, setLang] = useState(initialLang);
   const [activeCategory, setActiveCategory] = useState(categories[0]?.slug || 'food');
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState((draft && draft.cart) || []);
   const [selectedFood, setSelectedFood] = useState(null);
   // เมนูที่กำลังเปิดดูรูปขยายเต็มจอ (แตะที่รูปในการ์ด)
   const [previewFood, setPreviewFood] = useState(null);
   // หน้าที่ลูกค้าอยู่: 'menu' เลือกเมนู → 'cart' ตรวจ/แก้ไขตะกร้า → 'pay' ชำระเงิน
-  const [screen, setScreen] = useState('menu');
+  const [screen, setScreen] = useState((draft && draft.screen) || 'menu');
   const isCheckoutOpen = screen === 'pay';
   // รายการในตะกร้าที่กำลังเปิดแก้ไขตัวเลือก (ใช้ป๊อปอัพเดิมแบบทีละขั้น เปิดมาพร้อมที่เลือกไว้)
   const [editingRow, setEditingRow] = useState(null);
@@ -345,6 +378,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const totalItemsCount = cartCards.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => { setQrSaveState(''); }, [isCheckoutOpen, payTotal]);
+  // จำตะกร้า/หน้าที่อยู่ไว้ทุกครั้งที่เปลี่ยน
+  useEffect(() => { saveKioskDraft({ orderType, tableNo, cart, screen }); }, [orderType, tableNo, cart, screen]);
 
   // ฟังก์ชันคูปอง (ใช้ cartSubtotal จึงต้องอยู่หลังคำนวณยอด)
   const loadKWallet = async () => {
@@ -869,7 +904,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   // การ์ดเมนูหนึ่งใบ — ใช้ร่วมกันทุกหมวด
   const renderFoodCard = (food) => {
-    const inCartItems = cart.filter(c => c.food.id === food.id);
+    // ของแถม ฿0 ที่ติดมากับจานอื่น ไม่นับเป็นจำนวนที่ลูกค้าสั่งเมนูนี้
+    const inCartItems = cart.filter(c => c.food.id === food.id && !c.food.isBundled);
     const inCartQty = inCartItems.reduce((sum, c) => sum + c.quantity, 0);
     const price = Number(food.price) || 0;
 
@@ -1119,7 +1155,6 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             </div>
           ))}
           {coupons.map(c => {
-            const on = false;
             return (
               <div key={'c' + c.id} style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', background: '#fff', borderRadius: 12, padding: '0.5rem 0.6rem', opacity: c.usable ? 1 : 0.55 }}>
                 <span style={{ minWidth: 48, textAlign: 'center', fontWeight: 900, color: '#ea580c' }}>{c.big}</span>
@@ -1127,9 +1162,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                   <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{c.title}</div>
                   <div style={{ fontSize: '0.75rem', color: c.usable ? '#64748b' : '#b91c1c' }}>{c.usable ? (th ? `ลด ฿${money(c.discount)}` : `-฿${money(c.discount)}`) : c.reason}</div>
                 </div>
-                {c.usable && (on
-                  ? <button onClick={dropCoupon} style={btn(true)}>{th ? '✓ ใช้อยู่' : '✓ Applied'}</button>
-                  : <button onClick={() => pickKCoupon(c)} disabled={!!kBusy} style={btn(false)}>{kBusy === 'c' + c.id ? '…' : (th ? 'ใช้' : 'Use')}</button>)}
+                {c.usable && <button onClick={() => pickKCoupon(c)} disabled={!!kBusy} style={btn(false)}>{kBusy === 'c' + c.id ? '…' : (th ? 'ใช้' : 'Use')}</button>}
               </div>
             );
           })}
@@ -1478,6 +1511,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
             {qrType === 'static' ? (
               <img src={staticQrUrl} alt="Static QR" style={{ width: '220px', height: '220px', margin: '0 auto', display: 'block' }} />
+            ) : payTotal <= 0 ? (
+              <div style={{ height: '220px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', color: '#166534', fontWeight: 800 }}>
+                <CheckCircle size={48} color="#16a34a" />
+                {th ? 'คูปองครอบคลุมยอดทั้งหมด ไม่ต้องโอนเงิน' : 'Fully covered by coupons — no transfer needed'}
+              </div>
             ) : qrDataUrl ? (
               <img src={qrDataUrl} alt="Dynamic PromptPay QR" style={{ width: '220px', height: '220px', margin: '0 auto', display: 'block' }} />
             ) : (
@@ -1494,7 +1532,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             </div>
 
             {/* บันทึกรูป QR ไว้เปิดในแอปธนาคาร (สแกนจอตัวเองด้วยเครื่องเดียวกันไม่ได้) */}
-            {(qrType === 'static' ? staticQrUrl : qrDataUrl) && (
+            {payTotal > 0 && (qrType === 'static' ? staticQrUrl : qrDataUrl) && (
               <>
                 <button
                   onClick={handleSaveQr}
@@ -1556,7 +1594,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             <CheckCircle size={22} />
             {payBusy
               ? (th ? 'กำลังแจ้งร้าน...' : 'Notifying the shop...')
-              : payStage === 'rejected'
+              : payTotal <= 0
+                ? (th ? 'ยืนยันสั่งอาหาร' : 'Place order')
+                : payStage === 'rejected'
                 ? (th ? 'แจ้งโอนอีกครั้ง' : 'Notify again')
                 : (th ? 'ฉันโอนเงินแล้ว' : 'I have transferred')}
           </button>

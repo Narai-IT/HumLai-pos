@@ -312,7 +312,7 @@ const ManageMenu = () => {
     reader.readAsDataURL(file);
   });
 
-  // อัปโหลดรูปเมนูไปที่ ImgBB แล้วเก็บ "ลิงก์" ที่ได้ลงคอลัมน์ image ของชีต Menu
+  // อัปโหลดรูปเมนูไปที่ ImgBB (ผ่านเครื่อง API) แล้วเก็บ "ลิงก์" ที่ได้ลงคอลัมน์ image ของชีต Menu
   // → หน้าขาย/หน้าลูกค้าสั่งเอง ดึงลิงก์นี้ไปแสดงเอง
   //
   // ทำไมไม่ใช้ Google Drive: ลองแล้วติด "Access denied: DriveApp" ที่ฝั่ง Apps Script
@@ -329,21 +329,19 @@ const ManageMenu = () => {
       const base64 = String(dataUrl).split(',')[1];
       if (!base64) throw new Error('อ่านไฟล์รูปไม่ได้');
 
-      const IMGBB_API_KEY = 'c46b3eebbda2ef57c71cb885cb305fe5';
-      const formData = new FormData();
-      formData.append('image', base64); // ImgBB รับ base64 ตรง ๆ ได้ ไม่ต้องแนบเป็นไฟล์
-      formData.append('name', (editingItem?.name || 'menu').toString().slice(0, 60));
-
-      const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
-        method: 'POST',
-        body: formData
+      // ส่งรูปให้เครื่อง API อัปไป ImgBB (คีย์ ImgBB อยู่ที่ .env ของเครื่อง API ไม่อยู่ในหน้าเว็บ)
+      const res = await fetch(API_URL, {
+        method: 'POST', headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'uploadMenuImageHost', base64, name: (editingItem?.name || 'menu').toString().slice(0, 60) })
       });
       const data = await res.json().catch(() => null);
 
-      if (data && data.success && data.data && data.data.display_url) {
-        setEditingItem(prev => ({ ...prev, image: data.data.display_url }));
+      if (data && data.success && data.url) {
+        setEditingItem(prev => ({ ...prev, image: data.url }));
       } else {
-        throw new Error((data && data.error && data.error.message) || 'ImgBB ไม่ตอบลิงก์รูปกลับมา');
+        throw new Error(data && /Unknown action/i.test(data.error || '')
+          ? 'API ยังเป็นรุ่นเก่า — รัน update-api.bat ก่อน'
+          : (data && data.error) || 'อัปโหลดรูปไม่สำเร็จ');
       }
     } catch (err) {
       console.error('Image upload error:', err);
