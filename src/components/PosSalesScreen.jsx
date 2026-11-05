@@ -7,6 +7,7 @@ import FoodCard from './FoodCard';
 import { SALE_TYPES, sameTable, readTablesConfig, priceTypeForTable, saleTypesForTable } from '../utils/salePricing';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
 import './PosSalesScreen.css';
+import { menuCategoryLookup, discountAmount as calcDiscount } from '../utils/discount';
 
 // โต๊ะที่มีของค้างนานเกินเท่านี้ (นาที) จะขึ้นสีส้มเตือน
 const LATE_MINUTES = 90;
@@ -233,10 +234,14 @@ const PosSalesScreen = ({
   useEffect(() => { setSelectedDiscount(null); }, [tableNumber]);
 
   // ลำดับการคิดเหมือนหน้าชำระเงินเป๊ะ: ลดจากยอดอาหารก่อน แล้วค่อยบวกเซอร์วิสชาร์จและ VAT
-  const discountAmount = !selectedDiscount ? 0
-    : selectedDiscount.type === 'percent'
-      ? Math.round(subtotal * (Number(selectedDiscount.value) || 0)) / 100
-      : Math.min(Number(selectedDiscount.value) || 0, subtotal);
+  // ส่วนลดเฉพาะหมวด = ลดเฉพาะยอดของเมนูในหมวดนั้น (utils/discount ใช้ร่วมกับหน้าชำระเงิน)
+  const categoriesOf = useMemo(() => menuCategoryLookup(liveMenu), [liveMenu]);
+  const discountLines = [
+    ...sentItems.map(o => ({ name: o.ItemName, amount: (Number(o.ItemPrice) || 0) * (Number(o.Quantity) || 1) })),
+    ...cart.map(i => ({ name: i.food && i.food.name, amount: unitPrice(i) * (i.quantity || 1) }))
+  ];
+  const discountFor = (d) => Math.min(calcDiscount(d, discountLines, categoriesOf), subtotal);
+  const discountAmount = discountFor(selectedDiscount);
   const afterDiscount = subtotal - discountAmount;
 
   const scRate  = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
@@ -775,9 +780,7 @@ const PosSalesScreen = ({
                 </div>
               )}
               {discounts.map((d, i) => {
-                const amount = d.type === 'percent'
-                  ? Math.round(subtotal * (Number(d.value) || 0)) / 100
-                  : Math.min(Number(d.value) || 0, subtotal);
+                const amount = discountFor(d);
                 const active = selectedDiscount && selectedDiscount.name === d.name && selectedDiscount.value === d.value;
                 return (
                   <button

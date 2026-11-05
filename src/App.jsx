@@ -1828,6 +1828,7 @@ function App() {
             users={users}
             currentUser={currentUser}
             tableNo={tableNumber}
+            menu={allMenu.length > 0 ? allMenu : liveMenu}
           />
         </Suspense>
         </ChunkErrorBoundary>
