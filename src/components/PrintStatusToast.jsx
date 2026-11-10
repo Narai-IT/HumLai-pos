@@ -100,6 +100,7 @@ const PrintStatusToast = () => {
                 </div>
                 <div style={{ fontSize: '0.78rem', color: '#334155', marginTop: 2 }}>
                   {job.typeLabel}{job.orderNumber ? ` ${job.orderNumber}` : ''} → {job.printerLabel}
+                  {job.via === 'queue' && <span style={{ color: '#64748b' }}> · ผ่านคิว{job.phase === 'printing' ? ' (รอ Print Server ในร้าน)' : ''}</span>}
                 </div>
                 {summary && (
                   <div style={{ fontSize: '0.78rem', color: style.color, marginTop: 2, fontWeight: 600, lineHeight: 1.4 }}>{summary}</div>
@@ -114,7 +115,7 @@ const PrintStatusToast = () => {
               <>
                 {expanded && (
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${style.border}` }}>
-                    <PrintSteps steps={job.steps} stage={job.stage} error={job.error} compact />
+                    <PrintSteps steps={job.steps} stage={job.stage} error={job.error} via={job.via} compact />
                   </div>
                 )}
                 {job.phase !== 'error' && (

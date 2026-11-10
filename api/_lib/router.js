@@ -12,9 +12,10 @@ import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
 import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
 import { branchForWrite } from './branch.js';
+import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
-export const BUILD = '2026-10-21-crm-coupon-items';
+export const BUILD = '2026-11-10-print-queue';
 
 // ตารางคำสั่งเขียน — ชื่อ action ตรงกับของเดิมทุกตัว
 // แก้เมนู/หมวดแล้วส่งเมนูล่าสุดไปให้ระบบสมาชิก
@@ -29,6 +30,12 @@ const POST_ACTIONS = {
   reissueTaxInvoice,
   saveTaxCustomer,
   deleteTaxCustomer,
+  // คิวงานพิมพ์: มือถือ/แท็บเล็ตฝากงาน → Print Server ในร้านดึงไปพิมพ์ (printQueue.js)
+  enqueuePrint,
+  cancelPrintJob,
+  getPrintAgentKey,
+  claimPrintJobs,
+  reportPrintJob,
   addTableOrder:           write.addTableOrder,
   clearAllTableOrders:     write.clearAllTableOrders,
   clearTableOrders:        write.clearTableOrders,
@@ -111,6 +118,7 @@ async function handleExtraGet(action, params = {}) {
     case 'getSalesReport':    return await generateSalesReport();
     case 'getKioskPayment':         return await getKioskPayment(params);
     case 'getPendingKioskPayments': return await getPendingKioskPayments(params);
+    case 'getPrintQueue':     return await getPrintQueue(params);
     case 'getCrmStatus':      return { success: true, ...(await crmStatus()) };
     case 'getTaxInvoices':    return { success: true, invoices: await listTaxInvoices() };
     case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };

@@ -28,6 +28,7 @@ const FILES = [
   'print-ticket.js',
   'printer-net.js',
   'auto-print.js',
+  'print-queue.js',
   'start-printer.bat',
   'install-autostart.bat',
   'uninstall-autostart.bat',

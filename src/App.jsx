@@ -39,7 +39,7 @@ import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining
 import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
-import { sendPrintJob, setReceiptHeader } from './utils/printServer';
+import { sendPrintJob, setReceiptHeader, setPrintBranch } from './utils/printServer';
 import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
@@ -377,6 +377,9 @@ function App() {
       }
     } catch {}
   }, [serverPrinters, tablesBranch]);
+
+  // สาขาของงานพิมพ์ที่ฝากเข้าคิว (มือถือ/แท็บเล็ต) — Print Server ของสาขานี้เป็นคนรับไปพิมพ์
+  React.useEffect(() => { setPrintBranch(tablesBranch); }, [tablesBranch]);
 
   // หัวใบเสร็จของสาขานี้ — แนบไปกับทุกงานพิมพ์
   React.useEffect(() => {
