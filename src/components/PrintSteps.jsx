@@ -1,5 +1,5 @@
 import React from 'react';
-import { PRINT_STEPS, PRINT_STEP_LABEL, PRINT_STAGE_TIPS } from '../utils/printServer';
+import { PRINT_STEPS, PRINT_QUEUE_STEPS, PRINT_STEP_LABEL, PRINT_STAGE_TIPS } from '../utils/printServer';
 
 // รายการขั้นตอนการพิมพ์ ✓ / ⚠ / ✗ — ติดขั้นไหนเห็นทันทีพร้อมวิธีแก้
 // ใช้ทั้งในกล่องสถานะการพิมพ์มุมจอ และใต้ปุ่ม "ทดสอบพิมพ์"
@@ -11,10 +11,13 @@ const ICON = {
   skip: { char: '', color: '#94a3b8', bg: '#f1f5f9' }
 };
 
-const PrintSteps = ({ steps, stage, error, printing = false, compact = false }) => {
+const PrintSteps = ({ steps, stage, error, printing = false, compact = false, via }) => {
   const byKey = Object.fromEntries((steps || []).map(s => [s.key, s]));
+  // ส่งผ่านคิว (มือถือ/แท็บเล็ต) มีขั้นของคิวแทนขั้น "หน้าเว็บ → Print Server"
+  const queued = via === 'queue' || 'queue' in byKey || 'agent' in byKey || stage === 'queue' || stage === 'agent';
+  const base = queued ? PRINT_QUEUE_STEPS : PRINT_STEPS;
   // ขั้นที่ไม่อยู่ในรายการมาตรฐาน (เช่น format = จัดหน้าใบพิมพ์ไม่สำเร็จ) แสดงต่อท้าย
-  const keys = PRINT_STEPS.map(s => s.key);
+  const keys = base.map(s => s.key);
   if (stage && !keys.includes(stage)) keys.push(stage);
   const failed = !printing && !!error;
   const extraFail = failed && stage && !byKey[stage] ? { key: stage, status: 'fail', detail: error } : null;
@@ -23,8 +26,12 @@ const PrintSteps = ({ steps, stage, error, printing = false, compact = false }) 
     <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? '0.3rem' : '0.45rem' }}>
       {keys.map((key, i) => {
         let step = byKey[key] || (extraFail && extraFail.key === key ? extraFail : null);
-        if (!step && printing) step = { key, status: i === 0 ? 'wait' : 'skip', detail: i === 0 ? 'กำลังส่งงาน...' : '' };
-        if (!step && !keys.slice(PRINT_STEPS.length).includes(key)) step = { key, status: 'skip', detail: '' };
+        // ระหว่างพิมพ์: ขั้นถัดจากขั้นล่าสุดที่ผ่านแล้วคือขั้นที่กำลังรอ
+        if (!step && printing) {
+          const waiting = i === keys.findIndex(k => !byKey[k]);
+          step = { key, status: waiting ? 'wait' : 'skip', detail: waiting ? (key === 'agent' ? 'รอ Print Server ในร้านมารับงาน...' : 'กำลังส่งงาน...') : '' };
+        }
+        if (!step && !keys.slice(base.length).includes(key)) step = { key, status: 'skip', detail: '' };
         if (!step) return null;
         const status = step.status === 'pending' ? 'skip' : step.status;
         const icon = ICON[status] || ICON.skip;

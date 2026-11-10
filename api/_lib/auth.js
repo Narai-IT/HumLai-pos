@@ -32,6 +32,12 @@ const getSecret = () => {
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
 const hmac = (secret, text) => crypto.createHmac('sha256', secret).update(text).digest('base64url');
 
+// กุญแจเฉพาะงาน (เช่น กุญแจของ Print Server แต่ละสาขา) — คำนวณจากกุญแจหลัก ไม่ต้องเก็บแยก
+// เปลี่ยน API_SECRET เมื่อไหร่ กุญแจเหล่านี้เปลี่ยนตามทั้งหมด (ต้องเปิดรับงานพิมพ์จากมือถือใหม่)
+export async function deriveKey(purpose) {
+  return hmac(await getSecret(), `purpose:${purpose}`);
+}
+
 export async function signToken(payload) {
   const body = b64url(JSON.stringify({ ...payload, exp: Date.now() + TOKEN_TTL_MS }));
   return `${body}.${hmac(await getSecret(), body)}`;
@@ -123,7 +129,9 @@ export async function login(data) {
 // ── นโยบายสิทธิ์ของแต่ละคำสั่ง ──
 // ไม่ต้องล็อกอิน: หน้าลูกค้าสแกน QR สั่งเอง และ Print Server (ไม่มีคนล็อกอิน)
 // kioskPaidOrder (ออกบิลทันทีไม่ผ่านพนักงาน) ไม่เปิดสาธารณะแล้ว — ลูกค้าแจ้งโอน (kioskPaymentRequest) แล้วพนักงานยืนยันเป็นคนออกบิล
+// claimPrintJobs / reportPrintJob = Print Server ในร้าน (ตรวจด้วยกุญแจของสาขาแทนการล็อกอิน)
 const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskPaymentRequest', 'getKioskPayment', 'crmKioskMember',
+  'claimPrintJobs', 'reportPrintJob',
   'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem', 'crmKioskCancelRedeem']);
 
 // ข้อมูลสมาชิก (ชื่อ เบอร์ แต้ม) ต้องล็อกอินพนักงานเสมอ แม้ร้านไม่ได้เปิด "บังคับล็อกอิน" — กันคนนอกไล่ค้นข้อมูลลูกค้าจากเบอร์
@@ -138,7 +146,7 @@ const HQ_ONLY = new Set([
 ]);
 
 // แอดมิน (รวมผู้จัดการสาขา) — ตั้งค่าของสาขาตัวเอง
-const ADMIN = new Set(['crmSyncMenu', 'cancelTaxInvoice', 'deleteTaxCustomer', 'savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
+const ADMIN = new Set(['getPrintAgentKey', 'crmSyncMenu', 'cancelTaxInvoice', 'deleteTaxCustomer', 'savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
 
 // แคชเชียร์ขึ้นไป — หน้าหลังบ้านที่แคชเชียร์เข้าได้
 const BACKOFFICE = new Set(['getTaxInvoices', 'issueTaxInvoice', 'reissueTaxInvoice', 'getTaxCustomers', 'saveTaxCustomer', 'saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);

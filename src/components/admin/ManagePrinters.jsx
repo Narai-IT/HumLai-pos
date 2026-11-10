@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import PrintSteps from '../PrintSteps';
 import PrintServerDownload from './PrintServerDownload';
+import PrintQueuePanel from './PrintQueuePanel';
 import { Printer, Save, CheckCircle, XCircle, AlertCircle, Plus, Trash2, Search, RefreshCw, Wifi, Server, Settings2, Copy } from 'lucide-react';
 import {
   checkPrintServer,
@@ -452,7 +453,7 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                   </button>
                   <ul style={{ margin: '0.75rem 0 0 1.2rem', padding: 0, lineHeight: 1.7, fontSize: '0.83rem' }}>
                     <li>เครื่องที่เปิดหน้านี้ต้องรัน <code>start-printer.bat</code> หรือ <code>node server.js</code> ด้วย</li>
-                    <li>ถ้าใช้แท็บเล็ต/มือถือที่รัน Print Server ไม่ได้ ต้องเปิดแอปผ่าน <code>http://</code> ในวงแลนแทน</li>
+                    <li><strong>ใช้มือถือ/แท็บเล็ต?</strong> ไม่ต้องตั้งที่อยู่นี้ — สั่งพิมพ์ผ่านคิวได้เลย (ดูกล่อง “สั่งพิมพ์จากมือถือ / แท็บเล็ต” ด้านล่าง)</li>
                     <li>Chrome รุ่นใหม่อาจถามสิทธิ์เข้าถึงอุปกรณ์ในเครือข่ายครั้งแรก ให้กดอนุญาต</li>
                   </ul>
                 </div>
@@ -542,6 +543,9 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
 
         {/* ---------- ดาวน์โหลด Print Server + คู่มือ (+ แจ้งเมื่อมีเวอร์ชันใหม่) ---------- */}
         <PrintServerDownload health={health} />
+
+        {/* ---------- สั่งพิมพ์จากมือถือ/แท็บเล็ต (คิวงานพิมพ์ผ่าน API) ---------- */}
+        <PrintQueuePanel health={health} branchId={branchId} />
 
         {/* ---------- Auto print: Print Server ดึงออเดอร์ QR มาพิมพ์เอง ---------- */}
         <div style={{
@@ -956,6 +960,7 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
                         steps={ts.result?.steps}
                         stage={ts.result?.stage}
                         error={ts.result?.error}
+                        via={ts.result?.via}
                         printing={ts.status === 'loading'}
                       />
                     </div>

@@ -646,3 +646,43 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_CrmBills_Pending' AND object_id = OBJECT_ID('dbo.CrmBills'))
   CREATE INDEX IX_CrmBills_Pending ON dbo.CrmBills ([Status], NextAttempt);
 GO
+
+-- ─────────────────────────────────────────
+-- คิวงานพิมพ์: มือถือ/แท็บเล็ตสั่งพิมพ์ผ่าน API แล้ว Print Server ในร้านมาดึงไปพิมพ์ (api/_lib/printQueue.js)
+-- status: pending (รอ Print Server) / printing (รับไปแล้ว) / done / failed / cancelled / expired
+-- API สร้างตารางนี้เองครั้งแรกที่ใช้ ถ้าผู้ใช้ฐานข้อมูลมีสิทธิ์ — ไม่มีสิทธิ์ให้รัน npm run sql:init
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.PrintJobs', 'U') IS NULL
+CREATE TABLE dbo.PrintJobs (
+  RowId        INT IDENTITY(1,1) PRIMARY KEY,
+  JobId        NVARCHAR(40)  NOT NULL UNIQUE,
+  BranchId     NVARCHAR(60)  NOT NULL,
+  PrinterIp    NVARCHAR(100) NOT NULL,
+  PrinterName  NVARCHAR(120) NULL,
+  PrinterType  NVARCHAR(20)  NOT NULL,
+  PayloadJson  NVARCHAR(MAX) NOT NULL,
+  Label        NVARCHAR(120) NULL,
+  [Status]     NVARCHAR(20)  NOT NULL DEFAULT 'pending',
+  Stage        NVARCHAR(20)  NULL,
+  Error        NVARCHAR(500) NULL,
+  Warning      NVARCHAR(500) NULL,
+  Confirmed    BIT           NULL,
+  StepsJson    NVARCHAR(MAX) NULL,
+  CreatedAt    DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  ClaimedAt    DATETIME2(0)  NULL,
+  ClaimedBy    NVARCHAR(120) NULL,
+  FinishedAt   DATETIME2(0)  NULL
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_PrintJobs_Queue' AND object_id = OBJECT_ID('dbo.PrintJobs'))
+  CREATE INDEX IX_PrintJobs_Queue ON dbo.PrintJobs (BranchId, [Status], RowId);
+GO
+-- Print Server ของแต่ละสาขามาดึงคิวล่าสุดเมื่อไหร่ (หน้าเว็บใช้บอกว่าออนไลน์ไหม)
+IF OBJECT_ID('dbo.PrintAgents', 'U') IS NULL
+CREATE TABLE dbo.PrintAgents (
+  BranchId  NVARCHAR(60)  NOT NULL PRIMARY KEY,
+  Agent     NVARCHAR(120) NULL,
+  Version   NVARCHAR(20)  NULL,
+  LastSeen  DATETIME2(0)  NOT NULL
+);
+GO
