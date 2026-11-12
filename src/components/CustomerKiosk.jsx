@@ -1214,7 +1214,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       <div style={box}>
         {head}
         {!kWallet && !kMsg && <span style={{ fontSize: '0.85rem', color: '#9a3412' }}>{th ? 'กำลังโหลด…' : 'Loading…'}</span>}
-        {kWallet && <span style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.5rem' }}>{th ? `แต้มคงเหลือ ${Number(kWallet.balance || 0).toLocaleString()} แต้ม · ใช้คูปองได้หลายใบ · 1 เมนูใช้ได้กับคูปองใบเดียว` : `${kWallet.balance} points · several coupons, one per item`}</span>}
+        {kWallet && <span style={{ display: 'block', fontSize: '0.85rem', color: '#9a3412', marginBottom: '0.5rem' }}>{th ? `แต้มคงเหลือ ${Number(kWallet.balance || 0).toLocaleString()} แต้ม` : `${Number(kWallet.balance || 0).toLocaleString()} points left`}<br />{th ? 'การแลกแต้มเป็นไปตามเงื่อนไขที่บริษัทฯ กำหนด' : 'Points redemption is subject to company terms and conditions'}</span>}
         {kWallet && coupons.length === 0 && rewards.length === 0 && <span style={{ fontSize: '0.85rem', color: '#64748b' }}>{th ? 'ยังไม่มีคูปองที่ใช้ได้ และแต้มยังไม่พอแลก' : 'No coupons yet'}</span>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
           {kApplied.map(c => (
