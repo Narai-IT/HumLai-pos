@@ -453,14 +453,6 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             {counterText}
           </span>
         </div>
-        {config.separate && (
-          <div style={{
-            display: 'inline-block', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1d4ed8',
-            borderRadius: '999px', padding: '0.15rem 0.6rem', fontSize: '0.72rem', fontWeight: 800, marginBottom: '0.35rem'
-          }}>
-            {lang === 'th' ? 'รายการที่เลือกจะแยกเป็นรายการของตัวเองในบิล/ใบครัว' : 'Picks here become their own order lines'}
-          </div>
-        )}
         <div className="options-grid">
           {config.items.length > 0 ? config.items.map(addon => {
             const qty = getQty(qtyMap, addon.id);
