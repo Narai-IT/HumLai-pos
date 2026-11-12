@@ -1225,7 +1225,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 <div style={{ fontSize: '0.75rem', color: '#15803d' }}>{c.voucher ? (th ? 'ใบรับของ · แจ้งพนักงานรับของ' : 'Voucher · ask staff') : (th ? `✓ ใช้อยู่ · ลด ฿${money(c.discount)}` : `✓ Applied · -฿${money(c.discount)}`)}</div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <button onClick={() => removeKCoupon(c)} disabled={!!kBusy} style={btn(true)}>{kBusy === 'x' + c.id ? '…' : (th ? 'เอาออก' : 'Remove')}</button>
+                {/* คูปองที่แลกแต้มมาและยกเลิกได้ → มีแค่ปุ่มยกเลิกแลก คืนแต้ม · คูปองอื่นยังมีปุ่มเอาออก */}
+                {!c.cancel && <button onClick={() => removeKCoupon(c)} disabled={!!kBusy} style={btn(true)}>{kBusy === 'x' + c.id ? '…' : (th ? 'เอาออก' : 'Remove')}</button>}
                 {c.cancel && <button onClick={() => cancelKRedeem(c)} disabled={!!kBusy} style={{ ...btn(false), background: '#fef2f2', color: '#b91c1c', border: '1.5px solid #fca5a5' }}>{kBusy === 'v' + c.id ? '…' : (th ? 'ยกเลิกแลก คืนแต้ม' : 'Cancel · refund')}</button>}
               </div>
             </div>
