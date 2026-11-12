@@ -10,13 +10,13 @@ import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility'
 import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
 import { crmEnabled, lookupMember, crmCall, newCouponRef } from '../utils/crm';
+import KioskBanner from './KioskBanner';
+import { LOGO_WIDE, BANNER_CLOSED_KEY, resolveBanner, activeSlides, hasPromoSlides } from '../utils/banner';
 
 const TAKEAWAY_DINING = { id: 'takeaway', name: 'ห่อกลับบ้าน', nameEn: 'Takeaway' };
 const DINE_IN_DINING = { id: 'dine_in', name: 'ทานที่ร้าน', nameEn: 'Dine-in' };
 // ทานที่ร้านโดยไม่ได้สแกน QR โต๊ะ (เข้าจากหน้าแรกของเว็บ) → ไม่ถามโต๊ะ ลงชื่อนี้แทน
 const DINE_IN_LABEL = 'ทานที่ร้าน';
-// โลโก้ร้านแบบกว้าง (ตัดขอบขาวออกแล้ว) แสดงเต็มความกว้างหัวจอ
-const LOGO_WIDE = '/logo-wide.png';
 
 // รูปเมนูขยาย: ใช้สองนิ้วซูม/ลากดู, แตะสองครั้งที่รูปเพื่อซูมเข้า-ออก
 // ตอนซูมอยู่ แตะพื้นที่ว่างจะคืนขนาดเดิม (ยังไม่ปิด) — ตอนไม่ซูม แตะพื้นที่ว่างจะปิดรูป
@@ -345,6 +345,41 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   // แผงเลือกหมวดหมู่ (เปิดจากปุ่ม 3 ขีด)
   const [showCategoryMenu, setShowCategoryMenu] = useState(false);
+
+  // ── แบนเนอร์สไลด์หัวจอ (หลังบ้าน > ตั้งค่าแบนเนอร์) ──
+  const banner = useMemo(() => resolveBanner(settings), [settings]);
+  // ค้างจอ/ปุ่มปิด ใช้เมื่อมีรูปแบนเนอร์จริง — เหลือแต่โลโก้ = หัวร้านธรรมดาแบบเดิม
+  const bannerPromo = hasPromoSlides(banner);
+  const bannerClosable = bannerPromo && banner.closable;
+  const bannerSticky = bannerPromo && banner.sticky;
+  // ลูกค้ากดปิดแล้ว ไม่โผล่อีกจนกว่าจะเปิดหน้าใหม่ (สแกน QR ใหม่)
+  const [bannerClosed, setBannerClosed] = useState(() => {
+    try { return sessionStorage.getItem(BANNER_CLOSED_KEY) === '1'; } catch { return false; }
+  });
+  const closeBanner = () => {
+    setBannerClosed(true);
+    try { sessionStorage.setItem(BANNER_CLOSED_KEY, '1'); } catch { /* โหมดส่วนตัวเขียนไม่ได้ — ปิดเฉพาะรอบนี้ */ }
+  };
+  const bannerShown = activeSlides(banner).length > 0 && !(bannerClosed && bannerClosable);
+  // กดแบนเนอร์ที่ลิงก์ไปหมวดเมนูตั้งแต่จอแรก → จำไว้ก่อน เลือกทานที่ร้าน/ห่อกลับบ้านแล้วค่อยพาไป (ราคาสองแบบไม่เท่ากัน)
+  const [pendingCat, setPendingCat] = useState('');
+  // ความสูงแบนเนอร์ที่ค้างอยู่บนจอ — แถบหมวดหมู่ต้องเกาะต่อใต้แบนเนอร์ และเลื่อนไปหมวดแล้วหัวข้อไม่โดนบัง
+  const bannerBoxRef = useRef(null);
+  const [bannerH, setBannerH] = useState(0);
+  useEffect(() => {
+    const el = bannerBoxRef.current;
+    if (!el) { setBannerH(0); return; }
+    const measure = () => setBannerH(el.offsetHeight || 0);
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [orderType, screen, bannerShown, bannerSticky]);
+  const stickyBannerH = bannerSticky && bannerShown ? bannerH : 0;
 
 
   // PromptPay QR configurations
@@ -866,7 +901,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       window.removeEventListener('resize', measure);
       window.removeEventListener('orientationchange', measure);
     };
-  }, [lang, menuSections.length, screen]);
+  }, [lang, menuSections.length, screen, orderType]); // orderType: แถบหมวดหมู่เพิ่งโผล่หลังเลือกทานที่ร้าน/ห่อกลับบ้าน
 
   // หมวดที่เลือกอยู่หายไปจากเมนู (ร้านลบ/ปิดขาย) ให้กลับไปหมวดแรกที่ยังมีของ
   useEffect(() => {
@@ -875,7 +910,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     }
   }, [menuSections, activeCategory]);
 
-  const scrollOffset = catBarH + 8;
+  const scrollOffset = stickyBannerH + catBarH + 8;
 
   const scrollToCategory = (slug) => {
     setActiveCategory(slug);
@@ -886,6 +921,23 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   };
+
+  // กดแบนเนอร์ที่ลิงก์ไปหมวดเมนู
+  const openBannerCategory = (slug) => {
+    if (!orderType) { setPendingCat(slug); return; }
+    if (menuSections.some(section => section.slug === slug)) scrollToCategory(slug);
+  };
+  // เลือกทานที่ร้าน/ห่อกลับบ้านแล้ว → พาไปหมวดที่กดค้างไว้จากจอแรก
+  useEffect(() => {
+    // รอเมนูโหลดก่อน — ถ้าโหลดแล้วไม่มีหมวดนี้ (ร้านปิดหมวด/ไม่มีราคาห่อกลับบ้าน) ก็เลิกรอเฉย ๆ
+    if (!pendingCat || !orderType || menuSections.length === 0) return;
+    const slug = pendingCat;
+    const timer = setTimeout(() => {
+      if (menuSections.some(section => section.slug === slug)) scrollToCategory(slug);
+      setPendingCat('');
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [pendingCat, orderType, menuSections]);
 
   // เลื่อนอ่านไปถึงหมวดไหน ให้ปุ่มด้านบนโชว์ชื่อหมวดนั้น ลูกค้าจะได้รู้ว่าอยู่ตรงไหนของเมนู
   useEffect(() => {
@@ -1010,8 +1062,17 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   };
 
 
+  const renderBanner = (maxWidth) => (
+    <KioskBanner banner={banner} lang={lang} maxWidth={maxWidth}
+      joinUrl={joinUrl} onMember={() => setJoinOpened(true)}
+      onCategory={openBannerCategory}
+      onClose={bannerClosable ? closeBanner : undefined} />
+  );
+  const captionStyle = { textAlign: 'center', color: '#ea580c', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 };
+
   // ── จอแรก: ทานที่ร้าน / ห่อกลับบ้าน ──
   if (!orderType) {
+    const pendingCatInfo = pendingCat ? categories.find(cat => cat.slug === pendingCat) : null;
     const bigBtn = {
       display: 'flex', alignItems: 'center', gap: '1rem', width: '100%', textAlign: 'left',
       padding: '1.25rem', borderRadius: 18, border: '2px solid #e2e8f0',
@@ -1027,12 +1088,27 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           </button>
         </div>
 
-        {/* โลโก้ร้านเต็มความกว้าง */}
-        <img src={LOGO_WIDE} alt={lang === 'th' ? 'ข้าวมันไก่หำไหล' : 'Hum Lai Chicken Rice'}
-          style={{ display: 'block', width: '100%', maxWidth: 340, height: 'auto', margin: '0.35rem auto 0.2rem' }} />
-        <div style={{ textAlign: 'center', color: '#ea580c', fontWeight: 700, fontSize: '0.85rem', marginBottom: '1.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-          <Utensils size={14} /> {lang === 'th' ? 'สั่งอาหารด้วยตนเอง' : 'Self-ordering'}
-        </div>
+        {/* แบนเนอร์สไลด์ (โลโก้ร้าน + รูปโปรโมชัน) — ตั้งค่าที่หลังบ้าน */}
+        {bannerShown && (
+          <div ref={bannerBoxRef} style={bannerSticky
+            ? { position: 'sticky', top: 0, zIndex: 60, background: '#ffffff', padding: '0.35rem 0 0.3rem' }
+            : { padding: '0.35rem 0 0.2rem' }}>
+            {renderBanner(bannerPromo ? 448 : 340)}
+          </div>
+        )}
+        {banner.showCaption && (
+          <div style={{ ...captionStyle, fontSize: '0.85rem' }}>
+            <Utensils size={14} /> {lang === 'th' ? 'สั่งอาหารด้วยตนเอง' : 'Self-ordering'}
+          </div>
+        )}
+        {pendingCat && (
+          <div role="status" style={{ marginTop: '0.6rem', background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 12, padding: '0.55rem 0.75rem', fontSize: '0.88rem', fontWeight: 700, textAlign: 'center' }}>
+            {lang === 'th'
+              ? `เลือกทานที่ร้านหรือห่อกลับบ้านก่อน แล้วจะพาไปที่${pendingCatInfo ? `หมวด ${pendingCatInfo.name}` : 'เมนูที่เลือก'}`
+              : `Choose dine in or take away first — then we'll take you to ${pendingCatInfo ? (pendingCatInfo.nameEn || pendingCatInfo.name) : 'that menu'}`}
+          </div>
+        )}
+        <div style={{ height: '1.6rem' }} />
 
         {crmOn && (
           <div style={{ border: '2px solid ' + (member ? '#86efac' : '#fed7aa'), background: member ? '#f0fdf4' : '#fff7ed', borderRadius: 18, padding: '1rem', marginBottom: '1.4rem' }}>
@@ -1630,13 +1706,15 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       // เผื่อที่ให้แถบตะกร้าลอย / แถบปุ่มติดล่าง + แถบ home ของ iPhone
       paddingBottom: page === 'menu' ? 'calc(110px + env(safe-area-inset-bottom))' : 'calc(170px + env(safe-area-inset-bottom))',
       WebkitTapHighlightColor: 'transparent',
-      overflowX: 'hidden'
+      // clip (ไม่ใช่ hidden) — hidden ทำให้กล่องนี้กลายเป็นกรอบเลื่อน แถบที่ตั้ง sticky ข้างใน
+      // (แบนเนอร์ แถบหมวดหมู่ แถบบนของหน้าตะกร้า) จะไม่เกาะจอตอนเลื่อนหน้า
+      overflowX: 'clip'
     }}>
 
       {/* ─── หน้า 1: เมนู — ซ่อนไว้ (ไม่ถอดออก) ตอนอยู่หน้าตะกร้า/ชำระเงิน กลับมาแล้วอยู่ที่เดิม ─── */}
       <div style={{ display: page === 'menu' ? 'block' : 'none' }}>
         {/* หัวร้าน: โลโก้เต็มความกว้าง */}
-        <header style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: '0.6rem 0.9rem 0.75rem' }}>
+        <header style={{ background: '#ffffff', padding: '0.6rem 0.9rem 0.2rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.4rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', minWidth: 0 }}>
               <div style={{
@@ -1666,19 +1744,31 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               <Globe size={13} /> {th ? 'TH' : 'EN'}
             </button>
           </div>
-          <img src={LOGO_WIDE} alt={th ? 'ข้าวมันไก่หำไหล' : 'Hum Lai Chicken Rice'}
-            style={{ display: 'block', width: '100%', maxWidth: 330, height: 'auto', margin: '0.45rem auto 0.15rem' }} />
-          <div style={{ textAlign: 'center', color: '#ea580c', fontWeight: 700, fontSize: 'clamp(0.72rem, 3vw, 0.82rem)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-            <Utensils size={13} style={{ flexShrink: 0 }} />
-            {th ? 'สั่งอาหารด้วยตนเอง · เลือกใส่ตะกร้า แล้วค่อยชำระเงิน' : 'Self-order · add to cart, then pay'}
-          </div>
         </header>
+
+        {/* แบนเนอร์สไลด์ — ตั้งให้ค้างจอได้ที่หลังบ้าน (แถบหมวดหมู่จะเกาะต่อใต้แบนเนอร์) */}
+        {bannerShown && (
+          <div ref={bannerBoxRef} style={{
+            ...(bannerSticky ? { position: 'sticky', top: 0, zIndex: 96 } : {}),
+            background: '#ffffff', padding: '0.45rem 0.9rem 0.35rem'
+          }}>
+            {renderBanner(bannerPromo ? 448 : 330)}
+          </div>
+        )}
+        <div style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', padding: banner.showCaption ? '0.1rem 0.9rem 0.7rem' : '0 0 0.35rem' }}>
+          {banner.showCaption && (
+            <div style={{ ...captionStyle, fontSize: 'clamp(0.72rem, 3vw, 0.82rem)' }}>
+              <Utensils size={13} style={{ flexShrink: 0 }} />
+              {th ? 'สั่งอาหารด้วยตนเอง · เลือกใส่ตะกร้า แล้วค่อยชำระเงิน' : 'Self-order · add to cart, then pay'}
+            </div>
+          )}
+        </div>
 
         {/* ─── แถบหมวดหมู่ (3 ขีด) — กดแล้วเลื่อนไปยังหมวดนั้นในหน้าเดียวกัน ─── */}
         <div
           ref={catBarRef}
           style={{
-            position: 'sticky', top: 0, zIndex: 95,
+            position: 'sticky', top: stickyBannerH, zIndex: 95,
             background: '#f8fafc', padding: '0.5rem 1rem 0.6rem'
           }}
         >

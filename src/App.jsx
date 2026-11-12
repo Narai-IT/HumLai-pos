@@ -28,6 +28,7 @@ const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
 const ManageBranches = lazy(() => import('./components/admin/ManageBranches'));
 const ManageBranchMenu = lazy(() => import('./components/admin/ManageBranchMenu'));
 const ManageSettings = lazy(() => import('./components/admin/ManageSettings'));
+const ManageBanner = lazy(() => import('./components/admin/ManageBanner'));
 const ManageStock = lazy(() => import('./components/admin/ManageStock'));
 const ManageBOM = lazy(() => import('./components/admin/ManageBOM'));
 const Reports = lazy(() => import('./components/admin/Reports'));
@@ -1747,6 +1748,7 @@ function App() {
           <Route path="promotions" element={<ManagePromotions />} />
           <Route path="printers" element={isAdmin ? <ManagePrinters branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
+          <Route path="banner" element={isAdmin ? <ManageBanner categories={allCategories.length > 0 ? allCategories : categories} /> : <Navigate to="/admin" replace />} />
           <Route path="bom" element={isAdmin ? <ManageBOM /> : <Navigate to="/admin" replace />} />
           <Route path="stock" element={<ManageStock branchId={tablesBranch} branches={branches} canPickBranch={isAdmin} />} />
           <Route path="reports" element={(isAdmin || isCashier) ? <Reports allMenu={allMenu} isAdmin={isAdmin} branch={branch} users={users} userName={currentUser?.username || ''} /> : <Navigate to="/admin" replace />} />
