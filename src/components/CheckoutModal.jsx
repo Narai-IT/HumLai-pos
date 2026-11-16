@@ -21,8 +21,9 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
   return { subtotal, discountAmount, afterDiscount, sc, vat, grand: afterDiscount + sc + vat };
 };
 
-// รหัสจาก QR บัตรสมาชิก (QR.xxx) หรือ QR คูปอง (CP.xxx) เท่านั้น
-const isQrCode = (s) => /^(QR|CP)\.\S{4,}$/i.test(String(s || '').trim());
+// รหัสจาก QR ในบัตรสมาชิก LINE เท่านั้น: อักษร 2 ตัว + จุด เช่น QR.xxx (บัตรสมาชิก) CQ.xxx (QR คูปอง)
+// เบอร์โทร (ตัวเลข) และเลขสมาชิก (MB-xxxxxxx) ไม่เข้ารูปแบบนี้ → พิมพ์เองไม่ได้
+const isQrCode = (s) => /^[A-Z]{2}\.\S{4,}$/i.test(String(s || '').trim());
 
 // เครื่องยิง QR ส่งเป็นปุ่มคีย์บอร์ด · ถ้าเครื่องตั้งภาษาไทยอยู่ e.key จะกลายเป็นอักษรไทย
 // → แปลงจากตำแหน่งปุ่ม (e.code) ตามแป้นอังกฤษแทน ไม่ต้องสลับภาษาก่อนยิง
@@ -62,7 +63,7 @@ const CheckoutModal = ({
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
-  // text = ผลจากกล้อง/เครื่องยิง QR · QR คูปอง (CP.xxx) ได้ทั้งสมาชิกและคูปองที่ใช้กับบิลนี้
+  // text = ผลจากกล้อง/เครื่องยิง QR · QR คูปอง (CQ.xxx) ได้ทั้งสมาชิกและคูปองที่ใช้กับบิลนี้
   const findMember = async (text) => {
     const q = String(text || '').trim();
     if (!q || memberBusy) return;
@@ -82,7 +83,7 @@ const CheckoutModal = ({
   const findRef = useRef(findMember);
   useEffect(() => { findRef.current = findMember; });
   const onScan = useCallback((text) => { setScanOpen(false); findRef.current(text); }, []);
-  // เครื่องยิง QR (พิมพ์เป็นคีย์บอร์ดเร็วมากแล้วกด Enter) · คนพิมพ์เองช้ากว่า → ไม่นับ และรับเฉพาะรหัส QR (QR./CP.)
+  // เครื่องยิง QR (พิมพ์เป็นคีย์บอร์ดเร็วมากแล้วกด Enter) · คนพิมพ์เองช้ากว่า → ไม่นับ และรับเฉพาะรหัส QR (เช่น QR./CQ.)
   useEffect(() => {
     // ทำงานตลอดในหน้าสรุปบิล แม้เปิดหน้าต่างกล้องค้างไว้ (เครื่องที่ไม่มีกล้องก็ยิงได้)
     if (!crmOn || paymentStep !== 'summary') return undefined;
