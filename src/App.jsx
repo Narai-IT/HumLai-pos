@@ -1833,8 +1833,6 @@ function App() {
             onClose={() => setIsCheckoutOpen(false)}
             onComplete={handleCheckoutComplete}
             settings={checkoutSettings}
-            discounts={posDiscounts}
-            categories={allCategories.length > 0 ? allCategories : categories}
             initialDiscount={checkoutDiscount}
             initialMember={checkoutCrm ? checkoutCrm.member : null}
             initialCoupon={checkoutCrm ? checkoutCrm.coupon : null}

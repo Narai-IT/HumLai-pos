@@ -25,13 +25,11 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
-  settings = {}, discounts = [], categories = [], initialDiscount = null, branchId = '', menu = [],
+  // ส่วนลดเลือกที่หน้าขาย (ปุ่มสแกนสมาชิก / ใช้ส่วนลด) ส่งมาเป็น initialDiscount · หน้านี้ไม่มีหน้าเลือกส่วนลดแล้ว
+  settings = {}, initialDiscount = null, branchId = '', menu = [],
   // สมาชิกที่สแกนไว้แล้วที่หน้าขาย (+ QR คูปองที่ยิงมาพร้อมกัน) → ไม่ต้องสแกนซ้ำ
   initialMember = null, initialCoupon = null
 }) => {
-  // ส่วนลดเก็บเป็น "รหัสหมวดหมู่" (HL#####) ซึ่งอ่านไม่รู้เรื่องถ้าโชว์ดิบ ๆ
-  // แปลงเป็นชื่อหมวดให้แคชเชียร์อ่านออกก่อนแสดง
-  const categoryLabel = (slug) => categories.find(c => c.slug === slug)?.name || slug;
   const [paymentStep, setPaymentStep] = useState('summary');
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
   // (ต้องประกาศก่อนส่วนคูปองสมาชิก ที่ใช้ค่านี้ใน useEffect ด้านล่าง ไม่งั้นพังตอนเปิดหน้าชำระเงิน)
@@ -598,150 +596,11 @@ const CheckoutModal = ({
               </div>
             )}
             <button
-              onClick={() => setPaymentStep('discount')}
-              className="confirm-btn"
-              style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}
-            >
-              {lang === 'th' ? `ดำเนินการชำระเงิน ฿${grand.toLocaleString()}` : `Proceed to Payment ฿${grand.toLocaleString()}`}
-              <ChevronRight size={18} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '6px' }} />
-            </button>
-          </>
-        )}
-
-        {/* ── Step 1.5: เลือกส่วนลด ── */}
-        {paymentStep === 'discount' && (
-          <>
-            <div className="modal-header">
-              <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontWeight: '800' }}>
-                <Tag size={20} color="#ea580c" />
-                {lang === 'th' ? 'เลือกส่วนลด' : 'Select Discount'}
-              </h2>
-              <button className="close-btn" onClick={() => setPaymentStep('summary')}><ArrowLeft size={22} color="#0f172a" /></button>
-            </div>
-
-            {/* ยอดปัจจุบัน */}
-            <div style={{
-              background: '#f8fafc', border: '1px solid #e2e8f0',
-              borderRadius: '10px', padding: '0.7rem 1rem', marginBottom: '1.25rem',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-            }}>
-              <span style={{ color: '#475569', fontSize: '0.9rem', fontWeight: '600' }}>
-                {lang === 'th' ? 'ยอดอาหาร' : 'Subtotal'}
-              </span>
-              <span style={{ fontWeight: '800', fontSize: '1.2rem', color: '#0f172a' }}>
-                ฿{subtotal.toLocaleString()}
-              </span>
-            </div>
-
-            {/* ไม่ใช้ส่วนลด */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginBottom: '1.25rem' }}>
-              <button
-                onClick={() => setSelectedDiscount(null)}
-                style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0.9rem 1.1rem', borderRadius: '12px', cursor: 'pointer',
-                  border: `2px solid ${selectedDiscount === null ? '#0f172a' : '#cbd5e1'}`,
-                  background: selectedDiscount === null ? '#f1f5f9' : '#ffffff',
-                  color: '#0f172a', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%', textAlign: 'left'
-                }}
-              >
-                <span style={{ fontWeight: '700', fontSize: '0.95rem', color: '#0f172a' }}>
-                  {lang === 'th' ? '❌ ไม่ใช้ส่วนลด' : '❌ No Discount'}
-                </span>
-                {selectedDiscount === null && (
-                  <CheckCircle size={18} color="#16a34a" />
-                )}
-              </button>
-
-              {needMember && discounts.length > 0 && (
-                <div role="note" style={{ padding: '0.9rem 1rem', borderRadius: '12px', border: '1px dashed #f59e0b', background: '#fffbeb', color: '#92400e', fontWeight: 700, fontSize: '0.9rem' }}>
-                  {lang === 'th' ? '🔒 ใช้ส่วนลดได้เฉพาะสมาชิก · กลับไปหน้าสรุปบิลแล้วสแกน QR บัตรสมาชิกก่อน' : '🔒 Discounts are for members only · go back and scan the member card first'}
-                  <button type="button" onClick={() => setPaymentStep('summary')} style={{ display: 'block', marginTop: '0.5rem', border: '1px solid #92400e', background: '#fff', color: '#92400e', borderRadius: '8px', padding: '6px 12px', fontWeight: 800, cursor: 'pointer' }}>
-                    {lang === 'th' ? 'ไปสแกนสมาชิก' : 'Scan member'}
-                  </button>
-                </div>
-              )}
-              {discounts.length === 0 ? (
-                <div style={{
-                  textAlign: 'center', padding: '1.5rem', color: '#64748b', fontSize: '0.88rem', fontWeight: '600',
-                  border: '1px dashed #cbd5e1', borderRadius: '10px', background: '#f8fafc'
-                }}>
-                  {lang === 'th' ? 'ยังไม่มีส่วนลด (ตั้งค่าได้ที่ Admin → ส่วนลด)' : 'No discounts configured (Admin → Discounts)'}
-                </div>
-              ) : (
-                discounts.map(d => {
-                  if (needMember) return null;
-                  const isSelected = selectedDiscount?.id === d.id;
-                  const previewAmount = Math.min(discountFor(d), subtotal);
-                  const previewGrand = subtotal - previewAmount;
-                  return (
-                    <button
-                      key={d.id}
-                      onClick={() => setSelectedDiscount(isSelected ? null : d)}
-                      style={{
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        padding: '0.9rem 1.1rem', borderRadius: '12px', cursor: 'pointer',
-                        border: `2px solid ${isSelected ? '#ef4444' : '#cbd5e1'}`,
-                        background: isSelected ? '#fef2f2' : '#ffffff',
-                        color: '#0f172a', fontFamily: 'inherit', transition: 'all 0.15s', width: '100%', textAlign: 'left'
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
-                          <Tag size={15} color="#ef4444" />
-                          <span style={{ fontWeight: '700', fontSize: '0.97rem', color: '#0f172a' }}>{d.name}</span>
-                          <span style={{
-                            padding: '1px 8px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: '700',
-                            background: d.type === 'baht' ? '#dcfce7' : '#dbeafe',
-                            color: d.type === 'baht' ? '#15803d' : '#1d4ed8'
-                          }}>
-                            {d.type === 'baht' ? `-฿${Number(d.value).toLocaleString()}` : `-${d.value}%`}
-                          </span>
-                        </div>
-                        {d.categories && d.categories.length > 0 && (
-                          <div style={{ fontSize: '0.78rem', color: '#475569', paddingLeft: '23px', fontWeight: '500' }}>
-                            {lang === 'th' ? 'ใช้กับ: ' : 'Applies to: '}
-                            {d.categories.map(categoryLabel).join(', ')}
-                          </div>
-                        )}
-                        <div style={{ fontSize: '0.82rem', color: '#64748b', paddingLeft: '23px', marginTop: '2px', fontWeight: '500' }}>
-                          {lang === 'th' ? 'ประหยัด ' : 'Save '}
-                          <strong style={{ color: '#ef4444' }}>฿{previewAmount.toLocaleString()}</strong>
-                          {lang === 'th' ? '  →  ยอดสุทธิ ' : '  →  Net '}
-                          <strong style={{ color: '#ea580c' }}>฿{previewGrand.toLocaleString()}</strong>
-                        </div>
-                      </div>
-                      {isSelected && <CheckCircle size={20} color="#ef4444" style={{ flexShrink: 0, marginLeft: '0.5rem' }} />}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-
-            {/* ยอดหลังลด preview */}
-            {hasDiscount && (
-              <div style={{
-                background: '#fef2f2', border: '1px solid #fecaca',
-                borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1.25rem',
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-              }}>
-                <span style={{ color: '#dc2626', fontWeight: '700', fontSize: '0.9rem' }}>
-                  {lang === 'th' ? `ส่วนลด: ${selectedDiscount.name}` : `Discount: ${selectedDiscount.name}`}
-                </span>
-                <span style={{ color: '#dc2626', fontWeight: '800', fontSize: '1.1rem' }}>
-                  -฿{discountAmount.toLocaleString()}
-                </span>
-              </div>
-            )}
-
-            <button
               onClick={() => setPaymentStep('payment_method')}
               className="confirm-btn"
               style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}
             >
-              {lang === 'th'
-                ? `ชำระเงิน ฿${grand.toLocaleString()}`
-                : `Pay ฿${grand.toLocaleString()}`}
+              {lang === 'th' ? `ดำเนินการชำระเงิน ฿${grand.toLocaleString()}` : `Proceed to Payment ฿${grand.toLocaleString()}`}
               <ChevronRight size={18} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '6px' }} />
             </button>
           </>
@@ -752,7 +611,7 @@ const CheckoutModal = ({
           <>
             <div className="modal-header">
               <h2 className="modal-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? 'วิธีชำระเงิน' : 'Payment Method'}</h2>
-              <button className="close-btn" onClick={() => setPaymentStep('discount')}><ArrowLeft size={22} color="#0f172a" /></button>
+              <button className="close-btn" onClick={() => setPaymentStep('summary')}><ArrowLeft size={22} color="#0f172a" /></button>
             </div>
 
             <PriceBreakdown compact />
