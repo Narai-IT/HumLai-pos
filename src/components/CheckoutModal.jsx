@@ -24,6 +24,24 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
 // รหัสจาก QR บัตรสมาชิก (QR.xxx) หรือ QR คูปอง (CP.xxx) เท่านั้น
 const isQrCode = (s) => /^(QR|CP)\.\S{4,}$/i.test(String(s || '').trim());
 
+// เครื่องยิง QR ส่งเป็นปุ่มคีย์บอร์ด · ถ้าเครื่องตั้งภาษาไทยอยู่ e.key จะกลายเป็นอักษรไทย
+// → แปลงจากตำแหน่งปุ่ม (e.code) ตามแป้นอังกฤษแทน ไม่ต้องสลับภาษาก่อนยิง
+const US_KEYS = {
+  Minus: ['-', '_'], Equal: ['=', '+'], BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backslash: ['\\', '|'],
+  Semicolon: [';', ':'], Quote: ["'", '"'], Comma: [',', '<'], Period: ['.', '>'], Slash: ['/', '?'], Backquote: ['`', '~'],
+  Digit1: ['1', '!'], Digit2: ['2', '@'], Digit3: ['3', '#'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+  Digit6: ['6', '^'], Digit7: ['7', '&'], Digit8: ['8', '*'], Digit9: ['9', '('], Digit0: ['0', ')'],
+  NumpadDecimal: ['.', '.'], NumpadSubtract: ['-', '-'], NumpadAdd: ['+', '+'], NumpadDivide: ['/', '/'], NumpadMultiply: ['*', '*']
+};
+const scannerChar = (e) => {
+  if (e.key && e.key.length === 1 && e.key.charCodeAt(0) < 128) return e.key;
+  const c = e.code || '';
+  if (/^Key[A-Z]$/.test(c)) { const up = e.shiftKey !== (e.getModifierState && e.getModifierState('CapsLock')); return up ? c[3] : c[3].toLowerCase(); }
+  if (/^Numpad[0-9]$/.test(c)) return c[6];
+  const k = US_KEYS[c];
+  return k ? k[e.shiftKey ? 1 : 0] : '';
+};
+
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
@@ -72,12 +90,13 @@ const CheckoutModal = ({
       const now = Date.now();
       if (now - last > 60) buf = '';
       last = now;
-      if (e.key === 'Enter') {
+      if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
         const code = buf; buf = '';
         if (isQrCode(code)) { e.preventDefault(); findRef.current(code); }
         return;
       }
-      if (e.key.length === 1) buf += e.key;
+      const ch = scannerChar(e);
+      if (ch) buf += ch;
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
