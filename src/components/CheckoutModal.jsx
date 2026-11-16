@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { X, CheckCircle, ArrowLeft, CreditCard, Ticket, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound, QrCode } from 'lucide-react';
 import { crmEnabled, lookupMember, maskPhone, crmCall, newCouponRef } from '../utils/crm';
 import QrScanner from './QrScanner';
+import { isQrCode, scannerChar, useScannerWedge } from '../utils/qrScan';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
@@ -21,34 +22,12 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
   return { subtotal, discountAmount, afterDiscount, sc, vat, grand: afterDiscount + sc + vat };
 };
 
-// รหัสจาก QR ในบัตรสมาชิก LINE เท่านั้น: อักษร 2 ตัว + จุด เช่น QR.xxx (บัตรสมาชิก) CQ.xxx (QR คูปอง)
-// เบอร์โทร (ตัวเลข) และเลขสมาชิก (MB-xxxxxxx) ไม่เข้ารูปแบบนี้ → พิมพ์เองไม่ได้
-const isQrCode = (s) => /^[A-Z]{2}\.\S{4,}$/i.test(String(s || '').trim());
-
-// เครื่องยิง QR ส่งเป็นปุ่มคีย์บอร์ด · ถ้าเครื่องตั้งภาษาไทยอยู่ e.key จะกลายเป็นอักษรไทย
-// → แปลงจากตำแหน่งปุ่ม (e.code) ตามแป้นอังกฤษแทน ไม่ต้องสลับภาษาก่อนยิง
-const US_KEYS = {
-  Minus: ['-', '_'], Equal: ['=', '+'], BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backslash: ['\\', '|'],
-  Semicolon: [';', ':'], Quote: ["'", '"'], Comma: [',', '<'], Period: ['.', '>'], Slash: ['/', '?'], Backquote: ['`', '~'],
-  Digit1: ['1', '!'], Digit2: ['2', '@'], Digit3: ['3', '#'], Digit4: ['4', '$'], Digit5: ['5', '%'],
-  Digit6: ['6', '^'], Digit7: ['7', '&'], Digit8: ['8', '*'], Digit9: ['9', '('], Digit0: ['0', ')'],
-  NumpadDecimal: ['.', '.'], NumpadSubtract: ['-', '-'], NumpadAdd: ['+', '+'], NumpadDivide: ['/', '/'], NumpadMultiply: ['*', '*']
-};
-// ใช้ตำแหน่งปุ่ม (e.code) ก่อนเสมอ เพราะแป้นไทยบางปุ่มให้อักษรอังกฤษคนละตัว (เช่น ปุ่ม 2 = "/", ปุ่ม 3 = "-")
-// ตัวพิมพ์เล็ก/ใหญ่ดูจาก Shift ที่เครื่องยิงกด (ไม่ดู Caps Lock เพราะเครื่องยิงส่ง Shift ตามรหัสจริงอยู่แล้ว)
-const scannerChar = (e) => {
-  const c = e.code || '';
-  if (/^Key[A-Z]$/.test(c)) return e.shiftKey ? c[3] : c[3].toLowerCase();
-  if (/^Numpad[0-9]$/.test(c)) return c[6];
-  const k = US_KEYS[c];
-  if (k) return k[e.shiftKey ? 1 : 0];
-  return e.key && e.key.length === 1 && e.key.charCodeAt(0) < 128 ? e.key : '';
-};
-
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
-  settings = {}, discounts = [], categories = [], initialDiscount = null, branchId = '', menu = []
+  settings = {}, discounts = [], categories = [], initialDiscount = null, branchId = '', menu = [],
+  // สมาชิกที่สแกนไว้แล้วที่หน้าขาย (+ QR คูปองที่ยิงมาพร้อมกัน) → ไม่ต้องสแกนซ้ำ
+  initialMember = null, initialCoupon = null
 }) => {
   // ส่วนลดเก็บเป็น "รหัสหมวดหมู่" (HL#####) ซึ่งอ่านไม่รู้เรื่องถ้าโชว์ดิบ ๆ
   // แปลงเป็นชื่อหมวดให้แคชเชียร์อ่านออกก่อนแสดง
@@ -59,7 +38,7 @@ const CheckoutModal = ({
   const [selectedDiscount, setSelectedDiscount] = useState(initialDiscount);
   // ── ระบบสมาชิก: หน้าพนักงานรับเฉพาะสแกน QR บัตรสมาชิก/คูปอง (กล้อง หรือเครื่องยิง QR) · พิมพ์เบอร์/เลขสมาชิกไม่ได้ ──
   const [crmOn, setCrmOn] = useState(false);
-  const [member, setMember] = useState(null);
+  const [member, setMember] = useState(initialMember);
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
@@ -83,28 +62,8 @@ const CheckoutModal = ({
   const findRef = useRef(findMember);
   useEffect(() => { findRef.current = findMember; });
   const onScan = useCallback((text) => { setScanOpen(false); findRef.current(text); }, []);
-  // เครื่องยิง QR (พิมพ์เป็นคีย์บอร์ดเร็วมากแล้วกด Enter) · คนพิมพ์เองช้ากว่า → ไม่นับ และรับเฉพาะรหัส QR (เช่น QR./CQ.)
-  useEffect(() => {
-    // ทำงานตลอดในหน้าสรุปบิล แม้เปิดหน้าต่างกล้องค้างไว้ (เครื่องที่ไม่มีกล้องก็ยิงได้)
-    if (!crmOn || paymentStep !== 'summary') return undefined;
-    let buf = ''; let last = 0;
-    const onKey = (e) => {
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      const now = Date.now();
-      if (now - last > 60) buf = '';
-      last = now;
-      if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
-        const code = buf; buf = '';
-        if (isQrCode(code)) { e.preventDefault(); setScanOpen(false); findRef.current(code); }
-        return;
-      }
-      const ch = scannerChar(e);
-      if (ch) buf += ch;
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [crmOn, paymentStep]);
+  // เครื่องยิง QR (พิมพ์เป็นคีย์บอร์ดเร็วมากแล้วกด Enter) · ทำงานตลอดในหน้าสรุปบิล แม้เปิดหน้าต่างกล้องค้างไว้
+  useScannerWedge(crmOn && paymentStep === 'summary', (code) => { setScanOpen(false); findRef.current(code); });
 
   // ── คูปองสมาชิก / แลกแต้ม: คูปองที่เลือกถูกจองไว้กับบิลนี้ (couponRef) จนกว่าจะจ่ายหรือเปลี่ยนใจ ──
   const couponRef = useRef(newCouponRef('pos'));
@@ -141,6 +100,14 @@ const CheckoutModal = ({
     if (!res.success) setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ');
     loadWallet(m);
   };
+  // สมาชิกจากหน้าขาย: โหลดกระเป๋า (คูปองที่จองไว้กับบิล) และใช้คูปองที่ยิงมาจากหน้าขายครั้งเดียวตอนเปิดหน้าต่าง
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current || !initialMember) return;
+    startedRef.current = true;
+    if (initialCoupon && initialCoupon.usable) pickCoupon(initialCoupon, initialMember);   // pickCoupon โหลดกระเป๋าให้ด้วย
+    else { loadWallet(initialMember); if (initialCoupon && initialCoupon.reason) setWalletMsg(`คูปอง ${initialCoupon.code}: ${initialCoupon.reason}`); }
+  });   // ไม่ใส่ dependency: startedRef กันให้ทำครั้งเดียวตอนเปิดหน้าต่าง
   // ยกเลิกการแลกแต้ม → คืนแต้มเข้าบัตร (วันหมดอายุเดิม) และถอดออกจากบิล
   const cancelRedeem = async (c) => {
     if (couponBusy || !c.cancel) return;
@@ -170,6 +137,11 @@ const CheckoutModal = ({
   useEffect(() => () => {
     if (!completedRef.current) heldCoupons.current.forEach(id => crmCall('crmReleaseCoupon', { couponId: id, ref: couponRef.current, branchId }));
   }, [branchId]);
+  // ส่วนลดทุกแบบต้องสแกนสมาชิกก่อน (สาขาที่เชื่อมระบบสมาชิก) · ไม่มีสมาชิก = เอาส่วนลดร้านออก
+  const needMember = crmOn && !member;
+  useEffect(() => {
+    if (needMember && selectedDiscount && !selectedDiscount.crmCoupons) setSelectedDiscount(null);
+  }, [needMember, selectedDiscount]);
   const removeMember = () => {
     if (selectedDiscount && selectedDiscount.crmCoupons) setSelectedDiscount(null);
     setMember(null); setWallet(null); setWalletMsg('');
@@ -681,6 +653,14 @@ const CheckoutModal = ({
                 )}
               </button>
 
+              {needMember && discounts.length > 0 && (
+                <div role="note" style={{ padding: '0.9rem 1rem', borderRadius: '12px', border: '1px dashed #f59e0b', background: '#fffbeb', color: '#92400e', fontWeight: 700, fontSize: '0.9rem' }}>
+                  {lang === 'th' ? '🔒 ใช้ส่วนลดได้เฉพาะสมาชิก · กลับไปหน้าสรุปบิลแล้วสแกน QR บัตรสมาชิกก่อน' : '🔒 Discounts are for members only · go back and scan the member card first'}
+                  <button type="button" onClick={() => setPaymentStep('summary')} style={{ display: 'block', marginTop: '0.5rem', border: '1px solid #92400e', background: '#fff', color: '#92400e', borderRadius: '8px', padding: '6px 12px', fontWeight: 800, cursor: 'pointer' }}>
+                    {lang === 'th' ? 'ไปสแกนสมาชิก' : 'Scan member'}
+                  </button>
+                </div>
+              )}
               {discounts.length === 0 ? (
                 <div style={{
                   textAlign: 'center', padding: '1.5rem', color: '#64748b', fontSize: '0.88rem', fontWeight: '600',
@@ -690,6 +670,7 @@ const CheckoutModal = ({
                 </div>
               ) : (
                 discounts.map(d => {
+                  if (needMember) return null;
                   const isSelected = selectedDiscount?.id === d.id;
                   const previewAmount = Math.min(discountFor(d), subtotal);
                   const previewGrand = subtotal - previewAmount;

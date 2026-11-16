@@ -444,6 +444,7 @@ function App() {
   const [checkoutTotal, setCheckoutTotal] = useState(0);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutDiscount, setCheckoutDiscount] = useState(null);
+  const [checkoutCrm, setCheckoutCrm] = useState(null);
   const [showSalesSummaryModal, setShowSalesSummaryModal] = useState(false);
   const [showTaxInvoicePage, setShowTaxInvoicePage] = useState(false);
   const [salesSummaryMode, setSalesSummaryMode] = useState('daily'); // 'daily' | 'range'
@@ -1069,10 +1070,12 @@ function App() {
   // =============================================
   // NEW: Open checkout from table view
   // =============================================
-  const handleOpenCheckoutFromTable = (items, total, discount = null) => {
+  // crm = { member, coupon } สมาชิกที่สแกนไว้แล้วที่หน้าขาย → หน้าชำระเงินไม่ต้องสแกนซ้ำ
+  const handleOpenCheckoutFromTable = (items, total, discount = null, crm = null) => {
     setCheckoutItems(items);
     setCheckoutTotal(total);
     setCheckoutDiscount(discount);
+    setCheckoutCrm(crm);
     setIsCheckoutOpen(true);
   };
 
@@ -1630,6 +1633,7 @@ function App() {
         <Route path="/index" element={
           <PosSalesScreen
               lang={lang}
+              branchId={branchKey}
               setLang={setLang}
               tableNumber={tableNumber}
               onSelectTable={setTableNumber}
@@ -1832,6 +1836,8 @@ function App() {
             discounts={posDiscounts}
             categories={allCategories.length > 0 ? allCategories : categories}
             initialDiscount={checkoutDiscount}
+            initialMember={checkoutCrm ? checkoutCrm.member : null}
+            initialCoupon={checkoutCrm ? checkoutCrm.coupon : null}
             branchId={branchKey}
             users={users}
             currentUser={currentUser}
