@@ -82,7 +82,8 @@ const CheckoutModal = ({
   const onScan = useCallback((text) => { setScanOpen(false); findRef.current(text); }, []);
   // เครื่องยิง QR (พิมพ์เป็นคีย์บอร์ดเร็วมากแล้วกด Enter) · คนพิมพ์เองช้ากว่า → ไม่นับ และรับเฉพาะรหัส QR (QR./CP.)
   useEffect(() => {
-    if (!crmOn || paymentStep !== 'summary' || scanOpen) return undefined;
+    // ทำงานตลอดในหน้าสรุปบิล แม้เปิดหน้าต่างกล้องค้างไว้ (เครื่องที่ไม่มีกล้องก็ยิงได้)
+    if (!crmOn || paymentStep !== 'summary') return undefined;
     let buf = ''; let last = 0;
     const onKey = (e) => {
       const t = e.target;
@@ -92,7 +93,7 @@ const CheckoutModal = ({
       last = now;
       if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
         const code = buf; buf = '';
-        if (isQrCode(code)) { e.preventDefault(); findRef.current(code); }
+        if (isQrCode(code)) { e.preventDefault(); setScanOpen(false); findRef.current(code); }
         return;
       }
       const ch = scannerChar(e);
@@ -100,7 +101,7 @@ const CheckoutModal = ({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [crmOn, paymentStep, scanOpen]);
+  }, [crmOn, paymentStep]);
 
   // ── คูปองสมาชิก / แลกแต้ม: คูปองที่เลือกถูกจองไว้กับบิลนี้ (couponRef) จนกว่าจะจ่ายหรือเปลี่ยนใจ ──
   const couponRef = useRef(newCouponRef('pos'));
@@ -558,7 +559,7 @@ const CheckoutModal = ({
                       <QrCode size={18} /> {memberBusy ? '…' : (lang === 'th' ? 'สแกน QR บัตรสมาชิก / คูปอง' : 'Scan member / coupon QR')}
                     </button>
                     <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '6px' }}>
-                      {lang === 'th' ? 'ใช้กล้อง หรือเครื่องยิง QR ได้เลย · ไม่รับการพิมพ์เบอร์โทร/เลขสมาชิก' : 'Use the camera or a QR scanner · typing phone/member no. is not accepted'}
+                      {lang === 'th' ? 'มีเครื่องยิง QR: ยิงได้เลยไม่ต้องกดปุ่ม · ไม่มีเครื่องยิง: กดปุ่มเพื่อใช้กล้อง · พิมพ์เบอร์โทร/เลขสมาชิกไม่ได้' : 'With a QR scanner just scan — no need to press the button · without one, press to use the camera · typing phone/member no. is not accepted'}
                     </div>
                     {memberErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: '6px', fontWeight: 600 }}>{memberErr}</div>}
                   </>

@@ -44,7 +44,7 @@ const QrScanner = ({ open, onResult, onClose, title = 'สแกน QR' }) => {
 
     setErr('');
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setErr('เครื่องนี้เปิดกล้องจากหน้าเว็บไม่ได้ ใช้เครื่องยิงบาร์โค้ด หรือพิมพ์รหัสแทน');
+      setErr('เครื่องนี้เปิดกล้องจากหน้าเว็บไม่ได้ · ยิง QR ด้วยเครื่องยิงได้เลย');
       return undefined;
     }
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false })
@@ -56,8 +56,10 @@ const QrScanner = ({ open, onResult, onClose, title = 'สแกน QR' }) => {
         timer = setInterval(scan, 200);
       })
       .catch((e) => setErr(e && e.name === 'NotAllowedError'
-        ? 'ไม่ได้รับอนุญาตให้ใช้กล้อง กดอนุญาตกล้องในเบราว์เซอร์แล้วลองใหม่'
-        : 'เปิดกล้องไม่ได้: ' + ((e && e.message) || 'ไม่พบกล้อง')));
+        ? 'ไม่ได้รับอนุญาตให้ใช้กล้อง กดอนุญาตกล้องในเบราว์เซอร์แล้วลองใหม่ · หรือยิงด้วยเครื่องยิง QR ได้เลย'
+        : e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError')
+          ? 'เครื่องนี้ไม่มีกล้อง · ยิง QR ด้วยเครื่องยิงได้เลยตอนนี้ (ครั้งหน้าไม่ต้องกดปุ่มสแกน ยิงได้เลย)'
+          : 'เปิดกล้องไม่ได้: ' + ((e && e.message) || 'ไม่พบกล้อง') + ' · ยิงด้วยเครื่องยิง QR ได้เลย'));
 
     return () => {
       done = true;
