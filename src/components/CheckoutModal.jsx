@@ -33,13 +33,15 @@ const US_KEYS = {
   Digit6: ['6', '^'], Digit7: ['7', '&'], Digit8: ['8', '*'], Digit9: ['9', '('], Digit0: ['0', ')'],
   NumpadDecimal: ['.', '.'], NumpadSubtract: ['-', '-'], NumpadAdd: ['+', '+'], NumpadDivide: ['/', '/'], NumpadMultiply: ['*', '*']
 };
+// ใช้ตำแหน่งปุ่ม (e.code) ก่อนเสมอ เพราะแป้นไทยบางปุ่มให้อักษรอังกฤษคนละตัว (เช่น ปุ่ม 2 = "/", ปุ่ม 3 = "-")
+// ตัวพิมพ์เล็ก/ใหญ่ดูจาก Shift ที่เครื่องยิงกด (ไม่ดู Caps Lock เพราะเครื่องยิงส่ง Shift ตามรหัสจริงอยู่แล้ว)
 const scannerChar = (e) => {
-  if (e.key && e.key.length === 1 && e.key.charCodeAt(0) < 128) return e.key;
   const c = e.code || '';
-  if (/^Key[A-Z]$/.test(c)) { const up = e.shiftKey !== (e.getModifierState && e.getModifierState('CapsLock')); return up ? c[3] : c[3].toLowerCase(); }
+  if (/^Key[A-Z]$/.test(c)) return e.shiftKey ? c[3] : c[3].toLowerCase();
   if (/^Numpad[0-9]$/.test(c)) return c[6];
   const k = US_KEYS[c];
-  return k ? k[e.shiftKey ? 1 : 0] : '';
+  if (k) return k[e.shiftKey ? 1 : 0];
+  return e.key && e.key.length === 1 && e.key.charCodeAt(0) < 128 ? e.key : '';
 };
 
 const CheckoutModal = ({
