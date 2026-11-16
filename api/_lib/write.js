@@ -303,7 +303,7 @@ export async function insertOrder(data) {
       if (orderNo) {
         await queueBill(runner, branchId, billPayload({
           orderNumber: orderNo, memberId: data.memberId, paidTotal: p.grandTotal, storeDiscount: data.storeDiscount, staff: p.staff, channel: 'pos',
-          couponIds: data.couponIds, couponRef: data.couponRef, couponDiscount: data.couponDiscount,
+          couponIds: data.couponIds, couponRef: data.couponRef, couponDiscount: data.couponDiscount, vouchers: data.vouchers, voucherRef: data.voucherRef,
           rows: rows.filter(Array.isArray).map(r => ({ name: toText(r[4]), price: toNum(r[6]), qty: toNum(r[12]) }))
         }));
       }
@@ -312,7 +312,8 @@ export async function insertOrder(data) {
   });
   // สมาชิก: ส่งทันทีเพื่อเอาแต้มไปพิมพ์ลงใบเสร็จ (รอสั้น ๆ) · ส่งไม่ได้ก็อยู่ในคิว ส่งซ้ำเองภายหลัง
   if (result.success && result.orderNumber) {
-    if (data.memberId) {
+    // จ่ายด้วย Voucher ก็ส่งทันที ให้ CRM ตัด Voucher เป็นใช้แล้วเร็วที่สุด
+    if (data.memberId || (Array.isArray(data.vouchers) && data.vouchers.length)) {
       const crm = await sendBillNow(branchId, result.orderNumber);
       if (crm) result.crm = crm;
     }

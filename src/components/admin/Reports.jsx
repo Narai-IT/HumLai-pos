@@ -240,6 +240,7 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
       incomeByDay[day].cash     += Number(sd.cash)     || 0;
       incomeByDay[day].transfer += Number(sd.transfer) || 0;
       incomeByDay[day].card     += Number(sd.card)     || 0;
+      incomeByDay[day].other    += Number(sd.voucher)  || 0;   // Voucher → อื่นๆ
     } else {
       const m = (o.paymentMethod || '').toLowerCase();
       if (m.includes('สด') || m === 'cash')                                   incomeByDay[day].cash     += o.total;
