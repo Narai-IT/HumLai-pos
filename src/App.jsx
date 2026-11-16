@@ -1070,7 +1070,7 @@ function App() {
   // =============================================
   // NEW: Open checkout from table view
   // =============================================
-  // crm = { member, coupon } สมาชิกที่สแกนไว้แล้วที่หน้าขาย → หน้าชำระเงินไม่ต้องสแกนซ้ำ
+  // crm = { member, couponRef } สมาชิกและการจองคูปองที่ทำไว้แล้วที่หน้าขาย → หน้าชำระเงินไม่ต้องสแกนซ้ำ
   const handleOpenCheckoutFromTable = (items, total, discount = null, crm = null) => {
     setCheckoutItems(items);
     setCheckoutTotal(total);
@@ -1835,7 +1835,7 @@ function App() {
             settings={checkoutSettings}
             initialDiscount={checkoutDiscount}
             initialMember={checkoutCrm ? checkoutCrm.member : null}
-            initialCoupon={checkoutCrm ? checkoutCrm.coupon : null}
+            initialCouponRef={checkoutCrm ? checkoutCrm.couponRef : null}
             branchId={branchKey}
             users={users}
             currentUser={currentUser}
