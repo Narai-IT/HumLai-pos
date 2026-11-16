@@ -74,6 +74,8 @@ export async function lookupMember({ query: q, branchId, staff }) {
   const raw = String(q || '').trim();
   if (!raw) return { success: false, error: 'สแกน QR บัตรสมาชิก หรือพิมพ์เบอร์โทร / เลขสมาชิก' };
   if (!crmEnabled(branchId)) return { success: false, error: 'สาขานี้ยังไม่ได้เชื่อมระบบสมาชิก' };
+  // หน้าพนักงาน: รับเฉพาะรหัสจากการสแกน QR บัตรสมาชิก (QR.) หรือ QR คูปอง (CP.) · พิมพ์เบอร์/เลขสมาชิกไม่ได้
+  if (staff && !/^(QR|CP)\.\S{4,}$/i.test(raw)) return { success: false, error: 'ใช้ได้เฉพาะสแกน QR บัตรสมาชิก/คูปองจากบัตรสมาชิก LINE ของลูกค้า' };
   if (rateLimited(staff ? 120 : 30)) return { success: false, error: 'ค้นหาถี่เกินไป ลองใหม่ในอีกสักครู่' };
   const body = raw.startsWith('QR.') ? { qrToken: raw } : { query: raw };
   const r = await call('/api/pos/members/resolve', body, branchId);
