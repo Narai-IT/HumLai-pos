@@ -1162,6 +1162,9 @@ function App() {
       couponIds: printInfo.crmCoupon ? printInfo.crmCoupon.ids : undefined,
       couponRef: printInfo.crmCoupon ? printInfo.crmCoupon.ref : undefined,
       couponDiscount: printInfo.crmCoupon ? printInfo.crmCoupon.discount : undefined,
+      // Voucher ที่ใช้จ่ายบิลนี้ (ใช้แทนเงิน) → ระบบสมาชิกตัดเป็นใช้แล้วตอนบันทึกบิล
+      vouchers: printInfo.vouchers && printInfo.vouchers.list.length ? printInfo.vouchers.list : undefined,
+      voucherRef: printInfo.vouchers && printInfo.vouchers.list.length ? printInfo.vouchers.ref : undefined,
       payment: {
         orderNumber: newOrderNumber,
         tableNo: String(tableNumber),

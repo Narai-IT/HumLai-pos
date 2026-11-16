@@ -216,6 +216,7 @@ const printDailyClose = (printer, r) => {
   row('เงินสด', money2(r.cash));
   row('เงินโอน / QR', money2(r.transfer));
   row('บัตรเครดิต', money2(r.card));
+  if (Number(r.voucher)) row('Voucher', money2(r.voucher));
   rule();
   printer.println('เลขที่ใบกำกับภาษีอย่างย่อ');
   // แยกตามตัวนำหน้าเลขบิล — รายงานทุกสาขามีหลายชุด

@@ -136,6 +136,17 @@ export async function releaseCoupon(data, branchId) {
   if (!data.couponId || !ref(data.ref)) return { success: true, released: false };
   return crmAction('/api/pos/coupons/release', { couponId: String(data.couponId), ref: ref(data.ref) }, branchId);
 }
+// Voucher (ใช้แทนเงินตอนชำระ): ยิง QR / พิมพ์รหัส Voucher กระดาษ หรือสแกน QR Voucher ในบัตรสมาชิก LINE → CRM ตรวจแล้วจองไว้กับบิลนี้
+export async function checkVoucher(data, branchId) {
+  const code = String(data.code || '').trim().slice(0, 200);
+  if (!code || !ref(data.ref)) return { success: false, error: 'สแกน QR หรือพิมพ์รหัส Voucher' };
+  if (rateLimited(120)) return { success: false, error: 'ตรวจ Voucher ถี่เกินไป ลองใหม่ในอีกสักครู่' };
+  return crmAction('/api/pos/vouchers/check', { code, ref: ref(data.ref), minutes: 30 }, branchId);
+}
+export async function releaseVoucher(data, branchId) {
+  if (!data.voucherId || !ref(data.ref)) return { success: true, released: false };
+  return crmAction('/api/pos/vouchers/release', { voucherId: String(data.voucherId), ref: ref(data.ref) }, branchId);
+}
 export async function redeemReward(data, branchId, kiosk) {
   const m = memberBody(data, kiosk);
   if (!m || !ref(data.ref)) return { success: false, error: 'ข้อมูลไม่ครบ' };
@@ -188,7 +199,7 @@ async function sendMenu(force) {
 // ── ส่งบิล ──
 // สร้างข้อมูลที่จะส่งจากแถว Orders ของบิล (แถวตัวเลือก ↳ ราคา 0 ไม่นับ)
 //   rows: [{ name, price (ราคารวมของแถว), qty }]
-export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDiscount, channel, staff, couponIds, couponRef, couponDiscount }) {
+export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDiscount, channel, staff, couponIds, couponRef, couponDiscount, vouchers, voucherRef }) {
   const items = rows
     .filter((r) => r.name && !String(r.name).startsWith('↳'))
     .map((r, i) => {
@@ -205,6 +216,10 @@ export function billPayload({ orderNumber, memberId, rows, paidTotal, storeDisco
     // คูปองสมาชิกที่จองไว้กับบิลนี้ + ยอดส่วนลดที่ให้ลูกค้าไปจริง (CRM ใช้ยอดนี้แม้คูปองมีปัญหาตอนบิลมาถึง)
     ...(Array.isArray(couponIds) && couponIds.length && MEMBER_ID.test(String(memberId || ''))
       ? { couponIds: couponIds.map(String).slice(0, 5), couponRef: ref(couponRef), couponDiscount: Math.max(0, Number(couponDiscount) || 0) }
+      : {}),
+    // Voucher ที่ลูกค้าใช้จ่ายบิลนี้ (ใช้แทนเงิน ไม่ใช่ส่วนลด) · amount = ยอดที่ Voucher จ่ายจริง (เกินบิลไม่ทอน)
+    ...(Array.isArray(vouchers) && vouchers.length
+      ? { vouchers: vouchers.slice(0, 10).map((v) => ({ id: String(v.id).replace(/\D/g, '').slice(0, 20), amount: Math.max(0, Number(v.amount) || 0) })).filter((v) => v.id), voucherRef: ref(voucherRef) }
       : {}),
     staffId: staff ? String(staff).slice(0, 60) : undefined
   };

@@ -223,8 +223,8 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
   }, [data, payMap, branchFilter]);
 
   // Calculations for Summary — memoize ไว้ ไม่งั้นพิมพ์ค้นหา/สลับหน้าทีจะวนคำนวณใหม่ทั้งก้อนทุกครั้ง
-  const { totalSales, totalCash, totalXfer, totalCard, totalBills } = useMemo(() => {
-    let totalSales = 0, totalCash = 0, totalXfer = 0, totalCard = 0;
+  const { totalSales, totalCash, totalXfer, totalCard, totalVoucher, totalBills } = useMemo(() => {
+    let totalSales = 0, totalCash = 0, totalXfer = 0, totalCard = 0, totalVoucher = 0;
     bills.forEach(o => {
       totalSales += o.total;
       const sd = o.splitDetail && typeof o.splitDetail === 'object' ? o.splitDetail : null;
@@ -232,15 +232,17 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
         totalCash += Number(sd.cash) || 0;
         totalXfer += Number(sd.transfer) || 0;
         totalCard += Number(sd.card) || 0;
+        totalVoucher += Number(sd.voucher) || 0;
       } else {
         const m = (o.paymentMethod || '').toLowerCase();
         if (m.includes('สด') || m === 'cash') totalCash += o.total;
         else if (m.includes('โอน') || m.includes('qr') || m === 'transfer') totalXfer += o.total;
         else if (m.includes('บัตร') || m === 'card') totalCard += o.total;
+        else if (m.includes('voucher')) totalVoucher += o.total;
         else totalCash += o.total;
       }
     });
-    return { totalSales, totalCash, totalXfer, totalCard, totalBills: bills.length };
+    return { totalSales, totalCash, totalXfer, totalCard, totalVoucher, totalBills: bills.length };
   }, [bills]);
 
   // Calculate Menu Breakdown including sub-items/popups — เป็นลูปหนักสุด (วนทุกแถวออเดอร์ x2) จึง memoize
@@ -647,6 +649,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
         ['ยอดเงินสด (บาท)', totalCash],
         ['ยอดเงินโอน (บาท)', totalXfer],
         ['ยอดบัตรเครดิต (บาท)', totalCard],
+        ['ยอด Voucher (บาท)', totalVoucher],
         [],
         ['ยอดขายสะสมรายเมนู'],
         ['อันดับ', 'ชื่อเมนู', 'หมวดหมู่', 'จำนวนที่ขายได้', 'รายได้รวม (บาท)'],
@@ -669,6 +672,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
           if (sd.cash > 0) parts.push(`สด ฿${sd.cash}`);
           if (sd.transfer > 0) parts.push(`โอน ฿${sd.transfer}`);
           if (sd.card > 0) parts.push(`บัตร ฿${sd.card}`);
+          if (sd.voucher > 0) parts.push(`Voucher ฿${sd.voucher}`);
           splitLabel = parts.join(', ');
         }
 
@@ -770,6 +774,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
           if (sd.cash > 0) parts.push(`สด ฿${sd.cash}`);
           if (sd.transfer > 0) parts.push(`โอน ฿${sd.transfer}`);
           if (sd.card > 0) parts.push(`บัตร ฿${sd.card}`);
+          if (sd.voucher > 0) parts.push(`Voucher ฿${sd.voucher}`);
           splitLabel = parts.join(', ');
         }
         
@@ -839,6 +844,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
       cash: totalCash,
       transfer: totalXfer,
       card: totalCard,
+      voucher: totalVoucher,
       ranges,
       cancelCount: cancelled.size,
       cancelTotal: [...cancelled.values()].reduce((s, v) => s + v, 0),
@@ -1015,7 +1021,8 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                       {[
                         { label: '💵 เงินสด (Cash)', value: totalCash, color: '#22c55e' },
                         { label: '📱 เงินโอน / QR (Transfer)', value: totalXfer, color: '#38bdf8' },
-                        { label: '💳 บัตรเครดิต (Card)', value: totalCard, color: '#f97316' }
+                        { label: '💳 บัตรเครดิต (Card)', value: totalCard, color: '#f97316' },
+                        { label: '🎟️ Voucher', value: totalVoucher, color: '#f472b6' }
                       ].map(row => (
                         <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', alignItems: 'center' }}>
                           <span style={{ color: 'rgba(255,255,255,0.55)' }}>{row.label}</span>
@@ -1179,6 +1186,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
                           if (sd.cash > 0) parts.push(`สด ฿${fmt(sd.cash)}`);
                           if (sd.transfer > 0) parts.push(`โอน ฿${fmt(sd.transfer)}`);
                           if (sd.card > 0) parts.push(`บัตร ฿${fmt(sd.card)}`);
+                          if (sd.voucher > 0) parts.push(`Voucher ฿${fmt(sd.voucher)}`);
                           splitLabel = `(${parts.join(', ')})`;
                         }
 

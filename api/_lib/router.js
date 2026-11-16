@@ -10,7 +10,7 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
-import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink } from './crm.js';
+import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
@@ -97,6 +97,9 @@ const POST_ACTIONS = {
   crmReleaseCoupon:  async (data) => releaseCoupon(data, await branchForWrite(data)),
   crmRedeem:         async (data) => redeemReward(data, await branchForWrite(data), false),
   crmCancelRedeem:   async (data) => cancelRedeem(data, await branchForWrite(data), false),
+  // Voucher (ใช้แทนเงิน) — หน้าเลือกวิธีชำระของพนักงาน
+  crmVoucherCheck:   async (data) => checkVoucher(data, await branchForWrite(data)),
+  crmVoucherRelease: async (data) => releaseVoucher(data, await branchForWrite(data)),
   // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
   crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
   crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),

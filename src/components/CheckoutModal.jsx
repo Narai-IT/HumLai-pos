@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { X, CheckCircle, ArrowLeft, CreditCard, Banknote, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound, QrCode } from 'lucide-react';
+import { X, CheckCircle, ArrowLeft, CreditCard, Ticket, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound, QrCode } from 'lucide-react';
 import { crmEnabled, lookupMember, maskPhone, crmCall, newCouponRef } from '../utils/crm';
 import QrScanner from './QrScanner';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
@@ -174,7 +174,6 @@ const CheckoutModal = ({
     if (selectedDiscount && selectedDiscount.crmCoupons) setSelectedDiscount(null);
     setMember(null); setWallet(null); setWalletMsg('');
   };
-  const [cashInput, setCashInput] = useState('');
 
   const [qrApproved, setQrApproved] = useState(true);
   const [approverName] = useState('');
@@ -231,7 +230,6 @@ const CheckoutModal = ({
     setPaymentStep('success');
   };
 
-  const [splitCash, setSplitCash] = useState('');
   const [splitTransfer, setSplitTransfer] = useState('');
   const [splitCard, setSplitCard] = useState('');
 
@@ -243,8 +241,6 @@ const CheckoutModal = ({
   const hasCharges = sc > 0 || vat > 0;
   const hasDiscount = discountAmount > 0;
 
-  const cashAmount = parseFloat(cashInput) || 0;
-  const change = cashAmount - grand;
 
   const promptPayId = settings?.promptPayId || '004000001641684';
   const qrType = settings?.qrType || 'kshop_dynamic';
@@ -254,6 +250,9 @@ const CheckoutModal = ({
   const kshopRawPayload = settings?.kshopRawPayload || '00020101021130810016A00000067701011201150107536000315080214KB0000016416840320KPS004KB00000164168431690016A00000067701011301030040214KB0000016416840420KPS004KB00000164168453037645802TH6304A14E';
   const qrShopName = settings?.qrShopName || 'ข้าวมันไก่หำไหล';
   const qrAccountName = settings?.qrAccountName || 'ข้าวมันไก่หำไหล';
+  // ยอดที่ต้องโอน: null = ทั้งบิล · ตัวเลข = ส่วนที่เหลือหลังหัก Voucher (QR พร้อมเพย์สร้างตามยอดนี้)
+  const [transferDue, setTransferDue] = useState(null);
+  const qrAmount = transferDue ?? grand;
 
   const requestApproval = () => {};
 
@@ -269,14 +268,14 @@ const CheckoutModal = ({
 
   useEffect(() => {
     const isDynamic = qrType === 'dynamic' || qrType === 'kshop_dynamic';
-    if (!isDynamic || paymentStep !== 'transfer' || grand <= 0) { setQrDataUrl(''); return; }
+    if (!isDynamic || paymentStep !== 'transfer' || qrAmount <= 0) { setQrDataUrl(''); return; }
     let cancelled = false;
 
     let payload = '';
     if (qrType === 'kshop_dynamic') {
-      payload = generateDynamicQRFromRaw(kshopRawPayload, grand);
+      payload = generateDynamicQRFromRaw(kshopRawPayload, qrAmount);
     } else {
-      payload = generatePromptPayPayload(promptPayId, grand);
+      payload = generatePromptPayPayload(promptPayId, qrAmount);
     }
 
     if (payload) {
@@ -287,14 +286,62 @@ const CheckoutModal = ({
       setQrDataUrl('');
     }
     return () => { cancelled = true; };
-  }, [paymentStep, grand, promptPayId, qrType, kshopRawPayload]);
+  }, [paymentStep, qrAmount, promptPayId, qrType, kshopRawPayload]);
 
-  const splitCashN = parseFloat(splitCash) || 0;
   const splitTransferN = parseFloat(splitTransfer) || 0;
   const splitCardN = parseFloat(splitCard) || 0;
-  const splitSum = Math.round((splitCashN + splitTransferN + splitCardN) * 100) / 100;
+  const splitSum = Math.round((splitTransferN + splitCardN) * 100) / 100;
   const splitRemaining = Math.round((grand - splitSum) * 100) / 100;
-  const splitValid = splitRemaining === 0 && splitSum > 0 && [splitCashN, splitTransferN, splitCardN].filter(v => v > 0).length >= 2;
+  const splitValid = splitRemaining === 0 && splitSum > 0 && [splitTransferN, splitCardN].filter(v => v > 0).length >= 2;
+
+  // ── Voucher (ใช้แทนเงิน ไม่ใช่ส่วนลด): ยิง QR / พิมพ์รหัส Voucher กระดาษ หรือสแกน QR Voucher ในบัตรสมาชิก LINE ──
+  // ระบบสมาชิกตรวจและจองไว้กับบิลนี้ · ตัดเป็นใช้แล้วตอนบันทึกบิล · ยอดขาดจ่ายเพิ่มด้วยโอน/บัตร · ยอดเกินไม่ทอน
+  const voucherRef = useRef(newCouponRef('vc'));
+  const [vouchers, setVouchers] = useState([]);
+  const [voucherCode, setVoucherCode] = useState('');
+  const [voucherBusy, setVoucherBusy] = useState(false);
+  const [voucherErr, setVoucherErr] = useState('');
+  const [vScanOpen, setVScanOpen] = useState(false);
+  const voucherTotal = Math.round(vouchers.reduce((a, v) => a + (Number(v.value) || 0), 0) * 100) / 100;
+  const voucherShort = Math.round((grand - voucherTotal) * 100) / 100;   // > 0 = ยังขาด · < 0 = เกิน (ไม่ทอน)
+  const addVoucher = async (text) => {
+    const code = String(typeof text === 'string' ? text : voucherCode).trim();
+    if (!code || voucherBusy) return;
+    if (voucherTotal >= grand) { setVoucherErr('ยอด Voucher ครบยอดบิลแล้ว'); return; }
+    setVoucherBusy(true); setVoucherErr('');
+    const res = await crmCall('crmVoucherCheck', { code, ref: voucherRef.current, branchId });
+    setVoucherBusy(false);
+    if (!res.success) { setVoucherErr(res.error || 'ตรวจ Voucher ไม่สำเร็จ'); return; }
+    const v = res.voucher;
+    setVouchers(prev => (prev.some(x => x.id === v.id) ? prev : [...prev, v]));
+    setVoucherCode('');
+  };
+  const removeVoucher = (v) => {
+    crmCall('crmVoucherRelease', { voucherId: v.id, ref: voucherRef.current, branchId });
+    setVouchers(prev => prev.filter(x => x.id !== v.id));
+  };
+  const addVoucherRef = useRef(addVoucher);
+  useEffect(() => { addVoucherRef.current = addVoucher; });
+  const onVoucherScan = useCallback((text) => { setVScanOpen(false); addVoucherRef.current(text); }, []);
+  // ยอดที่ Voucher แต่ละใบจ่ายจริง ตามลำดับที่ยิง (ใบสุดท้ายอาจจ่ายไม่เต็มใบ = ส่วนเกินไม่ทอน)
+  const voucherAlloc = () => {
+    let left = grand;
+    return vouchers.map(v => { const amount = Math.round(Math.min(Number(v.value) || 0, Math.max(0, left)) * 100) / 100; left -= amount; return { id: v.id, amount }; }).filter(x => x.amount > 0);
+  };
+  // ปิดหน้าต่างโดยไม่จ่าย → ปล่อย Voucher ที่จองไว้ (ปล่อยไม่ทันระบบปล่อยเองเมื่อหมดเวลาจอง)
+  const heldVouchers = useRef([]);
+  useEffect(() => { heldVouchers.current = vouchers.map(v => v.id); }, [vouchers]);
+  useEffect(() => () => {
+    if (!completedRef.current) heldVouchers.current.forEach(id => crmCall('crmVoucherRelease', { voucherId: id, ref: voucherRef.current, branchId }));
+  }, [branchId]);
+  // rest = วิธีจ่ายส่วนที่ขาด ('transfer' | 'card') · ไม่ส่ง = Voucher ครบยอด
+  const handleVoucherPay = (rest) => {
+    if (!vouchers.length) return;
+    if (voucherShort <= 0) { setPendingComplete({ method: 'Voucher', details: { voucher: grand } }); setPaymentStep('success'); return; }
+    const details = { voucher: voucherTotal, [rest]: voucherShort };
+    setPendingComplete({ method: 'แยกจ่าย', details });
+    if (rest === 'transfer') { setTransferDue(voucherShort); setPaymentStep('transfer'); } else setPaymentStep('success');
+  };
 
   const handleConfirmPayment = (method) => {
     if (method === 'เงินโอน') {
@@ -309,7 +356,7 @@ const CheckoutModal = ({
 
   const handleConfirmSplit = () => {
     if (!splitValid) return;
-    const details = { cash: splitCashN, transfer: splitTransferN, card: splitCardN };
+    const details = { transfer: splitTransferN, card: splitCardN };
     setPendingComplete({ method: 'แยกจ่าย', details });
     if (splitTransferN > 0) {
       setSlipPreview('');
@@ -319,7 +366,11 @@ const CheckoutModal = ({
     }
   };
 
-  const paidMethod = pendingComplete?.method || '';
+  const PAY_PART = { voucher: 'Voucher', transfer: 'โอน', card: 'บัตร', cash: 'สด' };
+  const pd = pendingComplete?.details;
+  const paidMethod = (pendingComplete?.method || '') + (pd && pendingComplete?.method === 'แยกจ่าย'
+    ? ' (' + Object.entries(pd).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${PAY_PART[k] || k} ฿${Number(v).toLocaleString()}`).join(' + ') + ')' : '');
+  const voucherCodes = pd && pd.voucher > 0 ? vouchers.map(v => v.code).join(', ') : '';
   // no = เลขที่บิล (เซิร์ฟเวอร์ออกตอนบันทึก) · abb=false = ใบเสร็จธรรมดา ใช้ตอนยังบันทึกบิลไม่สำเร็จ
   const buildReceiptHtml = (no = orderNumber, abb = true) => {
     const now = new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -353,7 +404,8 @@ const CheckoutModal = ({
       ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', esc(no) || '-')}
       ${tableNo ? line('โต๊ะ', esc(tableNo)) : ''}
       ${line('วันที่', now)}
-      ${paidMethod ? line('ชำระโดย', paidMethod) : ''}
+      ${paidMethod ? line('ชำระโดย', esc(paidMethod)) : ''}
+      ${voucherCodes ? line('Voucher', esc(voucherCodes)) : ''}
       ${member ? line('สมาชิก', esc(member.id)) : ''}
       <div class="hr"></div>
       ${rows}
@@ -379,6 +431,7 @@ const CheckoutModal = ({
     if (sc > 0) summary.push({ label: `เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, value: money2(sc) });
     if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(vat) });
     if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
+    if (voucherCodes) summary.push({ label: 'Voucher', value: voucherCodes });
     if (member) summary.push({ label: 'สมาชิก', value: `${member.id}${member.phone ? ' ' + maskPhone(member.phone) : ''}` });
     return {
       id: no,
@@ -408,7 +461,10 @@ const CheckoutModal = ({
     completedRef.current = true;
     const crmCoupon = member && selectedDiscount && selectedDiscount.crmCoupons
       ? { ids: selectedDiscount.crmCoupons.map(c => c.id), ref: couponRef.current, discount: discountAmount } : null;
-    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount, crmCoupon });
+    const usedVouchers = pc.details && pc.details.voucher > 0 ? { list: voucherAlloc(), ref: voucherRef.current } : null;
+    // สแกน Voucher ไว้แต่สุดท้ายจ่ายวิธีอื่น → ปล่อยคืน
+    if (!usedVouchers) vouchers.forEach(v => crmCall('crmVoucherRelease', { voucherId: v.id, ref: voucherRef.current, branchId }));
+    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount, crmCoupon, vouchers: usedVouchers });
   };
 
   const PriceBreakdown = ({ compact = false }) => (
@@ -721,25 +777,9 @@ const CheckoutModal = ({
             <PriceBreakdown compact />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-              {/* เงินสด */}
-              <button
-                onClick={() => setPaymentStep('cash')}
-                style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#f0fdf4', border: '2px solid #bbf7d0', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
-                onMouseOver={e => e.currentTarget.style.background = '#dcfce7'}
-                onMouseOut={e => e.currentTarget.style.background = '#f0fdf4'}
-              >
-                <div style={{ background: '#dcfce7', borderRadius: '50%', padding: '0.6rem', flexShrink: 0 }}>
-                  <Banknote size={28} color="#16a34a" />
-                </div>
-                <div>
-                  <div style={{ fontWeight: '800', fontSize: '1.05rem', marginBottom: '2px', color: '#166534' }}>{lang === 'th' ? 'เงินสด' : 'Cash'}</div>
-                  <div style={{ color: '#15803d', fontSize: '0.85rem', fontWeight: '600' }}>{lang === 'th' ? 'รับเงินสดและทอนเงิน' : 'Accept cash & calculate change'}</div>
-                </div>
-              </button>
-
               {/* เงินโอน */}
               <button
-                onClick={() => setPaymentStep('transfer')}
+                onClick={() => { setTransferDue(null); setPaymentStep('transfer'); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#eff6ff', border: '2px solid #bfdbfe', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
                 onMouseOver={e => e.currentTarget.style.background = '#dbeafe'}
                 onMouseOut={e => e.currentTarget.style.background = '#eff6ff'}
@@ -769,9 +809,27 @@ const CheckoutModal = ({
                 </div>
               </button>
 
+              {/* Voucher (ใช้แทนเงิน) — ต้องเชื่อมระบบสมาชิก */}
+              {crmOn && (
+                <button
+                  onClick={() => { setVoucherErr(''); setPaymentStep('voucher'); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#fdf2f8', border: '2px solid #fbcfe8', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
+                  onMouseOver={e => e.currentTarget.style.background = '#fce7f3'}
+                  onMouseOut={e => e.currentTarget.style.background = '#fdf2f8'}
+                >
+                  <div style={{ background: '#fce7f3', borderRadius: '50%', padding: '0.6rem', flexShrink: 0 }}>
+                    <Ticket size={28} color="#db2777" />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '800', fontSize: '1.05rem', marginBottom: '2px', color: '#9d174d' }}>Voucher</div>
+                    <div style={{ color: '#be185d', fontSize: '0.85rem', fontWeight: '600' }}>{lang === 'th' ? 'สแกน QR หรือกรอกเลข Voucher · ขาดจ่ายเพิ่ม เกินไม่ทอน' : 'Scan or enter voucher · pay the rest, no change'}</div>
+                  </div>
+                </button>
+              )}
+
               {/* แยกจ่าย */}
               <button
-                onClick={() => { setSplitCash(''); setSplitTransfer(''); setSplitCard(''); setPaymentStep('split'); }}
+                onClick={() => { setSplitTransfer(''); setSplitCard(''); setPaymentStep('split'); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#faf5ff', border: '2px solid #e9d5ff', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
                 onMouseOver={e => e.currentTarget.style.background = '#f3e8ff'}
                 onMouseOut={e => e.currentTarget.style.background = '#faf5ff'}
@@ -785,6 +843,96 @@ const CheckoutModal = ({
                 </div>
               </button>
             </div>
+          </>
+        )}
+
+        {/* ── Step 3v: Voucher ── */}
+        {paymentStep === 'voucher' && (
+          <>
+            <div className="modal-header">
+              <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontWeight: '800' }}>
+                <Ticket size={22} color="#db2777" /> Voucher
+              </h2>
+              <button className="close-btn" onClick={() => setPaymentStep('payment_method')}><ArrowLeft size={22} color="#0f172a" /></button>
+            </div>
+            <QrScanner open={vScanOpen} onResult={onVoucherScan} onClose={() => setVScanOpen(false)} title="สแกน QR Voucher" />
+
+            <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+              <p style={{ color: '#475569', fontSize: '0.85rem', marginBottom: '0.3rem', fontWeight: '600' }}>{lang === 'th' ? 'ยอดที่ต้องชำระ' : 'Amount Due'}</p>
+              <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#ea580c', lineHeight: 1 }}>฿{grand.toLocaleString()}</div>
+            </div>
+
+            <form onSubmit={e => { e.preventDefault(); addVoucher(); }} style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+              <label htmlFor="voucher-code" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{lang === 'th' ? 'รหัส Voucher' : 'Voucher code'}</label>
+              <input
+                id="voucher-code" value={voucherCode} autoComplete="off" autoFocus
+                onChange={e => { setVoucherCode(e.target.value); setVoucherErr(''); }}
+                // อ่านตามตำแหน่งปุ่มแป้นอังกฤษ: เครื่องยิง QR/พิมพ์ตอนคีย์บอร์ดเป็นภาษาไทยก็ได้รหัสถูก (รหัส Voucher เป็นอักษรอังกฤษ/ตัวเลขเท่านั้น)
+                onKeyDown={e => {
+                  if (e.ctrlKey || e.metaKey || e.altKey || !e.key || e.key.length !== 1) return;
+                  const ch = scannerChar(e);
+                  if (ch && ch !== e.key) { e.preventDefault(); setVoucherCode(v => v + ch); setVoucherErr(''); }
+                }}
+                placeholder={lang === 'th' ? 'ยิง QR หรือพิมพ์รหัส เช่น VC-AB12-CD34' : 'Scan QR or type code e.g. VC-AB12-CD34'}
+                style={{ flex: 1, minWidth: 0, border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px 12px', fontSize: '1rem' }}
+              />
+              <button type="button" onClick={() => setVScanOpen(true)} disabled={voucherBusy} aria-label={lang === 'th' ? 'เปิดกล้องสแกน QR' : 'Scan QR with camera'}
+                style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #0f172a', background: '#fff', color: '#0f172a', borderRadius: '8px', padding: '0 12px', fontWeight: 800 }}>
+                <QrCode size={18} />
+              </button>
+              <button type="submit" disabled={voucherBusy || !voucherCode.trim()}
+                style={{ border: 0, background: '#0f172a', color: '#fff', borderRadius: '8px', padding: '0 16px', fontWeight: 800, opacity: voucherBusy || !voucherCode.trim() ? 0.5 : 1 }}>
+                {voucherBusy ? '…' : (lang === 'th' ? 'เพิ่ม' : 'Add')}
+              </button>
+            </form>
+            <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
+              {lang === 'th' ? 'Voucher กระดาษ: ยิง QR หรือพิมพ์รหัสบนใบ · Voucher ในบัตรสมาชิก LINE: ให้ลูกค้ากด "ใช้ Voucher" แล้วยิง QR' : 'Paper voucher: scan or type the code · LINE member voucher: customer taps "Use voucher", then scan'}
+            </div>
+            {voucherErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.75rem' }}>{voucherErr}</div>}
+
+            {vouchers.map(v => (
+              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', border: '2px solid #f9a8d4', borderRadius: '10px', background: '#fdf2f8', marginBottom: '6px' }}>
+                <Ticket size={20} color="#db2777" />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 800 }}>{v.title} <span style={{ color: '#9d174d' }}>฿{Number(v.value).toLocaleString()}</span></div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{v.code}{v.memberName ? ` · ${v.memberName}` : ''}</div>
+                </div>
+                <button type="button" onClick={() => removeVoucher(v)} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700 }}>{lang === 'th' ? 'เอาออก' : 'Remove'}</button>
+              </div>
+            ))}
+
+            {vouchers.length > 0 && (
+              <div style={{ background: voucherShort <= 0 ? '#f0fdf4' : '#fff7ed', border: `1px solid ${voucherShort <= 0 ? '#bbf7d0' : '#fed7aa'}`, borderRadius: '12px', padding: '0.85rem 1rem', margin: '0.75rem 0 1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#475569', fontWeight: 600 }}>
+                  <span>{lang === 'th' ? `Voucher ${vouchers.length} ใบ` : `${vouchers.length} voucher(s)`}</span>
+                  <span style={{ fontWeight: '800', color: '#0f172a' }}>฿{voucherTotal.toLocaleString()}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.95rem', fontWeight: '800', color: voucherShort > 0 ? '#ea580c' : '#16a34a' }}>
+                  <span>{voucherShort > 0 ? (lang === 'th' ? 'ยังขาด' : 'Remaining') : voucherShort < 0 ? (lang === 'th' ? 'เกิน (ไม่ทอน)' : 'Over (no change)') : (lang === 'th' ? 'ครบพอดี ✓' : 'Exact ✓')}</span>
+                  <span>฿{Math.abs(voucherShort).toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {vouchers.length > 0 && voucherShort <= 0 && (
+              <button onClick={() => handleVoucherPay()} className="confirm-btn" style={{ width: '100%', background: '#db2777', color: '#ffffff', fontWeight: '800' }}>
+                <CheckCircle size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
+                {lang === 'th' ? 'ยืนยันชำระด้วย Voucher' : 'Confirm Voucher Payment'}
+              </button>
+            )}
+            {vouchers.length > 0 && voucherShort > 0 && (
+              <>
+                <p style={{ fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem' }}>{lang === 'th' ? `จ่ายส่วนที่เหลือ ฿${voucherShort.toLocaleString()} ด้วย` : `Pay the remaining ฿${voucherShort.toLocaleString()} by`}</p>
+                <div style={{ display: 'flex', gap: '0.6rem' }}>
+                  <button onClick={() => handleVoucherPay('transfer')} className="confirm-btn" style={{ flex: 1, background: '#2563eb', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <Smartphone size={18} /> {lang === 'th' ? 'เงินโอน / QR' : 'Transfer / QR'}
+                  </button>
+                  <button onClick={() => handleVoucherPay('card')} className="confirm-btn" style={{ flex: 1, background: '#d97706', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                    <CreditCard size={18} /> {lang === 'th' ? 'บัตรเครดิต/เดบิต' : 'Card'}
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -804,7 +952,6 @@ const CheckoutModal = ({
             </div>
 
             {[
-              { key: 'cash', label: lang === 'th' ? 'เงินสด' : 'Cash', icon: <Banknote size={20} color="#16a34a" />, color: '#16a34a', val: splitCash, set: setSplitCash },
               { key: 'transfer', label: lang === 'th' ? 'เงินโอน / QR' : 'Transfer / QR', icon: <Smartphone size={20} color="#2563eb" />, color: '#2563eb', val: splitTransfer, set: setSplitTransfer },
               { key: 'card', label: lang === 'th' ? 'บัตรเครดิต' : 'Card', icon: <CreditCard size={20} color="#d97706" />, color: '#d97706', val: splitCard, set: setSplitCard },
             ].map(row => (
@@ -870,71 +1017,6 @@ const CheckoutModal = ({
           </>
         )}
 
-        {/* ── Step 3a: เงินสด ── */}
-        {paymentStep === 'cash' && (
-          <>
-            <div className="modal-header">
-              <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontWeight: '800' }}>
-                <Banknote size={22} color="#16a34a" /> {lang === 'th' ? 'ชำระด้วยเงินสด' : 'Cash Payment'}
-              </h2>
-              <button className="close-btn" onClick={() => setPaymentStep('payment_method')}><ArrowLeft size={22} color="#0f172a" /></button>
-            </div>
-
-            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-              <p style={{ color: '#475569', fontSize: '0.85rem', marginBottom: '0.3rem', fontWeight: '600' }}>{lang === 'th' ? 'ยอดที่ต้องชำระ' : 'Amount Due'}</p>
-              <div style={{ fontSize: '2.5rem', fontWeight: '900', color: '#ea580c', lineHeight: 1 }}>฿{grand.toLocaleString()}</div>
-              {(hasCharges || hasDiscount) && (
-                <p style={{ color: '#64748b', fontSize: '0.78rem', marginTop: '0.3rem', fontWeight: '500' }}>
-                  {lang === 'th' ? '(รวมส่วนลดและค่าบริการแล้ว)' : '(incl. discount & charges)'}
-                </p>
-              )}
-            </div>
-
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ color: '#334155', fontSize: '0.88rem', display: 'block', marginBottom: '0.5rem', fontWeight: '700' }}>
-                {lang === 'th' ? 'รับเงินมา (บาท)' : 'Cash Received (THB)'}
-              </label>
-              <input
-                type="number" min={grand} step="1" placeholder={`฿${Math.ceil(grand)}`}
-                value={cashInput} onChange={e => setCashInput(e.target.value)} autoFocus
-                style={{ width: '100%', padding: '0.85rem 1rem', background: '#ffffff', border: '2px solid #22c55e', borderRadius: '12px', color: '#0f172a', fontSize: '1.5rem', fontWeight: '800', textAlign: 'center', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-              {[20, 50, 100, 500, 1000].filter(v => v >= grand || v === Math.ceil(grand / 100) * 100).slice(0, 5).concat(
-                [Math.ceil(grand / 100) * 100, Math.ceil(grand / 500) * 500, Math.ceil(grand / 1000) * 1000]
-              ).filter((v, i, a) => v >= grand && a.indexOf(v) === i).sort((a, b) => a - b).slice(0, 5).map(amt => (
-                <button key={amt} onClick={() => setCashInput(String(amt))}
-                  style={{ flex: 1, minWidth: '60px', padding: '0.55rem', background: cashAmount === amt ? '#dcfce7' : '#f1f5f9', border: `2px solid ${cashAmount === amt ? '#22c55e' : '#cbd5e1'}`, borderRadius: '10px', color: '#0f172a', cursor: 'pointer', fontWeight: '700', fontSize: '0.88rem', fontFamily: 'inherit' }}>
-                  ฿{amt.toLocaleString()}
-                </button>
-              ))}
-            </div>
-
-            {cashInput && (
-              <div style={{ background: change >= 0 ? '#f0fdf4' : '#fef2f2', border: `1px solid ${change >= 0 ? '#bbf7d0' : '#fecaca'}`, borderRadius: '12px', padding: '1rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: '700', color: change >= 0 ? '#166534' : '#dc2626' }}>
-                  {lang === 'th' ? (change >= 0 ? 'เงินทอน' : 'ไม่พอ!') : (change >= 0 ? 'Change' : 'Insufficient!')}
-                </span>
-                <span style={{ fontSize: '1.5rem', fontWeight: '900', color: change >= 0 ? '#15803d' : '#dc2626' }}>
-                  {change >= 0 ? `฿${change.toLocaleString()}` : `-฿${Math.abs(change).toLocaleString()}`}
-                </span>
-              </div>
-            )}
-
-            <button
-              onClick={() => handleConfirmPayment('เงินสด')}
-              disabled={cashAmount < grand}
-              className="confirm-btn"
-              style={{ width: '100%', background: cashAmount >= grand ? '#16a34a' : '#e2e8f0', color: cashAmount >= grand ? '#ffffff' : '#94a3b8', cursor: cashAmount >= grand ? 'pointer' : 'not-allowed', opacity: cashAmount >= grand ? 1 : 0.6, fontWeight: '800' }}
-            >
-              <CheckCircle size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
-              {lang === 'th' ? 'ยืนยันรับเงิน' : 'Confirm Cash Received'}
-            </button>
-          </>
-        )}
-
         {/* ── Step 3b: เงินโอน ── */}
         {paymentStep === 'transfer' && (
           <>
@@ -942,7 +1024,7 @@ const CheckoutModal = ({
               <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontWeight: '800' }}>
                 <Smartphone size={22} color="#2563eb" /> {lang === 'th' ? 'เงินโอน / QR Code' : 'Transfer / QR'}
               </h2>
-              <button className="close-btn" onClick={() => setPaymentStep('payment_method')}><ArrowLeft size={22} color="#0f172a" /></button>
+              <button className="close-btn" onClick={() => setPaymentStep(transferDue !== null ? 'voucher' : 'payment_method')}><ArrowLeft size={22} color="#0f172a" /></button>
             </div>
             {!qrApproved ? (
               <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
@@ -962,7 +1044,7 @@ const CheckoutModal = ({
 
                 <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '12px', padding: '1rem', maxWidth: '320px', margin: '0 auto 1.1rem' }}>
                   <div style={{ color: '#475569', fontSize: '0.8rem', marginBottom: '0.25rem', fontWeight: '600' }}>{lang === 'th' ? 'ยอดที่ต้องชำระ' : 'Amount Due'}</div>
-                  <div style={{ color: '#ea580c', fontWeight: 900, fontSize: '1.8rem' }}>฿{grand.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div style={{ color: '#ea580c', fontWeight: 900, fontSize: '1.8rem' }}>฿{qrAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                   <div style={{ color: '#64748b', fontSize: '0.78rem', marginTop: '0.35rem', fontWeight: '600' }}>
                     {lang === 'th' ? 'บิล' : 'Bill'} {orderNumber}{tableNo ? ` · ${lang === 'th' ? 'โต๊ะ' : 'Table'} ${tableNo}` : ''}
                   </div>
@@ -1009,7 +1091,7 @@ const CheckoutModal = ({
                 </div>
                 {qrType === 'static' ? (
                   <img src={staticQrUrl} alt="K Shop QR" style={{ width: '100%', maxWidth: '260px', display: 'block', margin: '0 auto' }} />
-                ) : grand <= 0 ? (
+                ) : qrAmount <= 0 ? (
                   <div style={{ height: '260px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#166534', fontWeight: 800, textAlign: 'center' }}>
                     {lang === 'th' ? 'ยอด ฿0 — ไม่ต้องโอน กดยืนยันได้เลย' : 'Nothing to pay — just confirm'}
                   </div>
@@ -1040,14 +1122,14 @@ const CheckoutModal = ({
                       (lang === 'th' ? 'พร้อมเพย์ ID' : 'PromptPay ID') + ': ' + promptPayId
                     )}
                   </div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.15rem' }}>฿{grand.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 900, marginTop: '0.15rem' }}>฿{qrAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </div>
               </div>
 
               <p style={{ color: '#475569', fontSize: '0.88rem', marginBottom: '1rem', fontWeight: '600' }}>
                 {lang === 'th' ? 'บิลเลขที่:' : 'Bill No:'} <strong style={{ color: '#ea580c' }}>{orderNumber}</strong>
               </p>
-              <button onClick={() => handleConfirmPayment('เงินโอน')} className="confirm-btn" style={{ background: '#2563eb', color: '#ffffff', width: '100%', fontWeight: '800' }}>
+              <button onClick={() => (transferDue !== null ? (setSlipPreview(''), setPaymentStep('slip')) : handleConfirmPayment('เงินโอน'))} className="confirm-btn" style={{ background: '#2563eb', color: '#ffffff', width: '100%', fontWeight: '800' }}>
                 <CheckCircle size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
                 {lang === 'th' ? 'ยืนยันรับเงินโอนแล้ว' : 'Confirm Transfer Received'}
               </button>
@@ -1103,7 +1185,7 @@ const CheckoutModal = ({
               </p>
               <p style={{ color: '#475569', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: '600' }}>
                 {lang === 'th' ? 'บิลเลขที่:' : 'Bill No:'} <strong style={{ color: '#ea580c' }}>{orderNumber}</strong>
-                {' · '}<span style={{ color: '#ea580c', fontWeight: 800 }}>฿{grand.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                {' · '}<span style={{ color: '#ea580c', fontWeight: 800 }}>฿{qrAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </p>
 
               {slipPreview ? (

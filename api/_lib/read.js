@@ -295,7 +295,7 @@ export async function generateSalesReport() {
 
   let totalSales = 0;
   let totalBills = 0;
-  const paymentBreakdown = { 'เงินสด': 0, 'เงินโอน / QR': 0, 'บัตรเครดิต': 0 };
+  const paymentBreakdown = { 'เงินสด': 0, 'เงินโอน / QR': 0, 'บัตรเครดิต': 0, 'Voucher': 0 };
   const uniqueBills = new Set();
 
   for (const p of payRes.recordset) {
@@ -314,6 +314,7 @@ export async function generateSalesReport() {
         paymentBreakdown['เงินสด']        += Number(split.cash || 0);
         paymentBreakdown['เงินโอน / QR']  += Number(split.transfer || 0);
         paymentBreakdown['บัตรเครดิต']    += Number(split.card || 0);
+        paymentBreakdown['Voucher']       += Number(split.voucher || 0);
       }
     } else if (method.includes('สด') || method.toLowerCase() === 'cash') {
       paymentBreakdown['เงินสด'] += grandTotal;
@@ -321,6 +322,8 @@ export async function generateSalesReport() {
       paymentBreakdown['เงินโอน / QR'] += grandTotal;
     } else if (method.includes('บัตร') || method.toLowerCase() === 'card') {
       paymentBreakdown['บัตรเครดิต'] += grandTotal;
+    } else if (method.toLowerCase().includes('voucher')) {
+      paymentBreakdown['Voucher'] += grandTotal;
     } else {
       paymentBreakdown['เงินสด'] += grandTotal;
     }
