@@ -21,6 +21,27 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
   return { subtotal, discountAmount, afterDiscount, sc, vat, grand: afterDiscount + sc + vat };
 };
 
+// รหัสจาก QR บัตรสมาชิก (QR.xxx) หรือ QR คูปอง (CP.xxx) เท่านั้น
+const isQrCode = (s) => /^(QR|CP)\.\S{4,}$/i.test(String(s || '').trim());
+
+// เครื่องยิง QR ส่งเป็นปุ่มคีย์บอร์ด · ถ้าเครื่องตั้งภาษาไทยอยู่ e.key จะกลายเป็นอักษรไทย
+// → แปลงจากตำแหน่งปุ่ม (e.code) ตามแป้นอังกฤษแทน ไม่ต้องสลับภาษาก่อนยิง
+const US_KEYS = {
+  Minus: ['-', '_'], Equal: ['=', '+'], BracketLeft: ['[', '{'], BracketRight: [']', '}'], Backslash: ['\\', '|'],
+  Semicolon: [';', ':'], Quote: ["'", '"'], Comma: [',', '<'], Period: ['.', '>'], Slash: ['/', '?'], Backquote: ['`', '~'],
+  Digit1: ['1', '!'], Digit2: ['2', '@'], Digit3: ['3', '#'], Digit4: ['4', '$'], Digit5: ['5', '%'],
+  Digit6: ['6', '^'], Digit7: ['7', '&'], Digit8: ['8', '*'], Digit9: ['9', '('], Digit0: ['0', ')'],
+  NumpadDecimal: ['.', '.'], NumpadSubtract: ['-', '-'], NumpadAdd: ['+', '+'], NumpadDivide: ['/', '/'], NumpadMultiply: ['*', '*']
+};
+const scannerChar = (e) => {
+  if (e.key && e.key.length === 1 && e.key.charCodeAt(0) < 128) return e.key;
+  const c = e.code || '';
+  if (/^Key[A-Z]$/.test(c)) { const up = e.shiftKey !== (e.getModifierState && e.getModifierState('CapsLock')); return up ? c[3] : c[3].toLowerCase(); }
+  if (/^Numpad[0-9]$/.test(c)) return c[6];
+  const k = US_KEYS[c];
+  return k ? k[e.shiftKey ? 1 : 0] : '';
+};
+
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
@@ -33,24 +54,24 @@ const CheckoutModal = ({
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
   // (ต้องประกาศก่อนส่วนคูปองสมาชิก ที่ใช้ค่านี้ใน useEffect ด้านล่าง ไม่งั้นพังตอนเปิดหน้าชำระเงิน)
   const [selectedDiscount, setSelectedDiscount] = useState(initialDiscount);
-  // ── ระบบสมาชิก: สแกน QR บัตรสมาชิก (เครื่องยิงพิมพ์ลงช่องแล้วกด Enter ให้เอง) หรือพิมพ์เบอร์/เลขสมาชิก ──
+  // ── ระบบสมาชิก: หน้าพนักงานรับเฉพาะสแกน QR บัตรสมาชิก/คูปอง (กล้อง หรือเครื่องยิง QR) · พิมพ์เบอร์/เลขสมาชิกไม่ได้ ──
   const [crmOn, setCrmOn] = useState(false);
   const [member, setMember] = useState(null);
-  const [memberQuery, setMemberQuery] = useState('');
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
-  // text = ผลจากกล้อง (ไม่ส่ง = ใช้ที่พิมพ์/ยิงลงช่อง) · QR คูปอง (CP.xxx) ได้ทั้งสมาชิกและคูปองที่ใช้กับบิลนี้
+  // text = ผลจากกล้อง/เครื่องยิง QR · QR คูปอง (CP.xxx) ได้ทั้งสมาชิกและคูปองที่ใช้กับบิลนี้
   const findMember = async (text) => {
-    const q = String(typeof text === 'string' ? text : memberQuery).trim();
+    const q = String(text || '').trim();
     if (!q || memberBusy) return;
     const fail = (msg) => (member ? setWalletMsg(msg) : setMemberErr(msg));
+    if (!isQrCode(q)) return fail('QR นี้ไม่ใช่บัตรสมาชิก/คูปอง · ใช้ได้เฉพาะสแกน QR จากบัตรสมาชิก LINE ของลูกค้า');
     setMemberBusy(true); setMemberErr('');
     const res = await lookupMember(q, branchId);
     setMemberBusy(false);
     if (!res.success) return fail(res.error || 'ค้นหาสมาชิกไม่สำเร็จ');
     if (member && member.id !== res.member.id) return fail(`QR นี้เป็นของ ${res.member.name} (${res.member.id}) ไม่ใช่สมาชิกที่เลือกไว้ กด "เปลี่ยน" ก่อนถ้าจะใช้`);
-    if (!member) { setMember(res.member); setMemberQuery(''); loadWallet(res.member); }
+    if (!member) { setMember(res.member); loadWallet(res.member); }
     const sc = res.scannedCoupon;
     if (sc && sc.usable) pickCoupon(sc, res.member);
     else if (sc) setWalletMsg(`คูปอง ${sc.code}: ${sc.reason} · สะสมแต้มให้สมาชิกแล้ว`);
@@ -59,6 +80,27 @@ const CheckoutModal = ({
   const findRef = useRef(findMember);
   useEffect(() => { findRef.current = findMember; });
   const onScan = useCallback((text) => { setScanOpen(false); findRef.current(text); }, []);
+  // เครื่องยิง QR (พิมพ์เป็นคีย์บอร์ดเร็วมากแล้วกด Enter) · คนพิมพ์เองช้ากว่า → ไม่นับ และรับเฉพาะรหัส QR (QR./CP.)
+  useEffect(() => {
+    if (!crmOn || paymentStep !== 'summary' || scanOpen) return undefined;
+    let buf = ''; let last = 0;
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      const now = Date.now();
+      if (now - last > 60) buf = '';
+      last = now;
+      if (e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter') {
+        const code = buf; buf = '';
+        if (isQrCode(code)) { e.preventDefault(); findRef.current(code); }
+        return;
+      }
+      const ch = scannerChar(e);
+      if (ch) buf += ch;
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [crmOn, paymentStep, scanOpen]);
 
   // ── คูปองสมาชิก / แลกแต้ม: คูปองที่เลือกถูกจองไว้กับบิลนี้ (couponRef) จนกว่าจะจ่ายหรือเปลี่ยนใจ ──
   const couponRef = useRef(newCouponRef('pos'));
@@ -510,22 +552,13 @@ const CheckoutModal = ({
                     <label htmlFor="crm-member" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 800, fontSize: '0.9rem', marginBottom: '6px' }}>
                       <UserRound size={18} /> {lang === 'th' ? 'สมาชิก (สะสมแต้ม)' : 'Member (earn points)'}
                     </label>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        id="crm-member" value={memberQuery} autoComplete="off"
-                        onChange={e => { setMemberQuery(e.target.value); setMemberErr(''); }}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); findMember(); } }}
-                        placeholder={lang === 'th' ? 'สแกน QR บัตรสมาชิก/คูปอง · เบอร์โทร · เลขสมาชิก' : 'Member/coupon QR · phone · member no.'}
-                        style={{ flex: 1, minWidth: 0, border: '1px solid #cbd5e1', borderRadius: '8px', padding: '10px 12px', fontSize: '1rem' }}
-                      />
-                      <button type="button" onClick={() => setScanOpen(true)} disabled={memberBusy} aria-label={lang === 'th' ? 'เปิดกล้องสแกน QR' : 'Scan QR with camera'}
-                        style={{ display: 'flex', alignItems: 'center', gap: '4px', border: '1px solid #0f172a', background: '#fff', color: '#0f172a', borderRadius: '8px', padding: '0 12px', fontWeight: 800 }}>
-                        <QrCode size={18} /> {lang === 'th' ? 'สแกน' : 'Scan'}
-                      </button>
-                      <button type="button" onClick={() => findMember()} disabled={memberBusy || !memberQuery.trim()}
-                        style={{ border: 0, background: '#0f172a', color: '#fff', borderRadius: '8px', padding: '0 16px', fontWeight: 800, opacity: memberBusy || !memberQuery.trim() ? 0.5 : 1 }}>
-                        {memberBusy ? '…' : (lang === 'th' ? 'ค้นหา' : 'Find')}
-                      </button>
+                    {/* หน้าพนักงาน: ใช้ได้เฉพาะสแกน QR (กล้อง หรือเครื่องยิง QR) · พิมพ์เบอร์/เลขสมาชิกไม่ได้ */}
+                    <button type="button" id="crm-member" onClick={() => setScanOpen(true)} disabled={memberBusy} aria-label={lang === 'th' ? 'เปิดกล้องสแกน QR' : 'Scan QR with camera'}
+                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', border: 0, background: '#0f172a', color: '#fff', borderRadius: '8px', padding: '12px', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', opacity: memberBusy ? 0.6 : 1 }}>
+                      <QrCode size={18} /> {memberBusy ? '…' : (lang === 'th' ? 'สแกน QR บัตรสมาชิก / คูปอง' : 'Scan member / coupon QR')}
+                    </button>
+                    <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '6px' }}>
+                      {lang === 'th' ? 'ใช้กล้อง หรือเครื่องยิง QR ได้เลย · ไม่รับการพิมพ์เบอร์โทร/เลขสมาชิก' : 'Use the camera or a QR scanner · typing phone/member no. is not accepted'}
                     </div>
                     {memberErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.85rem', marginTop: '6px', fontWeight: 600 }}>{memberErr}</div>}
                   </>
