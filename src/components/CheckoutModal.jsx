@@ -27,8 +27,8 @@ const CheckoutModal = ({
   onClose, onComplete, lang = 'th',
   // ส่วนลดเลือกที่หน้าขาย (ปุ่มสแกนสมาชิก / ใช้ส่วนลด) ส่งมาเป็น initialDiscount · หน้านี้ไม่มีหน้าเลือกส่วนลดแล้ว
   settings = {}, initialDiscount = null, branchId = '', menu = [],
-  // สมาชิกที่สแกนไว้แล้วที่หน้าขาย (+ QR คูปองที่ยิงมาพร้อมกัน) → ไม่ต้องสแกนซ้ำ
-  initialMember = null, initialCoupon = null
+  // สมาชิกที่สแกนไว้แล้วที่หน้าขาย + รหัสการจองคูปองของบิล (คูปองที่ยิงที่หน้าขาย) → ไม่ต้องสแกนซ้ำ
+  initialMember = null, initialCouponRef = null
 }) => {
   const [paymentStep, setPaymentStep] = useState('summary');
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
@@ -64,7 +64,7 @@ const CheckoutModal = ({
   useScannerWedge(crmOn && paymentStep === 'summary', (code) => { setScanOpen(false); findRef.current(code); });
 
   // ── คูปองสมาชิก / แลกแต้ม: คูปองที่เลือกถูกจองไว้กับบิลนี้ (couponRef) จนกว่าจะจ่ายหรือเปลี่ยนใจ ──
-  const couponRef = useRef(newCouponRef('pos'));
+  const couponRef = useRef(initialCouponRef || newCouponRef('pos'));
   const completedRef = useRef(false);
   const [wallet, setWallet] = useState(null);
   const [walletMsg, setWalletMsg] = useState('');
@@ -98,13 +98,12 @@ const CheckoutModal = ({
     if (!res.success) setWalletMsg(res.error || 'ใช้คูปองไม่สำเร็จ');
     loadWallet(m);
   };
-  // สมาชิกจากหน้าขาย: โหลดกระเป๋า (คูปองที่จองไว้กับบิล) และใช้คูปองที่ยิงมาจากหน้าขายครั้งเดียวตอนเปิดหน้าต่าง
+  // สมาชิกจากหน้าขาย: โหลดกระเป๋า → ได้คูปองที่จองไว้ที่หน้าขาย (couponRef เดียวกัน) คิดยอดใหม่ตามบิลนี้
   const startedRef = useRef(false);
   useEffect(() => {
     if (startedRef.current || !initialMember) return;
     startedRef.current = true;
-    if (initialCoupon && initialCoupon.usable) pickCoupon(initialCoupon, initialMember);   // pickCoupon โหลดกระเป๋าให้ด้วย
-    else { loadWallet(initialMember); if (initialCoupon && initialCoupon.reason) setWalletMsg(`คูปอง ${initialCoupon.code}: ${initialCoupon.reason}`); }
+    loadWallet(initialMember);
   });   // ไม่ใส่ dependency: startedRef กันให้ทำครั้งเดียวตอนเปิดหน้าต่าง
   // ยกเลิกการแลกแต้ม → คืนแต้มเข้าบัตร (วันหมดอายุเดิม) และถอดออกจากบิล
   const cancelRedeem = async (c) => {
@@ -132,9 +131,10 @@ const CheckoutModal = ({
     heldCoupons.current = now;
   }, [selectedDiscount, branchId]);
   // ปิดหน้าต่างโดยไม่จ่าย → ปล่อยคูปอง (ถ้าปล่อยไม่ทัน ระบบปล่อยเองเมื่อหมดเวลาจอง)
+  // คูปองที่จองมาจากหน้าขาย ไม่ปล่อย: กลับไปหน้าขายแล้วยังใช้อยู่
   useEffect(() => () => {
-    if (!completedRef.current) heldCoupons.current.forEach(id => crmCall('crmReleaseCoupon', { couponId: id, ref: couponRef.current, branchId }));
-  }, [branchId]);
+    if (!completedRef.current && !initialCouponRef) heldCoupons.current.forEach(id => crmCall('crmReleaseCoupon', { couponId: id, ref: couponRef.current, branchId }));
+  }, [branchId, initialCouponRef]);
   // ส่วนลดทุกแบบต้องสแกนสมาชิกก่อน (สาขาที่เชื่อมระบบสมาชิก) · ไม่มีสมาชิก = เอาส่วนลดร้านออก
   const needMember = crmOn && !member;
   useEffect(() => {
