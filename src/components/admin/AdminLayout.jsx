@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package, FlaskConical, BarChart2, Building2, Images } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package, FlaskConical, BarChart2, Building2, Images, Receipt } from 'lucide-react';
 import './Admin.css';
 
 const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
@@ -63,6 +63,11 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
              {allowAll && (
                <NavLink to="/admin/printers" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                   <Store size={20} /> {lang === 'th' ? 'ปริ้นเตอร์' : 'Printers'}
+               </NavLink>
+             )}
+             {allowAll && (
+               <NavLink to="/admin/receipt" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
+                  <Receipt size={20} /> {lang === 'th' ? 'ใบเสร็จ' : 'Receipt'}
                </NavLink>
              )}
              {allowAll && (

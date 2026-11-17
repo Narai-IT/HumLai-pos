@@ -24,6 +24,7 @@ const ManagePromotions = lazy(() => import('./components/admin/ManagePromotions'
 const ManageCategories = lazy(() => import('./components/admin/ManageCategories'));
 const ManageTables = lazy(() => import('./components/admin/ManageTables'));
 const ManagePrinters = lazy(() => import('./components/admin/ManagePrinters'));
+const ManageReceipt = lazy(() => import('./components/admin/ManageReceipt'));
 const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
 const ManageBranches = lazy(() => import('./components/admin/ManageBranches'));
 const ManageBranchMenu = lazy(() => import('./components/admin/ManageBranchMenu'));
@@ -41,6 +42,7 @@ import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
 import { sendPrintJob, setReceiptHeader, setPrintBranch } from './utils/printServer';
+import { receiptHeaderStyle } from './utils/receiptStyle';
 import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
@@ -294,6 +296,10 @@ function App() {
     try { return String(JSON.parse(localStorage.getItem('gas_all_data') || '{}').defaultBranch || ''); } catch { return ''; }
   });
   const [branchTables, setBranchTables] = useState(null);
+  // รูปแบบใบเสร็จ (หลังบ้าน > ใบเสร็จ): โลโก้ ขนาด และรายละเอียดหัวใบ — ใช้ทุกสาขา
+  const [receiptSettings, setReceiptSettings] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('gas_all_data') || '{}').receiptSettings || null; } catch { return null; }
+  });
   // ปริ้นเตอร์จากเซิร์ฟเวอร์ (ทุกสาขา) — ใช้เฉพาะของสาขานี้ ดูเอฟเฟกต์ด้านล่าง
   const [serverPrinters, setServerPrinters] = useState(null);
   // สาขาที่ใช้เลือกผังโต๊ะและลิงก์ QR — ผู้ใช้ไม่ได้อยู่สาขาที่มีในรายการ ให้ถือเป็นสาขาหลัก
@@ -389,9 +395,10 @@ function App() {
       name: b.name || b.id, address: b.address || '', phone: b.phone || '',
       taxId: b.taxId || '', posId: b.posId || '', footer: b.receiptFooter || '',
       // อัตรา VAT สำหรับแยกยอดในใบกำกับภาษีอย่างย่อ — ใช้ค่าเดียวกับใบกำกับเต็มรูป (ไม่ได้ตั้ง = 7)
-      vatRate: Number(posSettings?.vat?.rate) > 0 ? Number(posSettings.vat.rate) : 7
+      vatRate: Number(posSettings?.vat?.rate) > 0 ? Number(posSettings.vat.rate) : 7,
+      ...receiptHeaderStyle(receiptSettings)
     } : null);
-  }, [branches, tablesBranch, posSettings]);
+  }, [branches, tablesBranch, posSettings, receiptSettings]);
 
   // ผังโต๊ะของสาขานี้จากเซิร์ฟเวอร์ → เขียนลงที่เดิม (pos_tables_config) ที่หน้าขายอ่านอยู่แล้ว
   // สาขาที่ยังไม่เคยบันทึกผังขึ้นระบบ → ใช้ผังเดิมในเครื่องไปก่อน
@@ -530,6 +537,7 @@ function App() {
       setBranches(data.branches);
     }
     if (typeof data.defaultBranch === 'string') setDefaultBranch(data.defaultBranch);
+    if ('receiptSettings' in data && changed('receiptSettings', data.receiptSettings)) setReceiptSettings(data.receiptSettings || null);
     if (data.branchTables && typeof data.branchTables === 'object' && changed('branchTables', data.branchTables)) {
       setBranchTables(data.branchTables);
     }
@@ -1754,6 +1762,7 @@ function App() {
           <Route path="branch-menu" element={isAdmin ? <ManageBranchMenu branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
           <Route path="printers" element={isAdmin ? <ManagePrinters branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
+          <Route path="receipt" element={isAdmin ? <ManageReceipt receiptSettings={receiptSettings} onSaved={setReceiptSettings} branches={branches} branchId={tablesBranch} /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
           <Route path="banner" element={isAdmin ? <ManageBanner categories={allCategories.length > 0 ? allCategories : categories} /> : <Navigate to="/admin" replace />} />
           <Route path="bom" element={isAdmin ? <ManageBOM /> : <Navigate to="/admin" replace />} />

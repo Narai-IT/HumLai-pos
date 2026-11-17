@@ -139,7 +139,7 @@ const ALWAYS_LOGIN = new Set(['crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 
 
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([
-  'saveBranches', 'saveUsers', 'getUsers', 'saveSettings', 'resetAllSheetData', 'clearSalesData',
+  'saveBranches', 'saveUsers', 'getUsers', 'saveSettings', 'saveReceiptSettings', 'resetAllSheetData', 'clearSalesData',
   'upsertMenu', 'deleteMenu', 'saveMenu', 'saveMenuOrder', 'upsertCategory', 'deleteCategory', 'saveCategories',
   'upsertPromotion', 'deletePromotion', 'savePromotions', 'saveDiscounts', 'uploadImage', 'uploadMenuImageHost',
   'saveBOM', 'upsertIngredient', 'deleteIngredient'

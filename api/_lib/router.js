@@ -74,6 +74,7 @@ const POST_ACTIONS = {
   savePrinters:            admin.savePrinters,
   saveDiscounts:           admin.saveDiscounts,
   saveSettings:            admin.saveSettings,
+  saveReceiptSettings:     admin.saveReceiptSettings,
   resetAllSheetData:       admin.resetAllSheetData,
   clearSalesData:          admin.clearSalesData,
   uploadImage:             admin.uploadImage,

@@ -8,6 +8,7 @@ import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload }
 import { scopedSlipCss } from '../utils/print80mm';
 import { API_URL } from '../utils/api';
 import { getReceiptHeader } from '../utils/printServer';
+import { logoHtml } from '../utils/receiptStyle';
 import { menuCategoryLookup, discountAmount as calcDiscount } from '../utils/discount';
 
 // discountAmount คิดมาแล้วจาก utils/discount (ส่วนลดเฉพาะหมวด ลดเฉพาะยอดของหมวดนั้น)
@@ -360,14 +361,17 @@ const CheckoutModal = ({
     const rate = Number(h.vatRate) > 0 ? Number(h.vatRate) : 7;
     const vatable = Math.round(grand * 100 / (100 + rate) * 100) / 100;
     const m2 = (n) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // รายละเอียดที่แสดงตั้งได้ที่ หลังบ้าน > ใบเสร็จ · ใบกำกับภาษีอย่างย่อต้องมีชื่อผู้ขายเสมอ (ม.86/6)
+    const showName = h.showName !== false || isAbb;
     const headLines = [
-      ...esc(h.address).split(/\r?\n/).map(x => x.trim()).filter(Boolean),
-      h.phone ? `โทร ${esc(h.phone)}` : '',
+      ...(h.showAddress !== false ? esc(h.address).split(/\r?\n/).map(x => x.trim()).filter(Boolean) : []),
+      h.phone && h.showPhone !== false ? `โทร ${esc(h.phone)}` : '',
       isAbb ? `เลขผู้เสียภาษี ${esc(h.taxId)}` : '',
       isAbb && esc(h.posId) ? `POS ID: ${esc(h.posId)}` : ''
     ].filter(Boolean).map(x => `<div class="c sm">${x}</div>`).join('');
     return `
-      <div class="c xl">${esc(h.name) || 'ข้าวมันไก่หำไหล'}</div>
+      ${logoHtml(h)}
+      ${showName ? `<div class="c xl">${esc(h.name) || 'ข้าวมันไก่หำไหล'}</div>` : ''}
       ${headLines}
       <div class="c sm">${isAbb ? 'ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)' : 'ใบเสร็จรับเงิน / RECEIPT'}</div>
       <div class="hr"></div>
