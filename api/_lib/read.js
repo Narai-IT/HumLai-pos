@@ -57,6 +57,14 @@ export const getSettings = async () => {
   try { return JSON.parse(res.recordset[0].value); } catch { return null; }
 };
 
+// รูปแบบใบเสร็จ (หลังบ้าน > ใบเสร็จ): โลโก้ ขนาดโลโก้ และรายละเอียดที่แสดงบนหัวใบ · ใช้ทุกสาขา
+// เก็บในแถว Settings 'receipt_settings' (ไม่ต้องแก้โครงสร้างฐานข้อมูล)
+export const getReceiptSettings = async () => {
+  const res = await query(`SELECT [value] FROM dbo.Settings WHERE [key] = 'receipt_settings'`);
+  if (!res.recordset.length) return null;
+  try { return JSON.parse(res.recordset[0].value); } catch { return null; }
+};
+
 // ผังโต๊ะของแต่ละสาขา — { [branchId]: [โต๊ะ...] } เก็บในแถว Settings 'branch_tables'
 export const getBranchTables = async () => {
   const res = await query(`SELECT [value] FROM dbo.Settings WHERE [key] = 'branch_tables'`);
@@ -84,7 +92,7 @@ const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch)
 // ข้อมูล "เย็น" — เปลี่ยนเฉพาะตอนแก้หลังบ้าน
 // branchId = ส่งเมนูที่ปรับตามสาขานั้นแล้ว ('' = เมนูกลาง ใช้ในหน้าหลังบ้าน)
 export async function buildStaticData(branchId = '') {
-  const [categories, rawMenu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch, menuBranchRows] = await Promise.all([
+  const [categories, rawMenu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch, menuBranchRows, receiptSettings] = await Promise.all([
     getCategoryRows(),
     getMenuRows(),
     allRows('Promotions', PROMO_COLS, mapPromotion),
@@ -96,10 +104,11 @@ export async function buildStaticData(branchId = '') {
     getBranches(),
     getBranchTables(),
     defaultBranchId(),
-    getMenuBranchRows(branchId)
+    getMenuBranchRows(branchId),
+    getReceiptSettings().catch(() => null)
   ]);
   const menu = applyBranchMenu(rawMenu, menuBranchRows, printers, branchId);
-  return { categories, menu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch };
+  return { categories, menu, promotions, users, printers, discounts, settings, branches, branchTables, defaultBranch, receiptSettings };
 }
 
 const getTableOrders = (branchId = '') => lastRows('TableOrders', TABLE_COLS, mapTableOrder, 0, branchId);

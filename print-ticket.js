@@ -299,10 +299,20 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     // ====== Format Receipt ======
     // ชื่อร้านพิมพ์เฉพาะที่ตั้งไว้ในหน้าสาขา — ใบครัวไม่พิมพ์ชื่อร้าน (ครัวไม่ต้องใช้ ประหยัดกระดาษ)
     printer.alignCenter();
-    if (isCustomerCopy && clean(header.name)) printer.println(clean(header.name));
+    // โลโก้ (หลังบ้าน > ใบเสร็จ): หน้าเว็บย่อเป็นขนาดพิมพ์และแปลงขาว-ดำมาแล้ว พิมพ์ได้ตรง ๆ · พิมพ์ไม่ได้ก็ข้ามไป ใบเสร็จต้องออก
+    if (isCustomerCopy && header.logo) {
+      const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(header.logo));
+      if (m) {
+        try { await printer.printImageBuffer(Buffer.from(m[1], 'base64')); }
+        catch (err) { console.error('Logo print skipped:', err.message || err); }
+      }
+    }
+    // รายละเอียดที่แสดงตั้งได้ที่ หลังบ้าน > ใบเสร็จ · ใบกำกับภาษีอย่างย่อต้องมีชื่อผู้ขายเสมอ
+    const showName = header.showName !== false || isAbb;
+    if (isCustomerCopy && showName && clean(header.name)) printer.println(clean(header.name));
     if (isCustomerCopy) {
-      clean(header.address).split(/\r?\n/).map(clean).filter(Boolean).forEach(line => printer.println(line));
-      if (clean(header.phone)) printer.println(`โทร ${clean(header.phone)}`);
+      if (header.showAddress !== false) clean(header.address).split(/\r?\n/).map(clean).filter(Boolean).forEach(line => printer.println(line));
+      if (header.showPhone !== false && clean(header.phone)) printer.println(`โทร ${clean(header.phone)}`);
       if (clean(header.taxId)) printer.println(`เลขผู้เสียภาษี ${clean(header.taxId)}`);
       if (isAbb && clean(header.posId)) printer.println(`POS ID: ${clean(header.posId)}`);
     }

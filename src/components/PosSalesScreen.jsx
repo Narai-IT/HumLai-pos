@@ -357,6 +357,8 @@ const PosSalesScreen = ({
         return {
           isFlattened: true,
           name: qty > 1 ? `${o.ItemName} (x${qty})` : o.ItemName,
+          // ราคาของบรรทัด → Print Server พิมพ์ชิดขวาเหมือนใบเสร็จ ลูกค้าตรวจได้ทีละรายการ
+          amount: (Number(o.ItemPrice) || 0) * qty,
           subItems: o.Options ? String(o.Options).split(', ').filter(Boolean) : []
         };
       }),

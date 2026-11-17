@@ -255,6 +255,29 @@ export const saveSettings = async (data) => {
   return { success: true };
 };
 
+// รูปแบบใบเสร็จ: โลโก้ (PNG ขาว-ดำที่ย่อเป็นขนาดพิมพ์แล้ว + รูปต้นฉบับไว้ปรับขนาดใหม่) และรายละเอียดหัวใบ
+const PNG_URL = /^data:image\/png;base64,[A-Za-z0-9+/=]+$/;
+const IMG_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+export const saveReceiptSettings = async (data) => {
+  const s = data.receipt && typeof data.receipt === 'object' ? data.receipt : {};
+  const logo = String(s.logo || '');
+  const logoSrc = String(s.logoSrc || '');
+  if (logo && (!PNG_URL.test(logo) || logo.length > 400000)) return { success: false, error: 'โลโก้ไม่ถูกต้องหรือใหญ่เกินไป' };
+  if (logoSrc && (!IMG_URL.test(logoSrc) || logoSrc.length > 1500000)) return { success: false, error: 'รูปโลโก้ต้นฉบับใหญ่เกินไป (ไม่เกินประมาณ 1 MB)' };
+  const paper = Number(s.paper) === 58 ? 58 : 80;
+  const maxW = paper === 58 ? 384 : 576;
+  const clean = {
+    logo, logoSrc, paper,
+    logoWidth: Math.max(48, Math.min(maxW, Math.round(Number(s.logoWidth) || 240))),
+    logoThreshold: Math.max(40, Math.min(220, Math.round(Number(s.logoThreshold) || 160))),
+    showName: s.showName !== false, showAddress: s.showAddress !== false, showPhone: s.showPhone !== false
+  };
+  const value = JSON.stringify(clean);
+  const res = await query(`UPDATE dbo.Settings SET [value] = @value WHERE [key] = 'receipt_settings'`, { value });
+  if (res.rowsAffected[0] === 0) await query(`INSERT INTO dbo.Settings ([key], [value]) VALUES ('receipt_settings', @value)`, { value });
+  return { success: true, receipt: clean };
+};
+
 // ── ล้างข้อมูล ──
 export const resetAllSheetData = async () => {
   await withTransaction(async (runner) => {
