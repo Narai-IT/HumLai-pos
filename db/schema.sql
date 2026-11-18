@@ -577,6 +577,10 @@ GO
 IF COL_LENGTH('dbo.Menu', 'branches') IS NULL
   ALTER TABLE dbo.Menu ADD branches NVARCHAR(MAX) NULL;
 GO
+-- เมนูเฉพาะสมาชิก — หน้าลูกค้าสั่งเองต้องล็อกอินสมาชิก (ยืนยันด้วยรหัสในบัตร LINE) · หน้าพนักงานต้องยิงบัตรสมาชิกก่อน
+IF COL_LENGTH('dbo.Menu', 'memberOnly') IS NULL
+  ALTER TABLE dbo.Menu ADD memberOnly BIT NULL;
+GO
 IF COL_LENGTH('dbo.Categories', 'visibility') IS NULL
   ALTER TABLE dbo.Categories ADD visibility NVARCHAR(20) NULL;
 GO

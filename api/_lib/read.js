@@ -15,7 +15,7 @@ const cols = (list) => list.map(c => `[${c}]`).join(', ');
 const ORDER_COLS   = cols(['Timestamp','OrderNumber','CustomerName','Address','ItemDetail','DiningOption','Price','TotalAmount','Status','OrderStartTime','CompletionTime','RecordedBy','Quantity']);
 const TABLE_COLS   = cols(['TableNumber','SessionId','ItemName','ItemNameEn','ItemPrice','Quantity','Options','Timestamp','Status','RecordedBy']);
 const MENU_BASE    = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId'];
-const MENU_COLS    = cols([...MENU_BASE, 'branches']);
+const MENU_COLS    = cols([...MENU_BASE, 'branches', 'memberOnly']);
 const CATEGORY_COLS= cols(Object.keys(CATEGORY_SPEC));
 // ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ยังไม่มีคอลัมน์ใหม่) → อ่านแบบเดิม หน้าร้านต้องโหลดเมนูได้เสมอ
 const CATEGORY_BASE= cols(Object.keys(CATEGORY_SPEC).filter(k => k !== 'visibility'));
@@ -78,6 +78,7 @@ export const getBranchTables = async () => {
 // เมนูเรียงตามลำดับที่จัดไว้ในหน้าจัดการเมนู — เมนูที่ยังไม่เคยจัด (sortOrder ว่าง) ต่อท้ายตามลำดับที่สร้าง
 // ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ไม่มีคอลัมน์ sortOrder) → เรียงแบบเดิม ไม่ให้หน้าร้านโหลดเมนูไม่ขึ้น
 const getMenuRows = () => allRows('Menu', MENU_COLS, mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq')
+  .catch(() => allRows('Menu', cols([...MENU_BASE, 'branches']), mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq'))
   .catch(() => allRows('Menu', cols(MENU_BASE), mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq'))
   .catch(() => allRows('Menu', cols(MENU_BASE), mapMenu));
 const getCategoryRows = () => allRows('Categories', CATEGORY_COLS, mapCategory)

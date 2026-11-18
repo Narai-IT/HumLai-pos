@@ -206,6 +206,11 @@ const CheckoutModal = ({
 
   // ส่วนลดเฉพาะหมวด: หาหมวดของแต่ละรายการจากชื่อเมนู แล้วลดเฉพาะยอดของหมวดที่เลือกไว้
   const categoriesOf = React.useMemo(() => menuCategoryLookup(menu), [menu]);
+  // เมนูเฉพาะสมาชิกในบิล → ต้องยิงบัตรสมาชิกก่อนชำระเงิน
+  const memberOnlyInBill = React.useMemo(() => {
+    const names = new Set((menu || []).filter(m => m && m.memberOnly === true).map(m => m.name));
+    return [...new Set((tableOrderItems || []).map(i => i && i.ItemName).filter(n => names.has(n)))];
+  }, [menu, tableOrderItems]);
   const discountLines = tableOrderItems.map(i => ({ name: i.ItemName, amount: (Number(i.ItemPrice) || 0) * (Number(i.Quantity) || 1) }));
   const discountFor = (d) => calcDiscount(d, discountLines, categoriesOf);
   const { subtotal, discountAmount, sc, vat, grand } = calcCharges(total, settings, discountFor(selectedDiscount));
@@ -599,10 +604,18 @@ const CheckoutModal = ({
                 )}
               </div>
             )}
+            {memberOnlyInBill.length > 0 && !member && (
+              <div role="alert" style={{ border: '2px solid #f59e0b', background: '#fffbeb', color: '#92400e', borderRadius: '12px', padding: '0.7rem 0.9rem', marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                👑 {lang === 'th'
+                  ? `บิลนี้มีเมนูเฉพาะสมาชิก (${memberOnlyInBill.join(', ')}) · ยิง QR บัตรสมาชิกก่อนชำระเงิน`
+                  : `Members-only items in this bill (${memberOnlyInBill.join(', ')}) · scan the member card first`}
+              </div>
+            )}
             <button
               onClick={() => setPaymentStep('payment_method')}
+              disabled={memberOnlyInBill.length > 0 && !member}
               className="confirm-btn"
-              style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}
+              style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800', ...(memberOnlyInBill.length > 0 && !member ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
             >
               {lang === 'th' ? `ดำเนินการชำระเงิน ฿${grand.toLocaleString()}` : `Proceed to Payment ฿${grand.toLocaleString()}`}
               <ChevronRight size={18} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '6px' }} />

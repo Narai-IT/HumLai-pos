@@ -1402,7 +1402,7 @@ function App() {
 
   // ── ลูกค้าแจ้งโอน (หน้าคีออส) → รอพนักงานหน้าขายกดยืนยัน ──
   // ส่งออเดอร์ทั้งก้อนไปเก็บไว้ก่อน บิลจริงออกตอนพนักงานกด "ได้รับเงินแล้ว" (respondKioskPayment)
-  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel, memberId, coupon) => {
+  const handleKioskPaymentRequest = async (targetTableNo, cartItems, total, paySessionId, diningLabel, memberId, coupon, verifyToken) => {
     const cartForServer = cartItems.map(item => {
       let unitPrice = Number(item.food.price) || 0;
       if (item.allPopups && item.allPopups.length > 0) {
@@ -1423,7 +1423,9 @@ function App() {
       // คูปองสมาชิกที่ใช้ในตะกร้า (จองไว้แล้ว) — total ด้านบนหักส่วนลดนี้แล้ว
       couponIds: coupon ? coupon.ids : undefined,
       couponRef: coupon ? coupon.ref : undefined,
-      couponDiscount: coupon ? coupon.discount : undefined
+      couponDiscount: coupon ? coupon.discount : undefined,
+      // ล็อกอินสมาชิก (รหัส 6 หลักในบัตร LINE) — เซิร์ฟเวอร์ใช้ตรวจเมนูเฉพาะสมาชิก
+      verifyToken: verifyToken || undefined
     };
     let lastError = '';
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -1431,6 +1433,8 @@ function App() {
         const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
         const json = await res.json().catch(() => null);
         if (json && json.success) return { success: true, status: json.status || 'pending', orderNumber: json.orderNumber || '' };
+        // เมนูเฉพาะสมาชิกแต่ยังไม่ได้ล็อกอิน/หมดเวลา → บอกหน้าลูกค้าทันที ไม่ต้องยิงซ้ำ
+        if (json && json.memberOnly) return { success: false, memberOnly: true, error: json.error };
         lastError = (json && json.error) || 'ส่งไม่สำเร็จ';
         if (/Unknown action/i.test(lastError)) break;
       } catch (e) {

@@ -508,6 +508,11 @@ const ManageMenu = () => {
                       }}>
                         {item.isActive !== false ? (lang === 'th' ? 'เปิด' : 'Active') : (lang === 'th' ? 'ซ่อน' : 'Hidden')}
                       </span>
+                      {item.memberOnly === true && (
+                        <span style={{ marginLeft: 4, padding: '0.25rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', fontWeight: 700, background: '#fef3c7', color: '#92400e' }}>
+                          👑 {lang === 'th' ? 'สมาชิก' : 'Members'}
+                        </span>
+                      )}
                       {Array.isArray(item.branches) && item.branches.length > 0 && (
                         <div style={{ marginTop: 4, fontSize: '0.75rem', color: '#2563eb', fontWeight: 600 }}>
                           🏠 {item.branches.map(id => (branchList.find(b => String(b.id) === String(id)) || {}).name || id).join(', ')}
@@ -843,6 +848,25 @@ const ManageMenu = () => {
                 />
                 <label htmlFor="menu-active" style={{ marginBottom: 0, cursor: 'pointer' }}>
                   {lang === 'th' ? 'เปิดใช้งาน (แสดงบนหน้าร้าน)' : 'Active (Show on storefront)'}
+                </label>
+              </div>
+
+              {/* เมนูเฉพาะสมาชิก: ลูกค้าสั่งเองต้องล็อกอินสมาชิก · พนักงานต้องยิงบัตรสมาชิกก่อน */}
+              <div className="admin-form-group" style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', border: '1.5px solid #f59e0b', background: '#fffbeb', borderRadius: '10px', padding: '0.6rem 0.75rem' }}>
+                <input
+                  type="checkbox"
+                  id="menu-member-only"
+                  checked={editingItem.memberOnly === true}
+                  onChange={e => setEditingItem({ ...editingItem, memberOnly: e.target.checked })}
+                  style={{ width: 'auto', marginBottom: 0, marginTop: '0.2rem' }}
+                />
+                <label htmlFor="menu-member-only" style={{ marginBottom: 0, cursor: 'pointer' }}>
+                  <b>👑 {lang === 'th' ? 'เฉพาะสมาชิก' : 'Members only'}</b>
+                  <span style={{ display: 'block', fontSize: '0.8rem', color: '#92400e', fontWeight: 500, marginTop: '0.15rem' }}>
+                    {lang === 'th'
+                      ? 'หน้าลูกค้าสั่งเอง: แสดงป้าย "เฉพาะสมาชิก" ลูกค้าต้องล็อกอินสมาชิก (ยืนยันด้วยรหัสในบัตร LINE) ก่อนถึงสั่งได้ · หน้าขายพนักงาน: ต้องยิงบัตรสมาชิกก่อน'
+                      : 'Self-order: customer must log in as a member first · Staff POS: scan the member card first'}
+                  </span>
                 </label>
               </div>
 

@@ -247,6 +247,12 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // ร้านเปิด "ยืนยันตัวตนก่อนใช้คูปอง" ไว้ไหม (CRM_KIOSK_VERIFY ที่เครื่อง API) — รู้จากคำตอบครั้งแรกที่ขอรหัส · ปิดอยู่ = แสดงคูปองทันที
   const [needVerify, setNeedVerify] = useState(false);
   const verified = !!verifyToken || !needVerify;
+  // ── เมนูเฉพาะสมาชิก: ต้องล็อกอินสมาชิก = ใส่เลขสมาชิก + ยืนยันรหัส 6 หลักในบัตร LINE (บังคับเสมอ ไม่ขึ้นกับการตั้งค่าคูปอง) ──
+  const memberLoggedIn = !!(member && verifyToken);
+  const isMemberOnly = (food) => !!(food && food.memberOnly === true);
+  const [gateFood, setGateFood] = useState(null);    // เมนูที่ลูกค้ากดตอนยังไม่ล็อกอิน → เปิดหน้าต่างล็อกอิน
+  const [gateMsg, setGateMsg] = useState('');
+  const [memberNotice, setMemberNotice] = useState('');
   const [codeInput, setCodeInput] = useState('');
   const [kWallet, setKWallet] = useState(null);
   // คูปองที่ใช้กับออเดอร์นี้ (ใช้ได้หลายใบ ตามลำดับที่กด) · ระบบสมาชิกคิดส่วนลดและแบ่งชิ้นในตะกร้าให้แต่ละใบ
@@ -564,6 +570,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   };
 
   const handleFoodClick = (food) => {
+    // เมนูเฉพาะสมาชิก: ยังไม่ล็อกอิน → เปิดหน้าต่างล็อกอินสมาชิกก่อน (ล็อกอินเสร็จแล้วสั่งต่อให้เลย)
+    if (isMemberOnly(food) && !memberLoggedIn) { setGateMsg(''); setGateFood(food); return; }
     // Check if food has popups/options configured
     if (food.hasPopup1 || food.hasPopup2 || food.hasPopup3 || food.hasPopup4 || food.hasPopup5 || food.hasPopup6 || (food.priceOptions && food.priceOptions.length > 1)) {
       setSelectedFood(food);
@@ -571,6 +579,40 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       handleAddToCartDirect(food);
     }
   };
+
+  // หน้าต่างล็อกอินเปิดอยู่ → ขอลิงก์เปิดบัตรสมาชิก LINE ไว้ (ใช้ดูรหัส 6 หลัก)
+  useEffect(() => {
+    if (!gateFood || !crmOn || !member || memberLoggedIn || cardUrl) return undefined;
+    let alive = true;
+    crmCall('crmKioskSendCode', { memberId: member.id, branchId }).then(res => {
+      if (!alive) return;
+      if (res.success) setCardUrl(res.liffUrl || '-'); else setGateMsg(res.error || '');
+    });
+    return () => { alive = false; };
+  }, [gateFood, crmOn, member, memberLoggedIn, cardUrl, branchId]);
+  const handleFoodClickRef = useRef(handleFoodClick);
+  useEffect(() => { handleFoodClickRef.current = handleFoodClick; });
+  // ล็อกอินสำเร็จ → ปิดหน้าต่าง แล้วสั่งเมนูที่กดไว้ต่อเลย
+  const gateFoodRef = useRef(null);
+  useEffect(() => { gateFoodRef.current = gateFood; });
+  useEffect(() => {
+    if (!memberLoggedIn || !gateFoodRef.current) return;
+    const f = gateFoodRef.current;
+    setGateFood(null);
+    handleFoodClickRef.current(f);
+  }, [memberLoggedIn]);
+  // ออกจากสมาชิก/เปลี่ยนสมาชิก/ยังไม่ล็อกอิน แต่มีเมนูสมาชิกในตะกร้า → เอาออก (รวมของแถม/รายการที่ผูกกับจานนั้น) และแจ้งลูกค้า
+  useEffect(() => {
+    if (memberLoggedIn) return;
+    const bad = cart.filter(r => isMemberOnly(r.food));
+    if (!bad.length) return;
+    const groups = new Set(bad.filter(r => r.groupId).map(r => r.groupId));
+    const names = new Set(bad.map(r => r.food.name));
+    setCart(prev => prev.filter(r => !isMemberOnly(r.food) && !(r.groupId && groups.has(r.groupId)) && !(!r.groupId && r.fromPopupOf && names.has(r.fromPopupOf))));
+    setMemberNotice(lang === 'th'
+      ? `เอาเมนูเฉพาะสมาชิกออกจากตะกร้าแล้ว (${[...names].join(', ')}) · ล็อกอินสมาชิกแล้วสั่งใหม่ได้`
+      : `Members-only items were removed (${[...names].join(', ')}). Log in as a member to order them.`);
+  }, [memberLoggedIn, cart]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // รูปขยาย: ดันประวัติไว้ 1 ขั้น ให้ปุ่มย้อนกลับของมือถือปิดรูปแทนการออกจากหน้า
   // (คง state เดิมของ router ไว้ เพื่อไม่ให้ router มองว่าเปลี่ยนหน้า)
@@ -759,10 +801,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const dining = orderType === 'takeaway' ? 'ห่อกลับบ้าน' : 'ทานที่ร้าน';
     const res = onRequestPayment
       ? await onRequestPayment(tableNo, cart, payTotal, snap.id, dining, member ? member.id : null,
-          kApplied.length && member ? { ids: kApplied.map(c => String(c.id)), ref: kioskRef.current, discount: couponOff } : null)
+          kApplied.length && member ? { ids: kApplied.map(c => String(c.id)), ref: kioskRef.current, discount: couponOff } : null,
+          verifyToken || '')
       : { success: false, error: 'ระบบยังไม่พร้อม' };
     setPayBusy(false);
     if (!res || !res.success) {
+      // เซิร์ฟเวอร์ปฏิเสธเพราะเมนูสมาชิก (ล็อกอินหมดเวลา) → ล้างการล็อกอิน ระบบจะเอาเมนูสมาชิกออกและแจ้งลูกค้าเอง
+      if (res && res.memberOnly) { setVerifyToken(''); saveSession(VERIFY_KEY, null); setPayError(res.error); return; }
       setPayError(lang === 'th'
         ? `แจ้งร้านไม่สำเร็จ${res && /Unknown action/i.test(res.error || '') ? ' (ระบบร้านยังไม่อัปเดต)' : ''} — กดอีกครั้ง หรือแจ้งพนักงาน`
         : 'Could not notify the shop — please try again or call our staff.');
@@ -960,6 +1005,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const inCartItems = cart.filter(c => c.food.id === food.id && !c.food.isBundled);
     const inCartQty = inCartItems.reduce((sum, c) => sum + c.quantity, 0);
     const price = Number(food.price) || 0;
+    // เมนูเฉพาะสมาชิก: ป้าย + กรอบส้ม · ยังไม่ล็อกอิน = ปุ่มล็อก (กดแล้วเปิดหน้าต่างล็อกอิน)
+    const memberOnly = isMemberOnly(food);
+    const locked = memberOnly && !memberLoggedIn;
 
     return (
       <div
@@ -968,8 +1016,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
            ถ้าแตะแล้วเพิ่มของทันทีจะได้ของที่ไม่ได้ตั้งใจสั่ง ต้องกดปุ่ม "+ สั่ง" เท่านั้น */
         style={{
           background: '#ffffff', borderRadius: '18px',
-          border: '1px solid #e2e8f0', overflow: 'hidden',
-          boxShadow: '0 6px 20px rgba(0,0,0,0.04)',
+          border: memberOnly ? '2px solid #f59e0b' : '1px solid #e2e8f0', overflow: 'hidden',
+          boxShadow: memberOnly ? '0 6px 20px rgba(245,158,11,0.18)' : '0 6px 20px rgba(0,0,0,0.04)',
           transition: 'transform 0.15s',
           display: 'flex', flexDirection: 'column', height: '100%',
           position: 'relative'
@@ -986,9 +1034,20 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             alt={food.name}
             loading="lazy"
             placeholderSize="3rem"
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', ...(locked ? { filter: 'grayscale(0.35) brightness(0.92)' } : {}) }}
           />
-          
+
+          {memberOnly && (
+            <div style={{
+              position: 'absolute', top: '8px', left: '42px', pointerEvents: 'none',
+              background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff',
+              fontWeight: 900, fontSize: '0.72rem', padding: '0.22rem 0.55rem', borderRadius: '20px',
+              border: '1.5px solid #ffffff', boxShadow: '0 3px 10px rgba(217,119,6,0.45)', whiteSpace: 'nowrap'
+            }}>
+              👑 {locked ? (lang === 'th' ? 'เฉพาะสมาชิก' : 'Members only') : (lang === 'th' ? 'เมนูสมาชิก' : 'Member menu')}
+            </div>
+          )}
+
           <div style={{
             position: 'absolute', top: '8px', left: '8px',
             width: '28px', height: '28px', borderRadius: '50%',
@@ -1043,6 +1102,17 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             )}
           </div>
 
+          {locked ? (
+            <button
+              onClick={() => handleFoodClick(food)}
+              style={{
+                marginTop: 'auto', background: '#fff7ed', color: '#9a3412', border: '1.5px dashed #f59e0b', borderRadius: '11px',
+                padding: '0.6rem 0.4rem', fontWeight: '800', fontSize: '0.84rem', cursor: 'pointer', width: '100%', fontFamily: 'inherit'
+              }}
+            >
+              🔒 {lang === 'th' ? 'สั่งได้เฉพาะสมาชิก' : 'Members only'}
+            </button>
+          ) : (
           <button
             onClick={() => handleFoodClick(food)}
             style={{
@@ -1056,6 +1126,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           >
             <Plus size={16} /> {lang === 'th' ? 'ใส่ตะกร้า' : 'Add to cart'}
           </button>
+          )}
         </div>
       </div>
     );
@@ -1890,6 +1961,90 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       {page === 'pay' && renderPayPage()}
 
       {/* ─── รูปเมนูขยายเต็มจอ ─── */}
+      {/* แจ้งว่าเอาเมนูเฉพาะสมาชิกออกจากตะกร้าแล้ว (ออกจาก/เปลี่ยนสมาชิก หรือล็อกอินหมดเวลา) */}
+      {memberNotice && (
+        <div role="alert" style={{ position: 'fixed', top: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 3100, width: 'min(92vw, 480px)', background: '#fff7ed', border: '2px solid #f59e0b', color: '#9a3412', borderRadius: 14, padding: '0.7rem 2.4rem 0.7rem 0.9rem', fontWeight: 700, fontSize: '0.9rem', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
+          👑 {memberNotice}
+          <button onClick={() => setMemberNotice('')} aria-label={lang === 'th' ? 'ปิด' : 'Close'} style={{ position: 'absolute', top: 6, right: 8, border: 0, background: 'none', fontSize: '1.2rem', color: '#9a3412', cursor: 'pointer' }}>×</button>
+        </div>
+      )}
+
+      {/* ── ล็อกอินสมาชิก (กดเมนูเฉพาะสมาชิกตอนยังไม่ล็อกอิน): ใส่เลขสมาชิก → ยืนยันรหัส 6 หลักในบัตร LINE ── */}
+      {gateFood && (() => {
+        const th = lang === 'th';
+        const field = { flex: 1, minWidth: 0, border: '1.5px solid #cbd5e1', borderRadius: 12, padding: '0.7rem 0.8rem', fontSize: '1rem', fontFamily: 'inherit' };
+        const goBtn = (on) => ({ border: 0, background: '#0f172a', color: '#fff', borderRadius: 12, padding: '0 1rem', fontWeight: 800, fontFamily: 'inherit', fontSize: '0.95rem', opacity: on ? 1 : 0.5, cursor: 'pointer' });
+        const close = () => { setGateFood(null); setGateMsg(''); };
+        return (
+          <div role="dialog" aria-modal="true" aria-label={th ? 'ล็อกอินสมาชิก' : 'Member login'} onClick={close}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', zIndex: 3000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: '22px 22px 0 0', padding: '1rem 1.1rem 1.4rem', boxShadow: '0 -8px 30px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' }}>
+              <div style={{ width: 44, height: 5, borderRadius: 3, background: '#cbd5e1', margin: '0 auto 0.8rem' }} />
+              <div style={{ display: 'flex', gap: '0.7rem', alignItems: 'center', marginBottom: '0.9rem' }}>
+                <div style={{ width: 64, height: 64, borderRadius: 12, overflow: 'hidden', flexShrink: 0, background: '#f1f5f9' }}>
+                  <MenuImage food={gateFood} alt="" placeholderSize="1.5rem" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 900, fontSize: '1.05rem' }}>{th ? gateFood.name : (gateFood.nameEn || gateFood.name)}</div>
+                  <div style={{ color: '#b45309', fontWeight: 800, fontSize: '0.88rem' }}>👑 {th ? 'เมนูนี้สั่งได้เฉพาะสมาชิก · ล็อกอินก่อนนะ' : 'Members only · please log in'}</div>
+                </div>
+              </div>
+              {!crmOn ? (
+                <p style={{ color: '#b91c1c', fontWeight: 700 }}>{th ? 'ตอนนี้ระบบสมาชิกยังไม่พร้อม สั่งเมนูนี้ไม่ได้ชั่วคราว' : 'Membership is unavailable right now.'}</p>
+              ) : !member ? (
+                <>
+                  <label htmlFor="gate-member" style={{ display: 'block', fontWeight: 800, marginBottom: '0.4rem' }}>{th ? 'ขั้นที่ 1/2: ใส่เลขที่สมาชิก หรือเบอร์โทรที่สมัครไว้' : 'Step 1/2: member no. or phone'}</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input id="gate-member" value={memberInput} autoComplete="off" autoFocus
+                      onChange={e => { setMemberInput(e.target.value); setMemberErr(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter') checkMember(); }} style={field} />
+                    <button onClick={checkMember} disabled={memberBusy || !memberInput.trim()} style={goBtn(!memberBusy && memberInput.trim())}>{memberBusy ? '…' : (th ? 'ถัดไป' : 'Next')}</button>
+                  </div>
+                  {memberErr && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.4rem', fontWeight: 600 }}>{memberErr}</div>}
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.4rem' }}>{th ? 'ดูเลขที่สมาชิกได้ในบัตรสมาชิก LINE' : 'Your member no. is in your LINE member card'}</div>
+                  {joinUrl && (
+                    <>
+                      <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem', margin: '0.9rem 0 0' }}>{th ? 'ยังไม่เป็นสมาชิก?' : 'Not a member yet?'}</div>
+                      <a href={joinUrl} target="_blank" rel="noopener noreferrer"
+                        style={{ display: 'block', textAlign: 'center', background: '#06c755', color: '#fff', borderRadius: 12, padding: '0.7rem', fontWeight: 800, marginTop: '0.4rem', textDecoration: 'none' }}>
+                        {th ? 'สมัครสมาชิกฟรีผ่าน LINE' : 'Join free on LINE'}
+                      </a>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 800, marginBottom: '0.3rem' }}>{th ? `ขั้นที่ 2/2: ยืนยันตัวตนคุณ${member.name}` : `Step 2/2: verify, ${member.name}`}</div>
+                  <label htmlFor="gate-code" style={{ display: 'block', fontSize: '0.88rem', color: '#9a3412', marginBottom: '0.5rem' }}>
+                    {th ? 'เปิดบัตรสมาชิกใน LINE แล้วพิมพ์รหัส 6 หลักที่อยู่ใต้ QR' : 'Open your LINE member card and type the 6-digit code under the QR'}
+                  </label>
+                  {cardUrl && cardUrl !== '-' && (
+                    <a href={cardUrl} target="_blank" rel="noopener noreferrer"
+                      style={{ display: 'inline-block', background: '#06c755', color: '#fff', borderRadius: 10, padding: '0.5rem 0.9rem', fontWeight: 800, textDecoration: 'none', marginBottom: '0.6rem' }}>
+                      {th ? 'เปิดบัตรสมาชิกใน LINE' : 'Open LINE member card'}
+                    </a>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input id="gate-code" value={codeInput} inputMode="numeric" maxLength={6} autoComplete="off" placeholder="000000"
+                      onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setKMsg(''); }}
+                      onKeyDown={e => { if (e.key === 'Enter') checkCode(); }}
+                      style={{ ...field, flex: '0 0 150px', letterSpacing: '0.3em', textAlign: 'center', fontSize: '1.2rem' }} />
+                    <button onClick={checkCode} disabled={kBusy === 'check' || codeInput.length !== 6} style={goBtn(codeInput.length === 6)}>{kBusy === 'check' ? '…' : (th ? 'ล็อกอิน' : 'Log in')}</button>
+                  </div>
+                  {(kMsg || gateMsg) && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg || gateMsg}</div>}
+                  <button onClick={() => keepMember(null)} style={{ marginTop: '0.7rem', border: 0, background: 'none', color: '#2563eb', textDecoration: 'underline', fontFamily: 'inherit', cursor: 'pointer', padding: 0 }}>
+                    {th ? `ไม่ใช่คุณ${member.name}? เปลี่ยนสมาชิก` : 'Not you? Change member'}
+                  </button>
+                </>
+              )}
+              <button onClick={close} style={{ display: 'block', width: '100%', marginTop: '1rem', border: 0, background: 'none', color: '#475569', fontWeight: 700, fontSize: '0.95rem', fontFamily: 'inherit', cursor: 'pointer' }}>
+                {th ? 'ไม่ใช่ตอนนี้' : 'Not now'}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {previewFood && (
         <div
           onClick={closePreview}

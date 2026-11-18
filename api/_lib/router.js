@@ -10,6 +10,7 @@ import { getPool, query, explainConnectError } from './db.js';
 import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
+import { memberOnlyProblem } from './memberOnly.js';
 import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
@@ -22,7 +23,8 @@ export const BUILD = '2026-11-10-print-queue';
 const MENU_ACTIONS = new Set(['upsertMenu', 'deleteMenu', 'saveMenu', 'upsertCategory', 'deleteCategory', 'saveCategories']);
 
 const POST_ACTIONS = {
-  kioskPaidOrder:          write.handleKioskPaidOrder,
+  // ยิงตรงจากภายนอก (หน้าลูกค้าตอนนี้ใช้ kioskPaymentRequest) — เมนูเฉพาะสมาชิกต้องล็อกอินสมาชิกเหมือนกัน
+  kioskPaidOrder:          async (data) => (await memberOnlyProblem(data.items, data, await branchForWrite(data))) || write.handleKioskPaidOrder(data),
   kioskPaymentRequest,
   respondKioskPayment,
   issueTaxInvoice,
