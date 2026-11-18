@@ -32,6 +32,8 @@ export async function memberOnlyProblem(items, { memberId, verifyToken } = {}, b
   }
   const v = await verifyKioskMember({ memberId, verifyToken }, branchId);
   if (!v || !v.success) {
+    // ระบบสมาชิกช้า/ปิดอยู่ชั่วคราว ≠ ล็อกอินหมดเวลา → ให้ลองใหม่ ไม่ต้องล็อกอินใหม่
+    if (!(v && v.verify)) return { success: false, memberOnly: true, retry: true, error: `เชื่อมระบบสมาชิกไม่ได้ชั่วคราว กรุณากดส่งอีกครั้ง (เมนู ${names})` };
     return { success: false, memberOnly: true, error: `ล็อกอินสมาชิกหมดเวลาหรือไม่ถูกต้อง กรุณาล็อกอินใหม่ก่อนสั่งเมนู ${names}` };
   }
   return null;

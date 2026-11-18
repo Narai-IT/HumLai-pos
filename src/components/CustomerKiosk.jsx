@@ -306,7 +306,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const finishCoupon = () => { keepApplied([]); kioskRef.current = newCouponRef('kiosk'); saveSession(REF_KEY, kioskRef.current); setKWallet(null); };
   const kioskCall = async (action, extra) => {
     const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, items: kioskItems, ...extra });
-    if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); }
+    if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); }
     return res;
   };
   const checkMember = async () => {
@@ -635,16 +635,19 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     }
   };
 
-  // หน้าต่างล็อกอินเปิดอยู่ → ขอลิงก์เปิดบัตรสมาชิก LINE ไว้ (ใช้ดูรหัส 6 หลัก)
+  // ร้านมีเมนูเฉพาะสมาชิก → จอแรกให้ล็อกอิน (รหัส 6 หลัก) ต่อจากใส่เลขสมาชิกได้เลย เข้าหน้าเมนูแล้วกดสั่งเมนูสมาชิกได้ทันที
+  const hasMemberMenu = liveMenu.some(isMemberOnly);
+  const startLogin = !orderType && hasMemberMenu;
+  // หน้าต่างล็อกอินเปิดอยู่ (หรือจอแรกที่มีเมนูสมาชิก) → ขอลิงก์เปิดบัตรสมาชิก LINE ไว้ (ใช้ดูรหัส 6 หลัก)
   useEffect(() => {
-    if (!gateFood || !crmOn || !member || memberLoggedIn || cardUrl) return undefined;
+    if (!(gateFood || startLogin) || !crmOn || !member || memberLoggedIn || cardUrl) return undefined;
     let alive = true;
     crmCall('crmKioskSendCode', { memberId: member.id, branchId }).then(res => {
       if (!alive) return;
       if (res.success) setCardUrl(res.liffUrl || '-'); else setGateMsg(res.error || '');
     });
     return () => { alive = false; };
-  }, [gateFood, crmOn, member, memberLoggedIn, cardUrl, branchId]);
+  }, [gateFood, startLogin, crmOn, member, memberLoggedIn, cardUrl, branchId]);
   const handleFoodClickRef = useRef(handleFoodClick);
   useEffect(() => { handleFoodClickRef.current = handleFoodClick; });
   // ล็อกอินสำเร็จ → ปิดหน้าต่าง แล้วสั่งเมนูที่กดไว้ต่อเลย
@@ -862,6 +865,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setPayBusy(false);
     if (!res || !res.success) {
       // เซิร์ฟเวอร์ปฏิเสธเพราะเมนูสมาชิก (ล็อกอินหมดเวลา) → ล้างการล็อกอิน ระบบจะเอาเมนูสมาชิกออกและแจ้งลูกค้าเอง
+      if (res && res.memberOnly && res.retry) { setPayError(res.error); return; }
       if (res && res.memberOnly) { setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); setPayError(res.error); return; }
       // เกินโควตาเมนูสมาชิกวันนี้ (เช่น สั่งจากเครื่องอื่น/สาขาอื่นไปก่อน) → บอกลูกค้า และโหลดสิทธิ์ใหม่
       if (res && res.memberQuota) { setPayError(res.error); loadQuota(); return; }
@@ -1263,7 +1267,38 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                   {memberLoggedIn ? (lang === 'th' ? 'ออกจากระบบ' : 'Log out') : (lang === 'th' ? 'ไม่ใช่ฉัน' : 'Not me')}
                 </button>
               </div>
-            ) : (
+            ) : null}
+            {member && !memberLoggedIn && hasMemberMenu && (
+              <div style={{ borderTop: '1px dashed #86efac', marginTop: '0.8rem', paddingTop: '0.8rem' }}>
+                <label htmlFor="start-code" style={{ display: 'block', fontWeight: 800, marginBottom: '0.15rem' }}>
+                  {lang === 'th' ? '👑 ล็อกอินเพื่อสั่งเมนูเฉพาะสมาชิก' : '👑 Log in for member-only menu'}
+                </label>
+                <span style={{ display: 'block', fontSize: '0.82rem', color: '#166534', marginBottom: '0.5rem' }}>
+                  {lang === 'th' ? 'เปิดบัตรสมาชิกใน LINE แล้วพิมพ์รหัส 6 หลักใต้ QR · ล็อกอินครั้งเดียว ครั้งต่อไปไม่ต้องใส่อีก' : 'Open your LINE member card and type the 6-digit code under the QR · once only'}
+                </span>
+                {cardUrl && cardUrl !== '-' && (
+                  <a href={cardUrl} target="_blank" rel="noopener noreferrer"
+                    style={{ display: 'inline-block', background: '#06c755', color: '#fff', borderRadius: 10, padding: '0.45rem 0.85rem', fontWeight: 800, textDecoration: 'none', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                    {lang === 'th' ? 'เปิดบัตรสมาชิกใน LINE' : 'Open LINE member card'}
+                  </a>
+                )}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input id="start-code" value={codeInput} inputMode="numeric" maxLength={6} autoComplete="off" placeholder="000000"
+                    onChange={e => { setCodeInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setKMsg(''); }}
+                    onKeyDown={e => { if (e.key === 'Enter') checkCode(); }}
+                    style={{ flex: 1, minWidth: 0, border: '1px solid #86efac', borderRadius: 12, padding: '0.65rem', fontSize: '1.15rem', letterSpacing: '0.3em', textAlign: 'center', fontFamily: 'inherit', background: '#fff' }} />
+                  <button onClick={checkCode} disabled={kBusy === 'check' || codeInput.length !== 6}
+                    style={{ border: 'none', borderRadius: 12, padding: '0 1rem', background: '#16a34a', color: '#fff', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', opacity: kBusy === 'check' || codeInput.length !== 6 ? 0.5 : 1 }}>
+                    {kBusy === 'check' ? '…' : (lang === 'th' ? 'ล็อกอิน' : 'Log in')}
+                  </button>
+                </div>
+                {kMsg && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.5rem', fontWeight: 600 }}>{kMsg}</div>}
+                <span style={{ display: 'block', fontSize: '0.78rem', color: '#64748b', marginTop: '0.4rem' }}>
+                  {lang === 'th' ? 'ไม่สั่งเมนูสมาชิก ข้ามได้ · ยังสะสมแต้มบิลนี้ได้ตามปกติ' : 'Optional · points are still collected'}
+                </span>
+              </div>
+            )}
+            {member ? null : (
               <>
                 <label htmlFor="kiosk-member" style={{ display: 'block', fontWeight: 800, marginBottom: '0.15rem' }}>{lang === 'th' ? 'เป็นสมาชิกหำไหลไหม? สะสมแต้มได้เลย' : 'Member? Earn points'}</label>
                 <span style={{ display: 'block', fontSize: '0.82rem', color: '#9a3412', marginBottom: '0.6rem' }}>

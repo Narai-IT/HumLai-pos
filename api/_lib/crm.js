@@ -141,7 +141,7 @@ export async function releaseCoupon(data, branchId) {
 // ให้ระบบสมาชิกตรวจ token เอง (บังคับยืนยันเสมอ ไม่ขึ้นกับ CRM_KIOSK_VERIFY)
 export async function verifyKioskMember(data, branchId) {
   const memberId = String(data.memberId || '');
-  if (!MEMBER_RE.test(memberId) || !data.verifyToken) return { success: false, error: 'ยังไม่ได้ล็อกอินสมาชิก' };
+  if (!MEMBER_RE.test(memberId) || !data.verifyToken) return { success: false, verify: true, error: 'ยังไม่ได้ล็อกอินสมาชิก' };
   return crmAction('/api/pos/members/wallet', { memberId, requireVerify: true, verifyToken: String(data.verifyToken), subtotal: 0 }, branchId);
 }
 // Voucher (ใช้แทนเงินตอนชำระ): ยิง QR / พิมพ์รหัส Voucher กระดาษ หรือสแกน QR Voucher ในบัตรสมาชิก LINE → CRM ตรวจแล้วจองไว้กับบิลนี้
