@@ -25,6 +25,7 @@ const ManageCategories = lazy(() => import('./components/admin/ManageCategories'
 const ManageTables = lazy(() => import('./components/admin/ManageTables'));
 const ManagePrinters = lazy(() => import('./components/admin/ManagePrinters'));
 const ManageReceipt = lazy(() => import('./components/admin/ManageReceipt'));
+const ManageMemberMenu = lazy(() => import('./components/admin/ManageMemberMenu'));
 const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
 const ManageBranches = lazy(() => import('./components/admin/ManageBranches'));
 const ManageBranchMenu = lazy(() => import('./components/admin/ManageBranchMenu'));
@@ -1435,6 +1436,7 @@ function App() {
         if (json && json.success) return { success: true, status: json.status || 'pending', orderNumber: json.orderNumber || '' };
         // เมนูเฉพาะสมาชิกแต่ยังไม่ได้ล็อกอิน/หมดเวลา → บอกหน้าลูกค้าทันที ไม่ต้องยิงซ้ำ
         if (json && json.memberOnly) return { success: false, memberOnly: true, error: json.error };
+        if (json && json.memberQuota) return { success: false, memberQuota: true, error: json.error };
         lastError = (json && json.error) || 'ส่งไม่สำเร็จ';
         if (/Unknown action/i.test(lastError)) break;
       } catch (e) {
@@ -1766,6 +1768,7 @@ function App() {
           <Route path="branch-menu" element={isAdmin ? <ManageBranchMenu branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
           <Route path="printers" element={isAdmin ? <ManagePrinters branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
+          <Route path="member-menu" element={isAdmin ? <ManageMemberMenu /> : <Navigate to="/admin" replace />} />
           <Route path="receipt" element={isAdmin ? <ManageReceipt receiptSettings={receiptSettings} onSaved={setReceiptSettings} branches={branches} branchId={tablesBranch} /> : <Navigate to="/admin" replace />} />
           <Route path="settings" element={isAdmin ? <ManageSettings users={users} /> : <Navigate to="/admin" replace />} />
           <Route path="banner" element={isAdmin ? <ManageBanner categories={allCategories.length > 0 ? allCategories : categories} /> : <Navigate to="/admin" replace />} />

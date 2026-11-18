@@ -690,3 +690,35 @@ CREATE TABLE dbo.PrintAgents (
   LastSeen  DATETIME2(0)  NOT NULL
 );
 GO
+
+-- ─────────────────────────────────────────
+-- เมนูเฉพาะสมาชิก: จำว่าสมาชิกแต่ละคนสั่งเมนูสมาชิกไปกี่ชิ้นในแต่ละวัน (จำกัดต่อวัน · หลังบ้าน > เมนูสมาชิก)
+-- นับรวมทุกสาขา · Status: held (ลูกค้าแจ้งโอนแล้ว รอพนักงานยืนยัน — นับกันโควตาไว้ก่อน) / used (บิลชำระแล้ว)
+--   / released (ปฏิเสธ ยกเลิกบิล คืนเงิน — คืนสิทธิ์)
+-- UsageDay = วันทำการตามเวลาไทย (เริ่มวันใหม่ตามเวลาที่ตั้ง) · OrderRef = รหัสคำขอจากหน้าลูกค้า หรือเลขบิลจากหน้าขาย
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.MemberMenuUsage', 'U') IS NULL
+CREATE TABLE dbo.MemberMenuUsage (
+  RowId        INT IDENTITY(1,1) PRIMARY KEY,
+  MemberId     NVARCHAR(20)  NOT NULL,
+  MenuId       NVARCHAR(60)  NOT NULL,
+  MenuName     NVARCHAR(300) NULL,
+  Qty          INT           NOT NULL,
+  Channel      NVARCHAR(10)  NOT NULL,
+  BranchId     NVARCHAR(60)  NULL,
+  OrderRef     NVARCHAR(80)  NOT NULL,
+  OrderNumber  NVARCHAR(60)  NULL,
+  [Status]     NVARCHAR(10)  NOT NULL,
+  UsageDay     CHAR(10)      NOT NULL,
+  CreatedAt    DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_MemberMenuUsage_Member' AND object_id = OBJECT_ID('dbo.MemberMenuUsage'))
+  CREATE INDEX IX_MemberMenuUsage_Member ON dbo.MemberMenuUsage (MemberId, UsageDay);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_MemberMenuUsage_Ref' AND object_id = OBJECT_ID('dbo.MemberMenuUsage'))
+  CREATE INDEX IX_MemberMenuUsage_Ref ON dbo.MemberMenuUsage (OrderRef);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_MemberMenuUsage_Day' AND object_id = OBJECT_ID('dbo.MemberMenuUsage'))
+  CREATE INDEX IX_MemberMenuUsage_Day ON dbo.MemberMenuUsage (UsageDay);
+GO

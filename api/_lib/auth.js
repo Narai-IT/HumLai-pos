@@ -132,14 +132,15 @@ export async function login(data) {
 // claimPrintJobs / reportPrintJob = Print Server ในร้าน (ตรวจด้วยกุญแจของสาขาแทนการล็อกอิน)
 const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskPaymentRequest', 'getKioskPayment', 'crmKioskMember',
   'claimPrintJobs', 'reportPrintJob',
+  'memberMenuQuota',
   'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem', 'crmKioskCancelRedeem']);
 
 // ข้อมูลสมาชิก (ชื่อ เบอร์ แต้ม) ต้องล็อกอินพนักงานเสมอ แม้ร้านไม่ได้เปิด "บังคับล็อกอิน" — กันคนนอกไล่ค้นข้อมูลลูกค้าจากเบอร์
-const ALWAYS_LOGIN = new Set(['crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
+const ALWAYS_LOGIN = new Set(['staffMemberQuota', 'getMemberMenuToday', 'crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
 
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([
-  'saveBranches', 'saveUsers', 'getUsers', 'saveSettings', 'saveReceiptSettings', 'resetAllSheetData', 'clearSalesData',
+  'saveBranches', 'saveUsers', 'getUsers', 'saveSettings', 'saveReceiptSettings', 'saveMemberMenuSettings', 'resetAllSheetData', 'clearSalesData',
   'upsertMenu', 'deleteMenu', 'saveMenu', 'saveMenuOrder', 'upsertCategory', 'deleteCategory', 'saveCategories',
   'upsertPromotion', 'deletePromotion', 'savePromotions', 'saveDiscounts', 'uploadImage', 'uploadMenuImageHost',
   'saveBOM', 'upsertIngredient', 'deleteIngredient'

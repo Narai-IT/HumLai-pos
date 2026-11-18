@@ -12,6 +12,7 @@ import { thaiTimeISO } from './time.js';
 import { branchForWrite } from './branch.js';
 import { handleKioskPaidOrder, itemOptionText } from './write.js';
 import { memberOnlyProblem } from './memberOnly.js';
+import { holdMemberMenu, markMemberMenuUsed, releaseMemberMenu } from './memberMenu.js';
 
 const text = (v, max) => String(v ?? '').trim().slice(0, max);
 const COLS = 'id, branchId, tableNo, dining, payloadJson, total, [status], requestedAt, respondedAt, respondedBy, orderNumber';
@@ -77,9 +78,12 @@ export async function kioskPaymentRequest(data) {
   };
 
   const existing = await findById(id);
+  if (existing && existing.status === 'approved') return { success: true, status: 'approved', orderNumber: existing.orderNumber || '' };
+  if (existing && existing.status === 'approving') return { success: true, status: 'pending' };
+  // เมนูสมาชิก: นับกันโควตาไว้ตั้งแต่แจ้งโอน (ส่งซ้ำ/แก้ตะกร้า = แทนที่รายการเดิมของคำขอนี้) · เกินโควตา = ปฏิเสธ
+  const quota = await holdMemberMenu({ memberId: data.memberId, items, channel: 'kiosk', branchId, ref: id, status: 'held' });
+  if (!quota.success) return quota;
   if (existing) {
-    if (existing.status === 'approved') return { success: true, status: 'approved', orderNumber: existing.orderNumber || '' };
-    if (existing.status === 'approving') return { success: true, status: 'pending' };
     await query(
       `UPDATE dbo.KioskPayments SET branchId = @branchId, tableNo = @tableNo, dining = @dining, payloadJson = @payloadJson,
           total = @total, [status] = 'pending', requestedAt = @at, respondedAt = NULL, respondedBy = NULL
@@ -128,6 +132,7 @@ export async function respondKioskPayment(data) {
       `UPDATE dbo.KioskPayments SET [status] = 'rejected', respondedAt = @at, respondedBy = @by
         WHERE id = @id AND [status] = 'pending'`, { id, at, by });
     if (!res.rowsAffected[0]) return { success: false, error: 'รายการนี้ถูกจัดการไปแล้ว' };
+    await releaseMemberMenu(id);   // ปฏิเสธ = คืนสิทธิ์เมนูสมาชิก
     return { success: true, status: 'rejected' };
   }
 
@@ -159,5 +164,6 @@ export async function respondKioskPayment(data) {
     return { success: false, error: (result && result.error) || 'บันทึกบิลไม่สำเร็จ' };
   }
   await query(`UPDATE dbo.KioskPayments SET [status] = 'approved', orderNumber = @no WHERE id = @id`, { id, no: result.orderNumber || '' });
+  await markMemberMenuUsed(id, result.orderNumber || '');
   return { success: true, status: 'approved', payment: { ...mapRow(row), status: 'approved', orderNumber: result.orderNumber || '' } };
 }

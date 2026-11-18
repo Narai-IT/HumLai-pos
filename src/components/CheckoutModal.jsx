@@ -211,6 +211,28 @@ const CheckoutModal = ({
     const names = new Set((menu || []).filter(m => m && m.memberOnly === true).map(m => m.name));
     return [...new Set((tableOrderItems || []).map(i => i && i.ItemName).filter(n => names.has(n)))];
   }, [menu, tableOrderItems]);
+  // โควตาเมนูสมาชิกวันนี้ (หลังบ้าน > เมนูสมาชิก) — บิลนี้สั่งเกินที่เหลือ = ชำระเงินไม่ได้
+  const [mQuota, setMQuota] = useState(null);
+  const mqMemberId = member ? member.id : '';
+  const needQuota = memberOnlyInBill.length > 0;
+  useEffect(() => {
+    let alive = true;
+    if (!mqMemberId || !needQuota) { setMQuota(null); return undefined; }
+    crmCall('staffMemberQuota', { memberId: mqMemberId, branchId }).then(res => { if (alive && res && res.success) setMQuota(res); });
+    return () => { alive = false; };
+  }, [mqMemberId, needQuota, branchId]);
+  const quotaProblem = React.useMemo(() => {
+    if (!mQuota || !mQuota.enabled || !member) return '';
+    const byName = new Map((menu || []).filter(m => m && m.memberOnly === true).map(m => [m.name, String(m.id)]));
+    const want = {}; let total = 0;
+    (tableOrderItems || []).forEach(i => { const id = i && byName.get(i.ItemName); if (id) { const q = Number(i.Quantity) || 1; want[id] = (want[id] || 0) + q; total += q; } });
+    for (const [id, q] of Object.entries(want)) {
+      const m = mQuota.menus && mQuota.menus[id];
+      if (m && m.limit && m.used + q > m.limit) return `${m.name} สั่งได้ ${m.limit} ชิ้นต่อวัน · วันนี้สั่งไปแล้ว ${m.used} · บิลนี้มี ${q}`;
+    }
+    if (mQuota.total && total > mQuota.total.left) return `เมนูสมาชิกสั่งได้รวม ${mQuota.total.limit} ชิ้นต่อวัน · วันนี้เหลือ ${mQuota.total.left} · บิลนี้มี ${total}`;
+    return '';
+  }, [mQuota, member, menu, tableOrderItems]);
   const discountLines = tableOrderItems.map(i => ({ name: i.ItemName, amount: (Number(i.ItemPrice) || 0) * (Number(i.Quantity) || 1) }));
   const discountFor = (d) => calcDiscount(d, discountLines, categoriesOf);
   const { subtotal, discountAmount, sc, vat, grand } = calcCharges(total, settings, discountFor(selectedDiscount));
@@ -611,11 +633,16 @@ const CheckoutModal = ({
                   : `Members-only items in this bill (${memberOnlyInBill.join(', ')}) · scan the member card first`}
               </div>
             )}
+            {quotaProblem && (
+              <div role="alert" style={{ border: '2px solid #dc2626', background: '#fef2f2', color: '#b91c1c', borderRadius: '12px', padding: '0.7rem 0.9rem', marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.9rem' }}>
+                👑 {lang === 'th' ? `เกินโควตาเมนูสมาชิกวันนี้ (รวมทุกสาขา): ${quotaProblem} · ลดจำนวนในบิลก่อนชำระเงิน` : `Member menu daily limit exceeded: ${quotaProblem}`}
+              </div>
+            )}
             <button
               onClick={() => setPaymentStep('payment_method')}
-              disabled={memberOnlyInBill.length > 0 && !member}
+              disabled={(memberOnlyInBill.length > 0 && !member) || !!quotaProblem}
               className="confirm-btn"
-              style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800', ...(memberOnlyInBill.length > 0 && !member ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
+              style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800', ...((memberOnlyInBill.length > 0 && !member) || quotaProblem ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
             >
               {lang === 'th' ? `ดำเนินการชำระเงิน ฿${grand.toLocaleString()}` : `Proceed to Payment ฿${grand.toLocaleString()}`}
               <ChevronRight size={18} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '6px' }} />

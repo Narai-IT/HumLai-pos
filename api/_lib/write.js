@@ -1,5 +1,6 @@
 // ── คำสั่งบันทึกฝั่งงานขาย: ออเดอร์ / โต๊ะ / ชำระเงิน / กะ (เดิมอยู่ใน doPost) ──
 import { query, withTransaction, insertRows } from './db.js';
+import { holdMemberMenu, releaseMemberMenu } from './memberMenu.js';
 import { toThaiClock, thaiTimeISO } from './time.js';
 import { toText, toNum } from './rows.js';
 import { deductStock } from './stock.js';
@@ -312,6 +313,11 @@ export async function insertOrder(data) {
   });
   // สมาชิก: ส่งทันทีเพื่อเอาแต้มไปพิมพ์ลงใบเสร็จ (รอสั้น ๆ) · ส่งไม่ได้ก็อยู่ในคิว ส่งซ้ำเองภายหลัง
   if (result.success && result.orderNumber) {
+    // เมนูสมาชิก: จดว่าสมาชิกคนนี้สั่งไปแล้ววันนี้ (โควตาต่อวัน) · รับเงินแล้วจึงไม่ปฏิเสธ หน้าขายตรวจโควตาให้ก่อนชำระแล้ว
+    if (data.memberId) {
+      await holdMemberMenu({ memberId: data.memberId, channel: 'staff', branchId, ref: result.orderNumber, status: 'used', orderNumber: result.orderNumber, enforce: false,
+        items: rows.filter(Array.isArray).map(r => ({ name: toText(r[4]), qty: toNum(r[12]) || 1 })) }).catch(err => console.error('[memberMenu] staff', err));
+    }
     // จ่ายด้วย Voucher ก็ส่งทันที ให้ CRM ตัด Voucher เป็นใช้แล้วเร็วที่สุด
     if (data.memberId || (Array.isArray(data.vouchers) && data.vouchers.length)) {
       const crm = await sendBillNow(branchId, result.orderNumber);
@@ -331,6 +337,7 @@ export async function updateStatus(data) {
       WHERE ISNULL(OrderNumber, '') = @id OR ISNULL([Timestamp], '') = @id`,
     { status, completion: String(data.completionTime || ''), id: String(data.orderId ?? '') }
   );
+  if (res.rowsAffected[0] > 0 && /cancel/i.test(status)) await releaseMemberMenu(String(data.orderId ?? ''));
   return { success: res.rowsAffected[0] > 0 };
 }
 
@@ -339,6 +346,7 @@ export async function cancelOrder(data) {
     `UPDATE dbo.Orders SET [Status] = 'cancelled' WHERE ISNULL(OrderNumber, '') = @n`,
     { n: String(data.orderNumber || '') }
   );
+  if (res.rowsAffected[0] > 0) await releaseMemberMenu(String(data.orderNumber || ''));   // ยกเลิกบิล = คืนสิทธิ์เมนูสมาชิก
   return { success: res.rowsAffected[0] > 0 };
 }
 
