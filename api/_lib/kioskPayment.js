@@ -11,6 +11,7 @@ import { query } from './db.js';
 import { thaiTimeISO } from './time.js';
 import { branchForWrite } from './branch.js';
 import { handleKioskPaidOrder, itemOptionText } from './write.js';
+import { memberOnlyProblem } from './memberOnly.js';
 
 const text = (v, max) => String(v ?? '').trim().slice(0, max);
 const COLS = 'id, branchId, tableNo, dining, payloadJson, total, [status], requestedAt, respondedAt, respondedBy, orderNumber';
@@ -58,6 +59,9 @@ export async function kioskPaymentRequest(data) {
   if (!(total > 0) && !(total === 0 && hasCoupon)) return { success: false, error: 'ยอดชำระไม่ถูกต้อง' };
 
   const branchId = await branchForWrite(data);
+  // เมนูเฉพาะสมาชิก: ต้องล็อกอินสมาชิก (ตรวจกับระบบสมาชิกอีกชั้น)
+  const mo = await memberOnlyProblem(items, { memberId: data.memberId, verifyToken: data.verifyToken }, branchId);
+  if (mo) return mo;
   const payload = JSON.stringify({
     branchId, tableNumber: text(data.tableNumber, 50), items, total, timestamp: data.timestamp || thaiTimeISO(),
     // เลขสมาชิกที่ลูกค้าใส่ก่อนสั่ง (ค้นจากระบบสมาชิกแล้ว) — ได้แต้มตอนพนักงานยืนยันยอดโอน

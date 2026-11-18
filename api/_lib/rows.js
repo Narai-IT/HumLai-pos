@@ -74,7 +74,7 @@ export const mapTableOrder = rowMapper({
 export const mapMenu = rowMapper({
   id: 'i', category: 's', name: 's', nameEn: 's', description: 's', descriptionEn: 's',
   price: 'n', image: 's', isActive: 'b', bundledItems: 'j', popupConfig: 'j', prices: 'j',
-  categories: 'j', printerId: 's', branches: 'j'
+  categories: 'j', printerId: 's', branches: 'j', memberOnly: 'b'
 });
 
 export const mapPromotion = rowMapper({ id: 'i', name: 's', nameEn: 's', price: 'n', origPrice: 'n' });

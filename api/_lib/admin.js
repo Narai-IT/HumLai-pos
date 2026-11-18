@@ -5,7 +5,7 @@ import { nextIds } from './ids.js';
 import { clearBranchCache, branchForWrite, defaultBranchId } from './branch.js';
 import { getBranchTables } from './read.js';
 
-const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId','branches'];
+const MENU_COLS = ['id','category','name','nameEn','description','descriptionEn','price','image','isActive','bundledItems','popupConfig','prices','categories','printerId','branches','memberOnly'];
 const CATEGORY_COLS = Object.keys(CATEGORY_SPEC);
 
 const menuValues = (item) => ([
@@ -15,7 +15,9 @@ const menuValues = (item) => ([
   toJson(item.bundledItems, '[]'), toJson(item.popupConfig, '{}'),
   toJson(item.prices, '[]'), toJson(item.categories, '[]'), toText(item.printerId),
   // สาขาที่ขายเมนูนี้ — [] = ทุกสาขา
-  JSON.stringify(Array.isArray(item.branches) ? item.branches.map(String).filter(Boolean) : [])
+  JSON.stringify(Array.isArray(item.branches) ? item.branches.map(String).filter(Boolean) : []),
+  // เฉพาะสมาชิก
+  item.memberOnly === true ? 1 : 0
 ]);
 
 // ค่าเริ่มต้นของแต่ละคอลัมน์ยกมาจากสคริปต์เดิมทั้งหมด

@@ -166,13 +166,6 @@ const PosSalesScreen = ({
     );
   };
 
-  // สั่งอาหารได้ต่อเมื่อเปิดกะและเลือกโต๊ะแล้ว — กันคีย์ของลอยแล้วหายตอนเลือกโต๊ะทีหลัง
-  const guardedOrderClick = (food) => {
-    if (!tableNumber) { alert(t('กรุณาเลือกโต๊ะด้านบนก่อนเริ่มคีย์รายการ', 'Please pick a table first.')); return; }
-    // การ์ด/ผลค้นหาปิดปุ่มไว้อยู่แล้ว ตัวนี้กันทางอื่นที่อาจเรียกเข้ามาโดยตรง
-    if (isUnpriced(food)) { alert(unpricedNote()); return; }
-    onOrderClick(food);
-  };
 
   // ── ค้นหาเมนูแล้วกดเพิ่มลงตะกร้าได้เลย ──
   const [query, setQuery] = useState('');
@@ -302,6 +295,12 @@ const PosSalesScreen = ({
     const a = walletArgs.current;
     if (memberId && a.member && (showDiscounts || heldCoupons.current.length)) a.loadWallet(a.member);
   }, [memberId, sentTotal, showDiscounts]);
+  // ── เมนูเฉพาะสมาชิก: ต้องยิงบัตรสมาชิกก่อนถึงคีย์ได้ ──
+  const [pendingFood, setPendingFood] = useState(null);
+  const isMemberOnly = (food) => !!(food && food.memberOnly === true);
+  const memberOnlyNames = useMemo(() => new Set(liveMenu.filter(m => m && m.memberOnly === true).map(m => m.name)), [liveMenu]);
+  // ปิดหน้าต่างสมาชิกโดยไม่ยิงบัตร → ไม่ค้างเมนูที่รอเพิ่ม
+  useEffect(() => { if (!showDiscounts) setPendingFood(null); }, [showDiscounts]);
   const findMember = async (text) => {
     const q = String(text || '').trim();
     if (!q || memberBusy) return;
@@ -315,8 +314,31 @@ const PosSalesScreen = ({
     const sc = res.scannedCoupon;
     if (sc && sc.usable) await pickCoupon(sc, res.member);
     else if (sc) setWalletMsg(`${t('คูปอง', 'Coupon')} ${sc.code}: ${sc.reason}`);
+    // กดเมนูสมาชิกไว้ก่อนยิงบัตร → เพิ่มให้เลย แล้วปิดหน้าต่าง
+    if (pendingFood) { const f = pendingFood; setPendingFood(null); setShowDiscounts(false); onOrderClick(f); }
   };
-  const removeMember = () => { setMember(null); setMemberErr(''); setWalletMsg(''); setSelectedDiscount(null); };
+  const removeMember = () => {
+    // เอาสมาชิกออก: เมนูสมาชิกที่ยังไม่ส่งครัวถูกเอาออกจากตะกร้า · ที่ส่งครัวแล้วต้องยิงบัตรสมาชิกใหม่ก่อนชำระเงิน
+    const unsent = cart.filter(i => isMemberOnly(i.food));
+    const sentNames = sentItems.filter(o => memberOnlyNames.has(o.ItemName)).map(o => o.ItemName);
+    if ((unsent.length || sentNames.length) && !window.confirm(t(
+      `บิลนี้มีเมนูเฉพาะสมาชิก${unsent.length ? `\n• ยังไม่ส่งครัว ${unsent.length} รายการ จะถูกเอาออกจากตะกร้า` : ''}${sentNames.length ? `\n• ส่งครัวแล้ว: ${[...new Set(sentNames)].join(', ')} — ต้องยิงบัตรสมาชิกก่อนชำระเงิน` : ''}\n\nเอาสมาชิกออกไหม?`,
+      'This bill has members-only items. Remove the member anyway?'))) return;
+    unsent.forEach(i => onRemoveFromCart(i.cartId));
+    setMember(null); setMemberErr(''); setWalletMsg(''); setSelectedDiscount(null);
+  };
+  // สั่งอาหารได้ต่อเมื่อเปิดกะและเลือกโต๊ะแล้ว — กันคีย์ของลอยแล้วหายตอนเลือกโต๊ะทีหลัง
+  const guardedOrderClick = (food) => {
+    if (!tableNumber) { alert(t('กรุณาเลือกโต๊ะด้านบนก่อนเริ่มคีย์รายการ', 'Please pick a table first.')); return; }
+    // การ์ด/ผลค้นหาปิดปุ่มไว้อยู่แล้ว ตัวนี้กันทางอื่นที่อาจเรียกเข้ามาโดยตรง
+    if (isUnpriced(food)) { alert(unpricedNote()); return; }
+    // เมนูเฉพาะสมาชิก + ยังไม่ได้ยิงบัตร → เปิดหน้าต่างสแกนสมาชิก ยิงแล้วเพิ่มเมนูนี้ให้เอง
+    if (isMemberOnly(food) && !member) {
+      setPendingFood(food); setMemberErr(''); setShowDiscounts(true);
+      return;
+    }
+    onOrderClick(food);
+  };
   // หน้าต่างสมาชิก/ส่วนลดเปิดอยู่ → ยิง QR ด้วยเครื่องยิงได้เลย (แม้หน้าต่างกล้องเปิดอยู่)
   useScannerWedge(showDiscounts, (code) => { setScanOpen(false); findMember(code); });
 
@@ -586,6 +608,7 @@ const PosSalesScreen = ({
                   disabled={isUnpriced(item)}
                   disabledReason={unpricedNote()}
                   onOrderClick={guardedOrderClick}
+                  memberLocked={item.memberOnly === true && !member}
                   onDecreaseClick={onDecreaseQuantity}
                   cartQuantity={cart.filter(c => c.food.id === item.id).reduce((s, c) => s + (c.quantity || 1), 0)}
                 />
@@ -866,6 +889,12 @@ const PosSalesScreen = ({
           <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{crmOn ? t('สมาชิก / ส่วนลด', 'Member / Discount') : t('ส่วนลด', 'Discount')}</h3>
             {crmOn && <QrScanner open={scanOpen} onResult={(code) => { setScanOpen(false); findMember(code); }} onClose={() => setScanOpen(false)} title={t('สแกน QR บัตรสมาชิก / คูปอง', 'Scan member / coupon QR')} />}
+            {pendingFood && !member && (
+              <div role="alert" style={{ border: '2px solid #f59e0b', background: '#fffbeb', color: '#92400e', borderRadius: '12px', padding: '0.6rem 0.75rem', marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.88rem', textAlign: 'left' }}>
+                👑 {t(`"${pendingFood.name}" เป็นเมนูเฉพาะสมาชิก · ยิงบัตรสมาชิกก่อน แล้วระบบจะเพิ่มเมนูนี้ให้`, `"${pendingFood.name}" is members-only · scan the member card first`)}
+                {!crmOn && <div style={{ color: '#b91c1c', marginTop: 4 }}>{t('สาขานี้ยังไม่ได้เชื่อมระบบสมาชิก จึงขายเมนูนี้ไม่ได้', 'This branch is not connected to the member system')}</div>}
+              </div>
+            )}
             {crmOn && (
               <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.75rem', marginBottom: '0.75rem', background: member ? '#f0fdf4' : '#fff', textAlign: 'left' }}>
                 {member ? (

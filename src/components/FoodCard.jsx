@@ -2,7 +2,8 @@ import React from 'react';
 import { Plus, Minus } from 'lucide-react';
 import { menuImageCandidates } from '../utils/menuImage';
 
-const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang = 'th', displayPrice, disabled = false, disabledReason = '' }) => {
+// memberLocked = เมนูเฉพาะสมาชิกที่ยังไม่ได้ยิงบัตรสมาชิก (กดแล้วหน้าขายเปิดหน้าต่างสแกนสมาชิกให้)
+const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang = 'th', displayPrice, disabled = false, disabledReason = '', memberLocked = false }) => {
   const name = lang === 'th' ? food.name : (food.nameEn || food.name);
   const desc = lang === 'th' ? food.description : (food.descriptionEn || food.description);
 
@@ -37,6 +38,14 @@ const FoodCard = ({ food, onOrderClick, onDecreaseClick, cartQuantity = 0, lang 
         )}
         {cartQuantity > 0 && (
           <span className="pos-qty-badge">{cartQuantity}</span>
+        )}
+        {food.memberOnly === true && (
+          <span style={{
+            position: 'absolute', top: 6, left: 6, background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff',
+            fontWeight: 800, fontSize: '0.68rem', padding: '2px 7px', borderRadius: 20, border: '1.5px solid #fff', pointerEvents: 'none'
+          }}>
+            {memberLocked ? '🔒' : '👑'} {lang === 'th' ? 'สมาชิก' : 'Member'}
+          </span>
         )}
       </div>
 
