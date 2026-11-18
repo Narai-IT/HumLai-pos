@@ -306,7 +306,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const finishCoupon = () => { keepApplied([]); kioskRef.current = newCouponRef('kiosk'); saveSession(REF_KEY, kioskRef.current); setKWallet(null); };
   const kioskCall = async (action, extra) => {
     const res = await crmCall(action, { memberId: member && member.id, verifyToken, ref: kioskRef.current, branchId, items: kioskItems, ...extra });
-    if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); }
+    if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); }
     return res;
   };
   const checkMember = async () => {
@@ -862,6 +862,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setPayBusy(false);
     if (!res || !res.success) {
       // เซิร์ฟเวอร์ปฏิเสธเพราะเมนูสมาชิก (ล็อกอินหมดเวลา) → ล้างการล็อกอิน ระบบจะเอาเมนูสมาชิกออกและแจ้งลูกค้าเอง
+      if (res && res.memberOnly && res.retry) { setPayError(res.error); return; }
       if (res && res.memberOnly) { setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); setPayError(res.error); return; }
       // เกินโควตาเมนูสมาชิกวันนี้ (เช่น สั่งจากเครื่องอื่น/สาขาอื่นไปก่อน) → บอกลูกค้า และโหลดสิทธิ์ใหม่
       if (res && res.memberQuota) { setPayError(res.error); loadQuota(); return; }

@@ -109,7 +109,8 @@ const POST_ACTIONS = {
   // เมนูสมาชิก: สิทธิ์ที่เหลือวันนี้ · หน้าลูกค้าต้องล็อกอินสมาชิก (ตรวจ verifyToken กับระบบสมาชิก) · หน้าขายพนักงานล็อกอินแล้ว
   memberMenuQuota:   async (data) => {
     const v = await verifyKioskMember({ memberId: data.memberId, verifyToken: data.verifyToken }, await branchForWrite(data));
-    if (!v || !v.success) return { success: false, needLogin: true, error: 'ล็อกอินสมาชิกหมดเวลา กรุณาล็อกอินใหม่' };
+    // ล็อกอินหลุดจริง (ระบบสมาชิกบอกว่า token ใช้ไม่ได้) เท่านั้นจึงให้ล็อกอินใหม่ · ระบบสมาชิกช้า/ปิดอยู่ชั่วคราว ไม่ลบล็อกอินที่จำไว้
+    if (!v || !v.success) return v && v.verify ? { success: false, needLogin: true, error: 'ล็อกอินสมาชิกหมดเวลา กรุณาล็อกอินใหม่' } : { success: false, error: (v && v.error) || 'เชื่อมระบบสมาชิกไม่ได้ชั่วคราว' };
     return memberQuota(String(data.memberId), 'kiosk');
   },
   staffMemberQuota:  async (data) => (/^MB-\d{7}$/.test(String(data.memberId || '')) ? memberQuota(String(data.memberId), 'staff') : { success: false, error: 'ไม่พบเลขสมาชิก' }),
