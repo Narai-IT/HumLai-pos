@@ -202,7 +202,7 @@ const LOGIN_KEY = 'kiosk_member_login';
 const readLogin = () => {
   try {
     const v = JSON.parse(localStorage.getItem(LOGIN_KEY) || 'null');
-    if (v && v.member && v.token && Number(v.exp) > Date.now()) return v;
+    if (v && v.member && Number(v.exp) > Date.now()) return v;
     if (v) localStorage.removeItem(LOGIN_KEY);
   } catch { /* ไม่มีที่เก็บ */ }
   return null;
@@ -265,14 +265,29 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const kioskRef = useRef(readSession(REF_KEY) || (() => { const r = newCouponRef('kiosk'); saveSession(REF_KEY, r); return r; })());
   const [verifyToken, setVerifyToken] = useState(() => {
     const t = readSession(VERIFY_KEY); if (t) return t;
-    const l = readLogin(); return l && member && l.member.id === member.id ? l.token : '';
+    const l = readLogin(); return l && member && l.member.id === member.id ? (l.token || '') : '';
   });
   const [cardUrl, setCardUrl] = useState('');
   // ร้านเปิด "ยืนยันตัวตนก่อนใช้คูปอง" ไว้ไหม (CRM_KIOSK_VERIFY ที่เครื่อง API) — รู้จากคำตอบครั้งแรกที่ขอรหัส · ปิดอยู่ = แสดงคูปองทันที
   const [needVerify, setNeedVerify] = useState(false);
   const verified = !!verifyToken || !needVerify;
   // ── เมนูเฉพาะสมาชิก: ต้องล็อกอินสมาชิก = ใส่เลขสมาชิก + ยืนยันรหัส 6 หลักในบัตร LINE (บังคับเสมอ ไม่ขึ้นกับการตั้งค่าคูปอง) ──
-  const memberLoggedIn = !!(member && verifyToken);
+  // หลังบ้านเลือกได้ว่าต้องใส่รหัส 6 หลักไหม (หลังบ้าน > เมนูสมาชิก) · null = ยังโหลดไม่เสร็จ (ถือว่าต้องใส่ไว้ก่อน)
+  const [memberCfg, setMemberCfg] = useState({ requireCode: null, rememberDays: 30 });
+  useEffect(() => {
+    if (!crmOn) return undefined;
+    let alive = true;
+    crmCall('memberMenuConfig', {}).then(res => { if (alive && res && res.success) setMemberCfg({ requireCode: res.requireCode === true, rememberDays: Number(res.rememberDays) || 0 }); });
+    return () => { alive = false; };
+  }, [crmOn]);
+  const noCode = memberCfg.requireCode === false;
+  const memberLoggedIn = !!(member && (verifyToken || noCode));
+  // ไม่ต้องใส่รหัส → จำเลขสมาชิกไว้ในมือถือลูกค้าตามจำนวนวันที่ตั้ง (เข้าครั้งหน้าเป็นสมาชิกเลย)
+  const rememberDays = memberCfg.rememberDays;
+  useEffect(() => {
+    if (!noCode || !member || verifyToken) return;
+    writeLogin({ member, token: '', ttl: (rememberDays || 1) * 86400 });
+  }, [noCode, member, verifyToken, rememberDays]);
   const isMemberOnly = (food) => !!(food && food.memberOnly === true);
   const [gateFood, setGateFood] = useState(null);    // เมนูที่ลูกค้ากดตอนยังไม่ล็อกอิน → เปิดหน้าต่างล็อกอิน
   const [gateMsg, setGateMsg] = useState('');
@@ -280,7 +295,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // โควตาเมนูสมาชิกวันนี้ (หลังบ้าน > เมนูสมาชิก) — { enabled, total: {limit,used,left}|null, menus: { [id]: { limit, used, left } } } · left null = ไม่จำกัด
   const [kQuota, setKQuota] = useState(null);
   const loadQuota = async () => {
-    if (!member || !verifyToken) { setKQuota(null); return; }
+    if (!member || !memberLoggedIn) { setKQuota(null); return; }
     const res = await crmCall('memberMenuQuota', { memberId: member.id, verifyToken, branchId });
     if (res && res.success) setKQuota(res);
     else if (res && res.needLogin) { setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); setKQuota(null); }
@@ -288,7 +303,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const loadQuotaRef = useRef(loadQuota);
   useEffect(() => { loadQuotaRef.current = loadQuota; });
   const kMemberId = member ? member.id : '';
-  useEffect(() => { loadQuotaRef.current(); }, [kMemberId, verifyToken]);
+  useEffect(() => { loadQuotaRef.current(); }, [kMemberId, verifyToken, noCode]);
   const [codeInput, setCodeInput] = useState('');
   const [kWallet, setKWallet] = useState(null);
   // คูปองที่ใช้กับออเดอร์นี้ (ใช้ได้หลายใบ ตามลำดับที่กด) · ระบบสมาชิกคิดส่วนลดและแบ่งชิ้นในตะกร้าให้แต่ละใบ
@@ -1268,7 +1283,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 </button>
               </div>
             ) : null}
-            {member && !memberLoggedIn && hasMemberMenu && (
+            {member && !memberLoggedIn && hasMemberMenu && memberCfg.requireCode === true && (
               <div style={{ borderTop: '1px dashed #86efac', marginTop: '0.8rem', paddingTop: '0.8rem' }}>
                 <label htmlFor="start-code" style={{ display: 'block', fontWeight: 800, marginBottom: '0.15rem' }}>
                   {lang === 'th' ? '👑 ล็อกอินเพื่อสั่งเมนูเฉพาะสมาชิก' : '👑 Log in for member-only menu'}

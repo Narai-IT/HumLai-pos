@@ -3,6 +3,7 @@
 // และ verifyToken (ได้จากการพิมพ์รหัส 6 หลักในบัตรสมาชิก LINE) ที่ระบบสมาชิกยืนยันว่าเป็นของสมาชิกคนนั้นจริง
 import { query } from './db.js';
 import { verifyKioskMember } from './crm.js';
+import { getMemberMenuSettings } from './memberMenu.js';
 
 // รหัสเมนูทั้งหมดในออเดอร์: จานหลัก + ตัวเลือกจากป๊อปอัพ/แอดออน
 const menuIdsOf = (items) => {
@@ -27,7 +28,12 @@ export async function memberOnlyProblem(items, { memberId, verifyToken } = {}, b
   const hit = rows.filter(r => ids.has(String(r.id)));
   if (!hit.length) return null;
   const names = hit.map(r => r.name).join(', ');
-  if (!/^MB-\d{7}$/.test(String(memberId || '')) || !String(verifyToken || '')) {
+  if (!/^MB-\d{7}$/.test(String(memberId || ''))) {
+    return { success: false, memberOnly: true, error: `เมนู ${names} สั่งได้เฉพาะสมาชิก กรุณาใส่เลขสมาชิกก่อน` };
+  }
+  // หลังบ้านปิด "ต้องใส่รหัส 6 หลัก" → มีเลขสมาชิกก็สั่งได้
+  if (!(await getMemberMenuSettings()).requireCode) return null;
+  if (!String(verifyToken || '')) {
     return { success: false, memberOnly: true, error: `เมนู ${names} สั่งได้เฉพาะสมาชิก กรุณาล็อกอินสมาชิกก่อน` };
   }
   const v = await verifyKioskMember({ memberId, verifyToken }, branchId);
