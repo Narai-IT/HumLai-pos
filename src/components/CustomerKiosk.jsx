@@ -197,6 +197,24 @@ function saveKioskDraft(d) {
 }
 
 // tables = ผังโต๊ะของสาขานี้ (ใช้ตอนเข้าหน้าลูกค้าจากหน้าแรกของเว็บ ที่ไม่มีเลขโต๊ะติดมากับลิงก์)
+// ล็อกอินสมาชิกที่จำไว้ในมือถือลูกค้า (ตั้งจำนวนวันที่ หลังบ้าน > เมนูสมาชิก) — เข้าครั้งหน้าไม่ต้องยืนยันรหัสซ้ำ
+const LOGIN_KEY = 'kiosk_member_login';
+const readLogin = () => {
+  try {
+    const v = JSON.parse(localStorage.getItem(LOGIN_KEY) || 'null');
+    if (v && v.member && v.token && Number(v.exp) > Date.now()) return v;
+    if (v) localStorage.removeItem(LOGIN_KEY);
+  } catch { /* ไม่มีที่เก็บ */ }
+  return null;
+};
+// ttl = อายุการล็อกอิน (วินาที) ตามที่ระบบสมาชิกให้มา
+const writeLogin = (v) => {
+  try {
+    if (v) localStorage.setItem(LOGIN_KEY, JSON.stringify({ member: v.member, token: v.token, exp: Date.now() + (Number(v.ttl) || 3600) * 1000 }));
+    else localStorage.removeItem(LOGIN_KEY);
+  } catch { /* ไม่มีที่เก็บ */ }
+};
+
 const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [], branchId = '' }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -214,7 +232,10 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // จำไว้ในแท็บนี้ รีเฟรชหน้าแล้วไม่ต้องกรอกใหม่
   const MEMBER_KEY = 'kiosk_member';
   const [crmOn, setCrmOn] = useState(false);
-  const [member, setMember] = useState(() => { try { return JSON.parse(sessionStorage.getItem(MEMBER_KEY) || 'null'); } catch { return null; } });
+  const [member, setMember] = useState(() => {
+    try { const m = JSON.parse(sessionStorage.getItem(MEMBER_KEY) || 'null'); if (m) return m; } catch { /* */ }
+    const l = readLogin(); return l ? l.member : null;
+  });
   const [memberInput, setMemberInput] = useState('');
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
@@ -229,7 +250,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     return () => { alive = false; };
   }, [crmOn, !!member, branchId]); // eslint-disable-line react-hooks/exhaustive-deps
   const keepMember = (m) => {
-    if (!m || !member || m.id !== member.id) { dropCoupon(); saveSession(VERIFY_KEY, null); setVerifyToken(''); setKWallet(null); setCardUrl(''); setCodeInput(''); }
+    if (!m || !member || m.id !== member.id) { dropCoupon(); saveSession(VERIFY_KEY, null); setVerifyToken(''); setKWallet(null); setCardUrl(''); setCodeInput(''); writeLogin(null); setKQuota(null); }
     setMember(m); saveSession(MEMBER_KEY, m);
   };
 
@@ -242,7 +263,10 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   function saveSession(key, v) { try { if (v) sessionStorage.setItem(key, typeof v === 'string' ? v : JSON.stringify(v)); else sessionStorage.removeItem(key); } catch { /* ไม่มีที่เก็บ */ } }
   const readSession = (key, json) => { try { const v = sessionStorage.getItem(key); return json ? JSON.parse(v || 'null') : (v || ''); } catch { return json ? null : ''; } };
   const kioskRef = useRef(readSession(REF_KEY) || (() => { const r = newCouponRef('kiosk'); saveSession(REF_KEY, r); return r; })());
-  const [verifyToken, setVerifyToken] = useState(() => readSession(VERIFY_KEY));
+  const [verifyToken, setVerifyToken] = useState(() => {
+    const t = readSession(VERIFY_KEY); if (t) return t;
+    const l = readLogin(); return l && member && l.member.id === member.id ? l.token : '';
+  });
   const [cardUrl, setCardUrl] = useState('');
   // ร้านเปิด "ยืนยันตัวตนก่อนใช้คูปอง" ไว้ไหม (CRM_KIOSK_VERIFY ที่เครื่อง API) — รู้จากคำตอบครั้งแรกที่ขอรหัส · ปิดอยู่ = แสดงคูปองทันที
   const [needVerify, setNeedVerify] = useState(false);
@@ -253,6 +277,18 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const [gateFood, setGateFood] = useState(null);    // เมนูที่ลูกค้ากดตอนยังไม่ล็อกอิน → เปิดหน้าต่างล็อกอิน
   const [gateMsg, setGateMsg] = useState('');
   const [memberNotice, setMemberNotice] = useState('');
+  // โควตาเมนูสมาชิกวันนี้ (หลังบ้าน > เมนูสมาชิก) — { enabled, total: {limit,used,left}|null, menus: { [id]: { limit, used, left } } } · left null = ไม่จำกัด
+  const [kQuota, setKQuota] = useState(null);
+  const loadQuota = async () => {
+    if (!member || !verifyToken) { setKQuota(null); return; }
+    const res = await crmCall('memberMenuQuota', { memberId: member.id, verifyToken, branchId });
+    if (res && res.success) setKQuota(res);
+    else if (res && res.needLogin) { setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); setKQuota(null); }
+  };
+  const loadQuotaRef = useRef(loadQuota);
+  useEffect(() => { loadQuotaRef.current = loadQuota; });
+  const kMemberId = member ? member.id : '';
+  useEffect(() => { loadQuotaRef.current(); }, [kMemberId, verifyToken]);
   const [codeInput, setCodeInput] = useState('');
   const [kWallet, setKWallet] = useState(null);
   // คูปองที่ใช้กับออเดอร์นี้ (ใช้ได้หลายใบ ตามลำดับที่กด) · ระบบสมาชิกคิดส่วนลดและแบ่งชิ้นในตะกร้าให้แต่ละใบ
@@ -449,7 +485,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setKBusy('check'); setKMsg('');
     const res = await crmCall('crmKioskCheckCode', { memberId: member.id, code: codeInput, branchId });
     setKBusy('');
-    if (res.success && res.verifyToken) { setVerifyToken(res.verifyToken); saveSession(VERIFY_KEY, res.verifyToken); setCodeInput(''); }
+    if (res.success && res.verifyToken) {
+      setVerifyToken(res.verifyToken); saveSession(VERIFY_KEY, res.verifyToken); setCodeInput('');
+      // จำการล็อกอินไว้ในเครื่อง (อายุตามที่ระบบสมาชิกให้มา) — สแกน QR ครั้งหน้าเป็นสมาชิกเลย
+      writeLogin({ member, token: res.verifyToken, ttl: res.expiresIn });
+    }
     else setKMsg(res.error || (lang === 'th' ? 'รหัสไม่ถูกต้อง' : 'Wrong code'));
   };
   const pickKCoupon = async (c) => {
@@ -569,7 +609,22 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setCart(rows.reduce(mergeRow, cart));
   };
 
+  // สั่งเมนูสมาชิกนี้ได้อีกกี่ชิ้นวันนี้ (หักที่อยู่ในตะกร้าแล้ว) · null = ไม่จำกัด
+  const memberLeft = (food) => {
+    if (!kQuota || !kQuota.enabled || !isMemberOnly(food)) return null;
+    const inCart = (pred) => cart.filter(r => !r.food.isBundled && pred(r)).reduce((a, r) => a + (r.quantity || 1), 0);
+    const q = kQuota.menus && kQuota.menus[String(food.id)];
+    const lefts = [];
+    if (q && q.limit) lefts.push(Math.max(0, q.limit - q.used - inCart(r => String(r.food.id) === String(food.id))));
+    if (kQuota.total) lefts.push(Math.max(0, kQuota.total.left - inCart(r => isMemberOnly(r.food))));
+    return lefts.length ? Math.min(...lefts) : null;
+  };
   const handleFoodClick = (food) => {
+    // เมนูเฉพาะสมาชิกที่ครบโควตาวันนี้แล้ว (รวมที่อยู่ในตะกร้า)
+    if (isMemberOnly(food) && memberLoggedIn && memberLeft(food) === 0) {
+      setMemberNotice(lang === 'th' ? `วันนี้สั่ง "${food.name}" ครบโควตาแล้ว · สั่งได้อีกพรุ่งนี้` : `Today's limit for "${food.name}" is reached`);
+      return;
+    }
     // เมนูเฉพาะสมาชิก: ยังไม่ล็อกอิน → เปิดหน้าต่างล็อกอินสมาชิกก่อน (ล็อกอินเสร็จแล้วสั่งต่อให้เลย)
     if (isMemberOnly(food) && !memberLoggedIn) { setGateMsg(''); setGateFood(food); return; }
     // Check if food has popups/options configured
@@ -807,7 +862,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     setPayBusy(false);
     if (!res || !res.success) {
       // เซิร์ฟเวอร์ปฏิเสธเพราะเมนูสมาชิก (ล็อกอินหมดเวลา) → ล้างการล็อกอิน ระบบจะเอาเมนูสมาชิกออกและแจ้งลูกค้าเอง
-      if (res && res.memberOnly) { setVerifyToken(''); saveSession(VERIFY_KEY, null); setPayError(res.error); return; }
+      if (res && res.memberOnly) { setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); setPayError(res.error); return; }
+      // เกินโควตาเมนูสมาชิกวันนี้ (เช่น สั่งจากเครื่องอื่น/สาขาอื่นไปก่อน) → บอกลูกค้า และโหลดสิทธิ์ใหม่
+      if (res && res.memberQuota) { setPayError(res.error); loadQuota(); return; }
       setPayError(lang === 'th'
         ? `แจ้งร้านไม่สำเร็จ${res && /Unknown action/i.test(res.error || '') ? ' (ระบบร้านยังไม่อัปเดต)' : ''} — กดอีกครั้ง หรือแจ้งพนักงาน`
         : 'Could not notify the shop — please try again or call our staff.');
@@ -817,7 +874,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     savePending(snap);
     if (res.status === 'approved') {
       setOrderNumber(res.orderNumber || '');
-      setPayStage('approved');
+      setPayStage('approved'); loadQuotaRef.current();
       finishCoupon();
       savePending(null);
       setCart([]);
@@ -838,7 +895,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       if (!alive || !st) return;
       if (st.status === 'approved') {
         setOrderNumber(st.orderNumber || '');
-        setPayStage('approved');
+        setPayStage('approved'); loadQuotaRef.current();
         finishCoupon();
         savePending(null);
         setCart([]);
@@ -1008,6 +1065,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     // เมนูเฉพาะสมาชิก: ป้าย + กรอบส้ม · ยังไม่ล็อกอิน = ปุ่มล็อก (กดแล้วเปิดหน้าต่างล็อกอิน)
     const memberOnly = isMemberOnly(food);
     const locked = memberOnly && !memberLoggedIn;
+    const left = memberOnly && memberLoggedIn ? memberLeft(food) : null;
+    const soldOut = left === 0;
 
     return (
       <div
@@ -1102,7 +1161,17 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             )}
           </div>
 
-          {locked ? (
+          {left !== null && (
+            <div style={{ fontSize: '0.72rem', fontWeight: 800, borderRadius: 8, padding: '0.2rem 0.4rem', textAlign: 'center',
+              background: soldOut ? '#fef2f2' : '#f0fdf4', color: soldOut ? '#b91c1c' : '#166534' }}>
+              {soldOut ? (lang === 'th' ? 'ครบโควตาวันนี้ · สั่งได้อีกพรุ่งนี้' : "Today's limit reached") : (lang === 'th' ? `วันนี้สั่งได้อีก ${left} ชิ้น` : `${left} left today`)}
+            </div>
+          )}
+          {soldOut ? (
+            <button disabled style={{ marginTop: 'auto', background: '#f1f5f9', color: '#94a3b8', border: 'none', borderRadius: '11px', padding: '0.6rem 0.4rem', fontWeight: '800', fontSize: '0.84rem', width: '100%', fontFamily: 'inherit' }}>
+              {lang === 'th' ? 'ครบโควตาวันนี้' : 'Limit reached'}
+            </button>
+          ) : locked ? (
             <button
               onClick={() => handleFoodClick(food)}
               style={{
@@ -1187,11 +1256,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <span style={{ fontSize: '1.8rem' }} aria-hidden="true">🎉</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <b style={{ display: 'block' }}>{lang === 'th' ? `สวัสดีคุณ${member.name}` : `Hi ${member.name}`}</b>
-                  <span style={{ fontSize: '0.85rem', color: '#166534' }}>{member.id} · {lang === 'th' ? 'บิลนี้สะสมแต้มให้อัตโนมัติ' : 'Points will be added to this bill'}</span>
+                  <b style={{ display: 'block' }}>{lang === 'th' ? `สวัสดีคุณ${member.name}` : `Hi ${member.name}`}{memberLoggedIn ? (lang === 'th' ? ' (ล็อกอินอยู่)' : ' (logged in)') : ''}</b>
+                  <span style={{ fontSize: '0.85rem', color: '#166534' }}>{member.id} · {lang === 'th' ? 'บิลนี้สะสมแต้มให้อัตโนมัติ' : 'Points will be added to this bill'}{memberLoggedIn ? (lang === 'th' ? ' · 👑 สั่งเมนูสมาชิกได้' : ' · 👑 member menu unlocked') : ''}</span>
                 </div>
                 <button onClick={() => keepMember(null)} style={{ border: 'none', background: 'none', color: '#64748b', textDecoration: 'underline', fontFamily: 'inherit', cursor: 'pointer', fontSize: '0.85rem' }}>
-                  {lang === 'th' ? 'ไม่ใช่ฉัน' : 'Not me'}
+                  {memberLoggedIn ? (lang === 'th' ? 'ออกจากระบบ' : 'Log out') : (lang === 'th' ? 'ไม่ใช่ฉัน' : 'Not me')}
                 </button>
               </div>
             ) : (

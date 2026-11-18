@@ -299,6 +299,27 @@ const PosSalesScreen = ({
   const [pendingFood, setPendingFood] = useState(null);
   const isMemberOnly = (food) => !!(food && food.memberOnly === true);
   const memberOnlyNames = useMemo(() => new Set(liveMenu.filter(m => m && m.memberOnly === true).map(m => m.name)), [liveMenu]);
+  // โควตาเมนูสมาชิกวันนี้ของสมาชิกที่ยิงบัตร (หลังบ้าน > เมนูสมาชิก) · นับรวมทุกสาขา
+  const [sQuota, setSQuota] = useState(null);
+  const sMemberId = member ? member.id : '';
+  useEffect(() => {
+    let alive = true;
+    setSQuota(null);
+    if (sMemberId) crmCall('staffMemberQuota', { memberId: sMemberId, branchId }).then(res => { if (alive && res && res.success) setSQuota(res); });
+    return () => { alive = false; };
+  }, [sMemberId, branchId]);
+  // สั่งเมนูนี้ได้อีกกี่ชิ้น (หักที่อยู่ในบิลนี้แล้ว ทั้งตะกร้าและที่ส่งครัว) · null = ไม่จำกัด
+  const staffLeft = (food) => {
+    if (!sQuota || !sQuota.enabled || !food || food.memberOnly !== true) return null;
+    const idOf = (name) => { const m = liveMenu.find(x => x.name === name); return m ? String(m.id) : ''; };
+    const inBill = (pred) => cart.filter(i => i.food && pred(String(i.food.id), i.food.memberOnly === true)).reduce((a, i) => a + (i.quantity || 1), 0)
+      + sentItems.filter(o => memberOnlyNames.has(o.ItemName) && pred(idOf(o.ItemName), true)).reduce((a, o) => a + (Number(o.Quantity) || 1), 0);
+    const q = sQuota.menus && sQuota.menus[String(food.id)];
+    const lefts = [];
+    if (q && q.limit) lefts.push(Math.max(0, q.limit - q.used - inBill((id) => id === String(food.id))));
+    if (sQuota.total) lefts.push(Math.max(0, sQuota.total.left - inBill((_, mo) => mo)));
+    return lefts.length ? Math.min(...lefts) : null;
+  };
   // ปิดหน้าต่างสมาชิกโดยไม่ยิงบัตร → ไม่ค้างเมนูที่รอเพิ่ม
   useEffect(() => { if (!showDiscounts) setPendingFood(null); }, [showDiscounts]);
   const findMember = async (text) => {
@@ -335,6 +356,11 @@ const PosSalesScreen = ({
     // เมนูเฉพาะสมาชิก + ยังไม่ได้ยิงบัตร → เปิดหน้าต่างสแกนสมาชิก ยิงแล้วเพิ่มเมนูนี้ให้เอง
     if (isMemberOnly(food) && !member) {
       setPendingFood(food); setMemberErr(''); setShowDiscounts(true);
+      return;
+    }
+    // ครบโควตาเมนูสมาชิกวันนี้ (รวมที่อยู่ในบิลนี้แล้ว)
+    if (isMemberOnly(food) && staffLeft(food) === 0) {
+      alert(t(`${member.name} สั่ง "${food.name}" ครบโควตาวันนี้แล้ว (รวมทุกสาขา) · สั่งได้อีกพรุ่งนี้`, `Today's limit for "${food.name}" is reached for this member`));
       return;
     }
     onOrderClick(food);
@@ -608,7 +634,7 @@ const PosSalesScreen = ({
                   disabled={isUnpriced(item)}
                   disabledReason={unpricedNote()}
                   onOrderClick={guardedOrderClick}
-                  memberLocked={item.memberOnly === true && !member}
+                  memberLocked={item.memberOnly === true && (!member || staffLeft(item) === 0)}
                   onDecreaseClick={onDecreaseQuantity}
                   cartQuantity={cart.filter(c => c.food.id === item.id).reduce((s, c) => s + (c.quantity || 1), 0)}
                 />
@@ -935,6 +961,13 @@ const PosSalesScreen = ({
                       {couponBusy ? t('กำลังคิดคูปอง…', 'Checking coupon…') : t('ยิง QR คูปองเพิ่มได้ (กด "ใช้คูปอง" ในบัตร LINE) · เลือกส่วนลดร้านด้านล่าง = เอาคูปองออก', 'Scan more coupon QRs · picking a store discount removes coupons')}
                     </div>
                     {walletMsg && <div role="alert" style={{ color: '#b45309', fontSize: '0.8rem', fontWeight: 700, marginTop: '4px' }}>{walletMsg}</div>}
+                    {sQuota && sQuota.enabled && (
+                      <div style={{ fontSize: '0.78rem', color: '#92400e', fontWeight: 700, marginTop: '6px' }}>
+                        👑 {t('เมนูสมาชิกวันนี้ (รวมทุกสาขา):', 'Member menu today (all branches):')}{' '}
+                        {sQuota.total ? t(`สั่งไปแล้ว ${sQuota.total.used} · เหลือ ${sQuota.total.left} ชิ้น`, `${sQuota.total.used} used · ${sQuota.total.left} left`) : ''}
+                        {Object.values(sQuota.menus || {}).filter(m => m.limit).map(m => ` · ${m.name} ${t('เหลือ', 'left')} ${Math.max(0, m.limit - m.used)}`).join('')}
+                      </div>
+                    )}
                   </>
                 )}
               </div>

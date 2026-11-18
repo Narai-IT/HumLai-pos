@@ -11,7 +11,8 @@ import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
 import { memberOnlyProblem } from './memberOnly.js';
-import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher } from './crm.js';
+import { memberQuota, memberMenuToday, saveMemberMenuSettings } from './memberMenu.js';
+import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher, verifyKioskMember } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
@@ -105,6 +106,15 @@ const POST_ACTIONS = {
   crmVoucherRelease: async (data) => releaseVoucher(data, await branchForWrite(data)),
   // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
   crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
+  // เมนูสมาชิก: สิทธิ์ที่เหลือวันนี้ · หน้าลูกค้าต้องล็อกอินสมาชิก (ตรวจ verifyToken กับระบบสมาชิก) · หน้าขายพนักงานล็อกอินแล้ว
+  memberMenuQuota:   async (data) => {
+    const v = await verifyKioskMember({ memberId: data.memberId, verifyToken: data.verifyToken }, await branchForWrite(data));
+    if (!v || !v.success) return { success: false, needLogin: true, error: 'ล็อกอินสมาชิกหมดเวลา กรุณาล็อกอินใหม่' };
+    return memberQuota(String(data.memberId), 'kiosk');
+  },
+  staffMemberQuota:  async (data) => (/^MB-\d{7}$/.test(String(data.memberId || '')) ? memberQuota(String(data.memberId), 'staff') : { success: false, error: 'ไม่พบเลขสมาชิก' }),
+  getMemberMenuToday:     async () => memberMenuToday(),
+  saveMemberMenuSettings: async (data) => saveMemberMenuSettings(data),
   crmKioskSendCode:  async (data) => sendMemberCode(data, await branchForWrite(data)),
   crmKioskCheckCode: async (data) => checkMemberCode(data, await branchForWrite(data)),
   crmKioskWallet:    async (data) => memberWallet(data, await branchForWrite(data), true),

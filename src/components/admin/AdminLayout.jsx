@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package, FlaskConical, BarChart2, Building2, Images, Receipt } from 'lucide-react';
+import { LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package, FlaskConical, BarChart2, Building2, Images, Receipt, Crown } from 'lucide-react';
 import './Admin.css';
 
 const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
@@ -55,6 +55,11 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
              {allowAll && (
                <NavLink to="/admin/users" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
                   <Users size={20} /> {lang === 'th' ? 'พนักงาน' : 'Users'}
+               </NavLink>
+             )}
+             {allowAll && (
+               <NavLink to="/admin/member-menu" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>
+                  <Crown size={20} /> {lang === 'th' ? 'เมนูสมาชิก' : 'Member menu'}
                </NavLink>
              )}
              <NavLink to="/admin/promotions" className={({isActive}) => isActive ? "admin-link active" : "admin-link"}>

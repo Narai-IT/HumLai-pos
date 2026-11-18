@@ -9,6 +9,7 @@
 //   CRM_ACCESS_CLIENT_ID / CRM_ACCESS_CLIENT_SECRET   Service Token ของ Cloudflare Access (ถ้า CRM อยู่หลัง Access)
 // ไม่ตั้ง CRM_URL = ปิดการเชื่อมทั้งหมด POS ทำงานเหมือนเดิมทุกอย่าง
 import crypto from 'node:crypto';
+import { getMemberMenuSettings } from './memberMenu.js';
 import { query } from './db.js';
 
 const TIMEOUT_MS = 6000;
@@ -167,7 +168,9 @@ export async function sendMemberCode(data, branchId) {
 }
 export async function checkMemberCode(data, branchId) {
   if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
-  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 6) }, branchId);
+  // จำการล็อกอินไว้กี่วัน (หลังบ้าน > เมนูสมาชิก) → อายุ verifyToken · ระบบสมาชิกรุ่นเก่าไม่รู้จัก days ก็ได้ 1 ชั่วโมงเหมือนเดิม
+  const { rememberDays } = await getMemberMenuSettings();
+  return crmAction('/api/pos/members/verify/check', { memberId: String(data.memberId), code: String(data.code || '').replace(/\D/g, '').slice(0, 6), days: rememberDays || undefined }, branchId);
 }
 
 // ลิงก์สมัครสมาชิกผ่าน LINE ของสาขานี้ (ปุ่มที่หน้าลูกค้าสั่งเอง) · จำไว้ 10 นาที ไม่ต้องถาม CRM ทุกครั้งที่ลูกค้าเปิดหน้า
