@@ -6,7 +6,7 @@ import { query, withTransaction } from './db.js';
 
 const KEY = 'member_menu_settings';
 export const DEFAULT_MEMBER_MENU = {
-  rememberDays: 30, dayStart: '00:00', limitEnabled: false, totalLimit: null, applyKiosk: true, applyStaff: true, perMenu: {}
+  rememberDays: 30, requireCode: false, dayStart: '00:00', limitEnabled: false, totalLimit: null, applyKiosk: true, applyStaff: true, perMenu: {}
 };
 const posInt = (v, max) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? Math.min(n, max) : null; };
 
@@ -18,6 +18,7 @@ export const normalizeMemberMenu = (raw) => {
   }
   return {
     rememberDays: Math.max(0, Math.min(90, parseInt(s.rememberDays, 10) >= 0 ? parseInt(s.rememberDays, 10) : DEFAULT_MEMBER_MENU.rememberDays)),
+    requireCode: s.requireCode === true,   // หน้าลูกค้าสั่งเอง: ต้องใส่รหัส 6 หลักจากบัตร LINE ก่อนสั่งเมนูสมาชิกไหม (ปิด = ใส่เลขสมาชิก/เบอร์โทรก็สั่งได้)
     dayStart: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(s.dayStart || '')) ? s.dayStart : '00:00',
     limitEnabled: s.limitEnabled === true,
     totalLimit: posInt(s.totalLimit, 999),

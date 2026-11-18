@@ -132,7 +132,7 @@ export async function login(data) {
 // claimPrintJobs / reportPrintJob = Print Server ในร้าน (ตรวจด้วยกุญแจของสาขาแทนการล็อกอิน)
 const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskPaymentRequest', 'getKioskPayment', 'crmKioskMember',
   'claimPrintJobs', 'reportPrintJob',
-  'memberMenuQuota',
+  'memberMenuQuota', 'memberMenuConfig',
   'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem', 'crmKioskCancelRedeem']);
 
 // ข้อมูลสมาชิก (ชื่อ เบอร์ แต้ม) ต้องล็อกอินพนักงานเสมอ แม้ร้านไม่ได้เปิด "บังคับล็อกอิน" — กันคนนอกไล่ค้นข้อมูลลูกค้าจากเบอร์

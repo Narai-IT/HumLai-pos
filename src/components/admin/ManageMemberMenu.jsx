@@ -70,6 +70,13 @@ const ManageMemberMenu = () => {
       <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
         <div style={{ ...card, flex: '1 1 380px' }}>
           <div style={h3}>🔐 การล็อกอินของลูกค้า (หน้าสั่งเอง)</div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginBottom: '0.5rem', fontWeight: 700 }}>
+            <input type="checkbox" checked={s.requireCode === true} onChange={e => set({ requireCode: e.target.checked })} style={{ width: 18, height: 18 }} />
+            ต้องใส่รหัส 6 หลักจากบัตร LINE ก่อนสั่งเมนูสมาชิก
+          </label>
+          <div style={{ ...hint, marginBottom: '0.6rem' }}>{s.requireCode === true
+            ? 'ปลอดภัย: ต้องเป็นเจ้าของบัตรจริงถึงสั่งได้'
+            : 'ไม่ติ๊ก = ลูกค้าใส่เลขสมาชิกหรือเบอร์โทรก็สั่งเมนูสมาชิกได้เลย (สะดวก แต่คนที่รู้เบอร์คนอื่นใช้สิทธิ์/โควตาแทนได้)'}</div>
           <label>จำการล็อกอินไว้ในมือถือลูกค้า{' '}
             <input type="number" min={0} max={90} value={s.rememberDays} onChange={e => set({ rememberDays: Math.max(0, Math.min(90, parseInt(e.target.value, 10) || 0)) })} style={num} /> วัน
           </label>

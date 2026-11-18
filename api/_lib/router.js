@@ -11,7 +11,7 @@ import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
 import { memberOnlyProblem } from './memberOnly.js';
-import { memberQuota, memberMenuToday, saveMemberMenuSettings } from './memberMenu.js';
+import { memberQuota, memberMenuToday, saveMemberMenuSettings, getMemberMenuSettings } from './memberMenu.js';
 import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher, verifyKioskMember } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
@@ -107,7 +107,12 @@ const POST_ACTIONS = {
   // คูปอง/แลกแต้ม — หน้าลูกค้าสั่งเอง (CRM_KIOSK_VERIFY=1 = ต้องยืนยันรหัสจากบัตรสมาชิกก่อน ระบบสมาชิกตรวจ verifyToken เอง)
   crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
   // เมนูสมาชิก: สิทธิ์ที่เหลือวันนี้ · หน้าลูกค้าต้องล็อกอินสมาชิก (ตรวจ verifyToken กับระบบสมาชิก) · หน้าขายพนักงานล็อกอินแล้ว
+  // หน้าลูกค้าสั่งเอง: ต้องใส่รหัส 6 หลักไหม + จำสมาชิกไว้กี่วัน
+  memberMenuConfig:  async () => { const s = await getMemberMenuSettings(); return { success: true, requireCode: s.requireCode, rememberDays: s.rememberDays }; },
   memberMenuQuota:   async (data) => {
+    if (!(await getMemberMenuSettings()).requireCode) {
+      return /^MB-\d{7}$/.test(String(data.memberId || '')) ? memberQuota(String(data.memberId), 'kiosk') : { success: false, needLogin: true, error: 'ไม่พบเลขสมาชิก' };
+    }
     const v = await verifyKioskMember({ memberId: data.memberId, verifyToken: data.verifyToken }, await branchForWrite(data));
     // ล็อกอินหลุดจริง (ระบบสมาชิกบอกว่า token ใช้ไม่ได้) เท่านั้นจึงให้ล็อกอินใหม่ · ระบบสมาชิกช้า/ปิดอยู่ชั่วคราว ไม่ลบล็อกอินที่จำไว้
     if (!v || !v.success) return v && v.verify ? { success: false, needLogin: true, error: 'ล็อกอินสมาชิกหมดเวลา กรุณาล็อกอินใหม่' } : { success: false, error: (v && v.error) || 'เชื่อมระบบสมาชิกไม่ได้ชั่วคราว' };
