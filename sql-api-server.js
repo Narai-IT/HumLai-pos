@@ -22,9 +22,12 @@ app.use(cors(allowOrigin ? { origin: allowOrigin.split(',').map(s => s.trim()).f
 app.use(express.json({ limit: '12mb' }));
 app.use(express.text({ type: 'text/*', limit: '12mb' }));
 
+// IP ของลูกค้า: ผ่าน Cloudflare Tunnel ได้จาก CF-Connecting-IP · ผ่าน proxy อื่นใช้ X-Forwarded-For ตัวแรก · ในวง LAN ใช้ที่อยู่ที่ต่อเข้ามา
+const clientIp = (req) => String(req.headers['cf-connecting-ip'] || String(req.headers['x-forwarded-for'] || '').split(',')[0] || (req.socket && req.socket.remoteAddress) || '').trim();
+
 app.all('/api/pos', async (req, res) => {
   try {
-    const result = await route({ method: req.method, params: req.query, body: req.body });
+    const result = await route({ method: req.method, params: req.query, body: req.body, ip: clientIp(req) });
     res.set('Cache-Control', 'no-store').json(result);
   } catch (err) {
     console.error('[pos]', req.method, req.query.action || '', err);

@@ -1,5 +1,5 @@
 // ── คำสั่งบันทึกฝั่งงานขาย: ออเดอร์ / โต๊ะ / ชำระเงิน / กะ (เดิมอยู่ใน doPost) ──
-import { query, withTransaction, insertRows } from './db.js';
+import { query, withTransaction, insertRows, lockKey } from './db.js';
 import { holdMemberMenu, releaseMemberMenu } from './memberMenu.js';
 import { toThaiClock, thaiTimeISO } from './time.js';
 import { toText, toNum } from './rows.js';
@@ -24,23 +24,53 @@ export function itemOptionText(item) {
   return parts.join(', ');
 }
 
-// เลขบิลถัดไปของคำนำหน้าหนึ่ง ๆ (เช่น SELF-#007)
-// ต้องเรียกในทรานแซกชันที่จับล็อกอยู่ ไม่งั้นสองคำขอพร้อมกันจะได้เลขเดียวกัน
-async function nextOrderNumber(runner, prefix) {
-  const res = await runner(
-    `SELECT OrderNumber FROM dbo.Orders WITH (UPDLOCK, HOLDLOCK) WHERE OrderNumber LIKE @pat`,
-    { pat: `${prefix}-#%` }
-  );
-  const re = new RegExp(`^${prefix}-#(\\d+)$`);
+// ── เลขบิล ──
+// ทุกคำขอที่ออกเลขบิลของคำนำหน้าเดียวกันต่อคิวกันที่ lockKey('bill:<คำนำหน้า>') (สาขาเดียวกันทำทีละบิล ต่างสาขาไม่รอกัน)
+// แล้วบวก 1 ที่ตาราง BillCounters — ไม่ต้องไล่อ่านบิลเก่าทั้งหมด จึงเร็วเท่าเดิมแม้บิลสะสมเป็นแสนใบ
+// เลขออกในทรานแซกชันเดียวกับบิล: บันทึกบิลไม่สำเร็จ = ตัวนับย้อนกลับด้วย เลขจึงต่อเนื่องไม่ข้าม (เลขที่ใบกำกับภาษีอย่างย่อ)
+const lockBill = (runner, prefix) => lockKey(runner, 'bill:' + prefix);
+
+// ฐานข้อมูลที่ยังไม่ได้รัน sql:init ไม่มีตาราง BillCounters → ใช้วิธีเดิม (อ่านเลขสูงสุดจากบิล)
+let countersReady = false;
+async function hasBillCounters(runner) {
+  if (countersReady) return true;
+  try {
+    const res = await runner(`SELECT OBJECT_ID('dbo.BillCounters', 'U') AS id`);
+    countersReady = !!(res.recordset[0] && res.recordset[0].id);
+  } catch { /* ถือว่ายังไม่มี */ }
+  return countersReady;
+}
+
+// เลขสูงสุดที่มีอยู่ในบิลเดิมของคำนำหน้านี้ (ใช้ครั้งแรกตอนยังไม่มีตัวนับ / ฐานข้อมูลยังไม่มีตาราง)
+async function maxBillNumber(runner, prefix) {
+  const res = await runner(`SELECT OrderNumber FROM dbo.Orders WHERE OrderNumber LIKE @pat`, { pat: `${prefix}-#%` });
+  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}-#(\\d+)$`);
   let max = 0;
   for (const row of res.recordset) {
     const m = re.exec(String(row.OrderNumber || '').trim());
-    if (m) {
-      const n = parseInt(m[1], 10);
-      if (!isNaN(n) && n > max) max = n;
-    }
+    if (m) { const n = parseInt(m[1], 10); if (!isNaN(n) && n > max) max = n; }
   }
-  return `${prefix}-#${String(max + 1).padStart(3, '0')}`;
+  return max;
+}
+
+const formatBill = (prefix, n) => `${prefix}-#${String(n).padStart(3, '0')}`;
+
+// เลขบิลถัดไป (เช่น A-#007) — ต้องเรียกหลัง lockBill(runner, prefix) ในทรานแซกชันเดียวกัน
+async function nextOrderNumber(runner, prefix) {
+  if (!(await hasBillCounters(runner))) return formatBill(prefix, (await maxBillNumber(runner, prefix)) + 1);
+  const up = await runner(
+    `UPDATE dbo.BillCounters SET LastNo = LastNo + 1, UpdatedAt = SYSUTCDATETIME() OUTPUT inserted.LastNo AS n WHERE Prefix = @p`, { p: prefix });
+  if (up.recordset.length) return formatBill(prefix, up.recordset[0].n);
+  const n = (await maxBillNumber(runner, prefix)) + 1;
+  await runner(`INSERT INTO dbo.BillCounters (Prefix, LastNo) VALUES (@p, @n)`, { p: prefix, n });
+  return formatBill(prefix, n);
+}
+
+// บิลที่เครื่องส่งเลขมาเอง (หน้าเว็บรุ่นเก่า/บิลค้างเก่า) → ขยับตัวนับให้ไม่ต่ำกว่าเลขนั้น กันเลขชนกันภายหลัง
+const parseBill = (no) => { const m = /^(.+)-#(\d+)$/.exec(String(no || '').trim()); return m ? { prefix: m[1], n: parseInt(m[2], 10) } : null; };
+async function bumpCounter(runner, prefix, n) {
+  if (!(await hasBillCounters(runner))) return;
+  await runner(`UPDATE dbo.BillCounters SET LastNo = @n, UpdatedAt = SYSUTCDATETIME() WHERE Prefix = @p AND LastNo < @n`, { p: prefix, n });
 }
 
 // ตัวนำหน้าเลขบิลของสาขา (หลังบ้าน > สาขา) — ไม่ได้ตั้งใช้รหัสสาขา ตรงกับ branchPrefix() ฝั่งหน้าเว็บ
@@ -98,13 +128,16 @@ export async function handleKioskPaidOrder(data) {
   if (items.length === 0) return { success: false, error: 'ไม่มีรายการอาหารในออเดอร์' };
   // สาขามาจากลิงก์ QR ของโต๊ะ (?b=) — ลิงก์แบบเก่าไม่มี ใช้สาขาหลัก
   const branchId = await branchForWrite(data);
+  const prefix = await branchBillPrefix(query, branchId);
 
   const result = await withTransaction(async (runner) => {
+    // ต่อคิวออกเลขบิลของสาขาก่อน — sessionId เดียวกันส่งซ้ำพร้อมกันก็ตรวจซ้ำได้ถูกต้อง
+    await lockBill(runner, prefix);
     // ยิงซ้ำเพราะเน็ตมือถือหลุดกลางทางเป็นเรื่องปกติ — sessionId เดิมต้องได้เลขบิลเดิมกลับไป
     const dup = await findKioskOrderBySession(runner, session);
     if (dup) return { success: true, orderNumber: dup, duplicate: true };
 
-    const orderNo = await nextOrderNumber(runner, await branchBillPrefix(runner, branchId));
+    const orderNo = await nextOrderNumber(runner, prefix);
     const name    = table ? `โต๊ะ ${table} (สั่งเอง)` : 'สั่งเอง';
     const addr    = table ? `โต๊ะ ${table}` : 'สั่งเอง';
     const tsLocal = toThaiClock(time);
@@ -143,7 +176,7 @@ export async function handleKioskPaidOrder(data) {
     }));
 
     return { success: true, orderNumber: orderNo };
-  });
+  }, { isolation: 'READ_COMMITTED' });
   if (result.success && !result.duplicate) {
     sendBillNow(branchId, result.orderNumber).then(() => flushCrmQueue()).catch(() => {});
   }
@@ -265,18 +298,22 @@ export async function insertOrder(data) {
   const assign = !!data.assignNumber;
   const clientRef = toText(data.clientRef);
   const useRef = assign && !!clientRef && await hasClientRef();
+  // เลขบิลที่เครื่องส่งมาเอง (ไม่ให้เซิร์ฟเวอร์ออกเลข) — ต่อคิวตามคำนำหน้าของเลขนั้น
+  const givenNo = assign ? '' : (toText(data.payment && data.payment.orderNumber) || toText(rows[0] && rows[0][1]));
+  const given = parseBill(givenNo);
+  const prefix = given ? given.prefix : await branchBillPrefix(query, branchId);
   const result = await withTransaction(async (runner) => {
+    await lockBill(runner, prefix);
     if (useRef) {
       // ส่งซ้ำ (เน็ตหลุดหลังเซิร์ฟเวอร์บันทึกแล้ว) → คืนเลขบิลเดิม ไม่บันทึกซ้ำ
       const dup = await runner(
-        `SELECT TOP (1) orderNumber FROM dbo.PaymentSummary WITH (UPDLOCK, HOLDLOCK) WHERE ClientRef = @ref`,
+        `SELECT TOP (1) orderNumber FROM dbo.PaymentSummary WHERE ClientRef = @ref`,
         { ref: clientRef }
       );
       if (dup.recordset.length) return { success: true, orderNumber: dup.recordset[0].orderNumber, duplicate: true };
     }
-    const orderNo = assign
-      ? await nextOrderNumber(runner, await branchBillPrefix(runner, branchId))
-      : toText(data.payment && data.payment.orderNumber) || toText(rows[0] && rows[0][1]);
+    const orderNo = assign ? await nextOrderNumber(runner, prefix) : givenNo;
+    if (given) await bumpCounter(runner, given.prefix, given.n);
     if (rows.length > 0) {
       const values = rows.map(r => {
         const row = Array.isArray(r) ? r : [];
@@ -310,7 +347,7 @@ export async function insertOrder(data) {
       }
     }
     return { success: true, orderNumber: orderNo };
-  });
+  }, { isolation: 'READ_COMMITTED' });
   // สมาชิก: ส่งทันทีเพื่อเอาแต้มไปพิมพ์ลงใบเสร็จ (รอสั้น ๆ) · ส่งไม่ได้ก็อยู่ในคิว ส่งซ้ำเองภายหลัง
   if (result.success && result.orderNumber) {
     // เมนูสมาชิก: จดว่าสมาชิกคนนี้สั่งไปแล้ววันนี้ (โควตาต่อวัน) · รับเงินแล้วจึงไม่ปฏิเสธ หน้าขายตรวจโควตาให้ก่อนชำระแล้ว

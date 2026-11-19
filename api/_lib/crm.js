@@ -53,16 +53,43 @@ async function call(path, body, branchId, timeoutMs = TIMEOUT_MS) {
   }
 }
 
-// ── ค้นหาสมาชิก ──
-// จำกัดจำนวนครั้งต่อนาที กันการไล่เดาเบอร์ (หน้าลูกค้าเรียกได้โดยไม่ต้องล็อกอิน)
-const lookups = [];
-function rateLimited(limit) {
+// ── จำกัดจำนวนครั้งต่อนาที ──
+// กันคนนอกไล่เดาเบอร์โทรว่าเบอร์ไหนเป็นสมาชิก (หน้าลูกค้าเรียกได้โดยไม่ต้องล็อกอิน และ API เปิดออกอินเทอร์เน็ต)
+// นับแยกตามประเภท · สาขา · เครื่องที่ส่งมา (IP) — สาขาหนึ่งใช้เยอะไม่บล็อกอีกสาขา และพนักงานตรวจ Voucher ไม่กินโควตาลูกค้า
+//   ipMiss = ค้นแล้วไม่เจอ (ลูกค้าจริงใส่เบอร์ถูกเกือบทุกครั้ง คนไล่เดาเบอร์จะไม่เจอเป็นส่วนใหญ่)
+//   ลูกค้าที่ต่อ WiFi ร้านอาจออกอินเทอร์เน็ตด้วย IP เดียวกันทั้งร้าน เพดานต่อ IP จึงไม่ตั้งต่ำเกินไป
+const LIMITS = {
+  kiosk:   { ip: 20, ipMiss: 5, branch: 200, all: 600 },   // หน้าลูกค้า: ใส่เลขสมาชิก/เบอร์โทร
+  staff:   { branch: 600, all: 1200 },                     // หน้าขาย: สแกน QR บัตรสมาชิก/คูปอง
+  voucher: { ip: 60, branch: 240, all: 600 },              // ตรวจ Voucher
+  code:    { ip: 10, branch: 100, all: 300 }               // ขอลิงก์บัตรสมาชิก (รหัส 6 หลัก)
+};
+const WINDOW_MS = 60 * 1000;
+const hits = new Map();
+const recent = (key, now) => {
+  const a = hits.get(key);
+  if (!a) return 0;
+  while (a.length && now - a[0] > WINDOW_MS) a.shift();
+  if (!a.length) { hits.delete(key); return 0; }
+  return a.length;
+};
+const push = (key, now) => { const a = hits.get(key); if (a) a.push(now); else hits.set(key, [now]); };
+export function rateLimited(kind, { ip = '', branchId = '' } = {}) {
+  const lim = LIMITS[kind];
+  if (!lim) return false;
   const now = Date.now();
-  while (lookups.length && now - lookups[0] > 60000) lookups.shift();
-  if (lookups.length >= limit) return true;
-  lookups.push(now);
+  if (lim.ipMiss && ip && recent(`${kind}|miss|${ip}`, now) >= lim.ipMiss) return true;
+  const keys = [];
+  if (lim.ip && ip) keys.push([`${kind}|ip|${ip}`, lim.ip]);
+  if (lim.branch) keys.push([`${kind}|br|${branchId}`, lim.branch]);
+  keys.push([`${kind}|all`, lim.all]);
+  for (const [key, max] of keys) if (recent(key, now) >= max) return true;
+  for (const [key] of keys) push(key, now);
+  // เก็บกวาด IP ที่เงียบไปแล้ว ไม่ให้หน่วยความจำโตเรื่อย ๆ
+  if (hits.size > 5000) for (const key of [...hits.keys()]) recent(key, now);
   return false;
 }
+const noteMiss = (kind, ip) => { if (ip) push(`${kind}|miss|${ip}`, Date.now()); };
 const maskName = (name) => {
   const s = String(name || '').trim();
   if (!s) return 'สมาชิก';
@@ -71,17 +98,18 @@ const maskName = (name) => {
 };
 
 // staff = พนักงานหน้าร้าน (เห็นชื่อเต็มและแต้ม) · ลูกค้าหน้า QR สั่งเองเห็นแค่ชื่อย่อ
-export async function lookupMember({ query: q, branchId, staff }) {
+export async function lookupMember({ query: q, branchId, staff, ip = '' }) {
   const raw = String(q || '').trim();
   if (!raw) return { success: false, error: 'สแกน QR บัตรสมาชิก หรือพิมพ์เบอร์โทร / เลขสมาชิก' };
   if (!crmEnabled(branchId)) return { success: false, error: 'สาขานี้ยังไม่ได้เชื่อมระบบสมาชิก' };
   // หน้าพนักงาน: รับเฉพาะรหัสจากการสแกน QR ในบัตรสมาชิก LINE (อักษร 2 ตัว + จุด เช่น QR. บัตรสมาชิก, CQ. คูปอง)
   // เบอร์โทร/เลขสมาชิก (MB-xxxxxxx) ไม่เข้ารูปแบบนี้ → พิมพ์เองไม่ได้
   if (staff && !/^[A-Z]{2}\.\S{4,}$/i.test(raw)) return { success: false, error: 'ใช้ได้เฉพาะสแกน QR บัตรสมาชิก/คูปองจากบัตรสมาชิก LINE ของลูกค้า' };
-  if (rateLimited(staff ? 120 : 30)) return { success: false, error: 'ค้นหาถี่เกินไป ลองใหม่ในอีกสักครู่' };
+  if (rateLimited(staff ? 'staff' : 'kiosk', { ip, branchId })) return { success: false, error: 'ค้นหาถี่เกินไป ลองใหม่ในอีกสักครู่' };
   const body = raw.startsWith('QR.') ? { qrToken: raw } : { query: raw };
   const r = await call('/api/pos/members/resolve', body, branchId);
   if (!r.ok) {
+    if (r.status === 404 && !staff) noteMiss('kiosk', ip);
     if (r.status === 404) return { success: false, notFound: true, error: /^(CP\.)?[A-Z0-9]{2}-/i.test(raw) ? 'ไม่พบคูปองนี้' : 'ไม่พบสมาชิก' };
     if (r.status === 410) return { success: false, error: 'QR หมดอายุ ให้ลูกค้าเปิดบัตรสมาชิกใหม่แล้วสแกนอีกครั้ง' };
     return { success: false, offline: !!r.retry, error: r.error };
@@ -148,7 +176,7 @@ export async function verifyKioskMember(data, branchId) {
 export async function checkVoucher(data, branchId) {
   const code = String(data.code || '').trim().slice(0, 200);
   if (!code || !ref(data.ref)) return { success: false, error: 'สแกน QR หรือพิมพ์รหัส Voucher' };
-  if (rateLimited(120)) return { success: false, error: 'ตรวจ Voucher ถี่เกินไป ลองใหม่ในอีกสักครู่' };
+  if (rateLimited('voucher', { ip: data._ip, branchId })) return { success: false, error: 'ตรวจ Voucher ถี่เกินไป ลองใหม่ในอีกสักครู่' };
   return crmAction('/api/pos/vouchers/check', { code, ref: ref(data.ref), minutes: 30 }, branchId);
 }
 export async function releaseVoucher(data, branchId) {
@@ -163,7 +191,7 @@ export async function redeemReward(data, branchId, kiosk) {
 // ยืนยันตัวตนที่หน้าลูกค้าสั่งเอง: รหัส 6 หลักในบัตรสมาชิก LINE (ไม่ส่งข้อความ) · send = ขอลิงก์เปิดบัตรสมาชิก
 export async function sendMemberCode(data, branchId) {
   if (!MEMBER_RE.test(String(data.memberId || ''))) return { success: false, error: 'ไม่พบเลขสมาชิก' };
-  if (rateLimited(30)) return { success: false, error: 'ขอรหัสถี่เกินไป ลองใหม่ในอีกสักครู่' };
+  if (rateLimited('code', { ip: data._ip, branchId })) return { success: false, error: 'ขอรหัสถี่เกินไป ลองใหม่ในอีกสักครู่' };
   return crmAction('/api/pos/members/verify/send', { memberId: String(data.memberId) }, branchId);
 }
 export async function checkMemberCode(data, branchId) {

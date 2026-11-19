@@ -91,8 +91,8 @@ const POST_ACTIONS = {
   deleteIngredient,
 
   // ระบบสมาชิก: พนักงานค้นสมาชิกตอนปิดบิล (เห็นชื่อเต็ม แต้ม) · ลูกค้าหน้า QR ใส่เลขสมาชิก (เห็นแค่ชื่อย่อ)
-  crmMemberLookup:   async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: true }),
-  crmKioskMember:    async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: false }),
+  crmMemberLookup:   async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: true, ip: data._ip }),
+  crmKioskMember:    async (data) => lookupMember({ query: data.query, branchId: await branchForWrite(data), staff: false, ip: data._ip }),
   crmRetry:          async () => ({ success: true, sent: await flushCrmQueue(100) }),
   crmSyncMenu:       async () => syncMenuToCrm({ force: true }),
   // คูปอง/แลกแต้ม — หน้าขายของพนักงาน
@@ -180,7 +180,8 @@ export function parseBody(body) {
   catch { return null; }
 }
 
-export async function route({ method, params = {}, body }) {
+// ip = เครื่องที่ส่งคำขอมา (ใช้นับจำนวนครั้งค้นหาสมาชิกต่อเครื่อง) — ส่งมาจาก server ไม่รับจาก body
+export async function route({ method, params = {}, body, ip = '' }) {
   if (method === 'GET') {
     params = { ...params };
     const token = params.token; delete params.token;
@@ -202,6 +203,7 @@ export async function route({ method, params = {}, body }) {
     const handler = POST_ACTIONS[action];
     if (!handler) return { success: false, error: 'Unknown action' };
     const token = data._token; delete data._token;
+    data._ip = String(ip || '').slice(0, 64);
     const auth = await authorize(action, token, data, null);
     if (!auth.ok) return auth.response;
     const result = await handler(data);

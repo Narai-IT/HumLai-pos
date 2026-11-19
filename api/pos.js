@@ -18,7 +18,9 @@ export default async function handler(req, res) {
 
   try {
     const params = req.query || {};
-    const result = await route({ method: req.method, params, body: req.body });
+    const h = req.headers || {};
+    const ip = String(h['cf-connecting-ip'] || String(h['x-forwarded-for'] || '').split(',')[0] || h['x-real-ip'] || '').trim();
+    const result = await route({ method: req.method, params, body: req.body, ip });
     return res.status(200).json(result);
   } catch (err) {
     console.error('[pos]', req.method, (req.query && req.query.action) || '', err);
