@@ -35,7 +35,8 @@ export const dbConfig = {
     useUTC: true,
     ...(instanceName ? { instanceName } : {})
   },
-  pool: { max: Number(process.env.SQL_POOL_MAX || 5), min: 0, idleTimeoutMillis: 30000 },
+  // คำขอที่รอคิวออกเลขบิล/โควตาจะถือการเชื่อมต่อไว้ระหว่างรอ — เผื่อให้หน้าอ่านข้อมูลยังมีที่ว่าง
+  pool: { max: Number(process.env.SQL_POOL_MAX || 20), min: 0, idleTimeoutMillis: 30000 },
   requestTimeout: Number(process.env.SQL_TIMEOUT || 20000),
   connectionTimeout: Number(process.env.SQL_CONNECT_TIMEOUT || 15000)
 };
@@ -107,12 +108,29 @@ export async function query(text, params = {}) {
 export const typed = (sqlType, value) => ({ __sqlType: sqlType, value });
 export { sql };
 
-// รันหลายคำสั่งในทรานแซกชันเดียว — ใช้ตอนออกเลขบิลคีออส (หลายโต๊ะกดจ่ายพร้อมกันได้)
-// ระดับ SERIALIZABLE + UPDLOCK ทำหน้าที่แทน LockService ของ Apps Script
-export async function withTransaction(fn) {
+// รันหลายคำสั่งในทรานแซกชันเดียว
+//   isolation: ค่าเริ่มต้น SERIALIZABLE (ของเดิม) · งานที่ต่อคิวด้วย lockKey() ใช้ 'READ_COMMITTED' ได้ ไม่ล็อกช่องว่างในตาราง จึงไม่ติดกันเอง
+//   SQL Server ตัดทิ้งเพราะสองคำขอรอกันเอง (deadlock 1205) → ทุกอย่างในทรานแซกชันถูกยกเลิกแล้ว ลองใหม่เองสูงสุด 3 ครั้ง
+const DEADLOCK = 1205;
+const isDeadlock = (err) => !!err && (err.number === DEADLOCK || (err.originalError && err.originalError.number === DEADLOCK) || /deadlock/i.test(String(err.message || '')));
+export async function withTransaction(fn, { isolation = 'SERIALIZABLE', retries = 3 } = {}) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await runTransaction(fn, isolation);
+    } catch (err) {
+      if (!isDeadlock(err)) throw err;
+      if (attempt >= retries) {
+        console.error('[db] deadlock ซ้ำ', attempt, 'ครั้ง:', err.message);
+        throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดอีกครั้ง');
+      }
+      await new Promise(r => setTimeout(r, 40 + Math.floor(Math.random() * 120) * attempt));
+    }
+  }
+}
+async function runTransaction(fn, isolation) {
   const pool = await getPool();
   const tx = new sql.Transaction(pool);
-  await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+  await tx.begin(sql.ISOLATION_LEVEL[isolation] ?? sql.ISOLATION_LEVEL.SERIALIZABLE);
   const txQuery = (text, params = {}) => {
     const request = new sql.Request(tx);
     for (const [key, value] of Object.entries(params)) {
@@ -129,6 +147,16 @@ export async function withTransaction(fn) {
     try { await tx.rollback(); } catch { /* ทรานแซกชันถูกยกเลิกไปแล้ว */ }
     throw err;
   }
+}
+
+// ต่อคิวตามชื่อ (เช่น "bill:A" = ออกเลขบิลสาขา A, "member-menu:MB-0000001") จนจบทรานแซกชัน
+// คำขอชื่อเดียวกันทำทีละคำขอ ชื่อต่างกันไม่รอกัน · ใช้ในทรานแซกชันเท่านั้น
+export async function lockKey(runner, resource, timeoutMs = 15000) {
+  const res = await runner(
+    `DECLARE @r INT; EXEC @r = sp_getapplock @Resource = @res, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = @t; SELECT @r AS r`,
+    { res: String(resource).slice(0, 255), t: timeoutMs });
+  const r = res.recordset && res.recordset[0] ? res.recordset[0].r : -999;
+  if (r < 0) throw new Error('ระบบกำลังบันทึกรายการอื่นอยู่ กรุณากดอีกครั้ง');
 }
 
 // เขียนหลายแถวในคำสั่งเดียว แบ่งก้อนไม่ให้เกินเพดานพารามิเตอร์ของ SQL Server (2100 ตัว)

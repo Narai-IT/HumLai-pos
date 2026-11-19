@@ -722,3 +722,13 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_MemberMenuUsage_Day' AND object_id = OBJECT_ID('dbo.MemberMenuUsage'))
   CREATE INDEX IX_MemberMenuUsage_Day ON dbo.MemberMenuUsage (UsageDay);
 GO
+-- ── ตัวนับเลขบิล (เลขที่ใบกำกับภาษีอย่างย่อ) — หนึ่งแถวต่อคำนำหน้าเลขบิลของสาขา ──
+-- ออกบิลใหม่ = บวก 1 ที่แถวนี้ ไม่ต้องไล่อ่านบิลเก่าทั้งหมด (เร็วเท่ากันไม่ว่าบิลสะสมกี่ใบ)
+-- ไม่มีแถวของคำนำหน้านั้น → ระบบอ่านเลขล่าสุดจากบิลเดิมครั้งเดียวแล้วนับต่อ
+IF OBJECT_ID('dbo.BillCounters', 'U') IS NULL
+CREATE TABLE dbo.BillCounters (
+  Prefix     NVARCHAR(60) NOT NULL PRIMARY KEY,
+  LastNo     INT          NOT NULL,
+  UpdatedAt  DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO

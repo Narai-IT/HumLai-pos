@@ -2,7 +2,7 @@
 //   • จำการล็อกอินของลูกค้าได้กี่วัน (ส่งให้ระบบสมาชิกเป็นอายุ verifyToken)
 //   • จำกัดการสั่งเมนูสมาชิก: รวมทุกเมนู (totalLimit) และ/หรือแยกแต่ละเมนู (perMenu) — นับเป็นชิ้น รวมทุกสาขา
 //   • นับกันโควตาไว้ตั้งแต่ลูกค้าแจ้งโอน (held) · ปฏิเสธ/ยกเลิกบิล = คืนสิทธิ์ (released)
-import { query, withTransaction } from './db.js';
+import { query, withTransaction, lockKey } from './db.js';
 
 const KEY = 'member_menu_settings';
 export const DEFAULT_MEMBER_MENU = {
@@ -71,9 +71,10 @@ export const memberItemsOf = (items, menus) => {
 };
 
 // ที่ใช้ไปแล้ววันนี้ (held + used) ไม่นับรายการของ ref นี้เอง (ส่งคำขอซ้ำ/แก้ตะกร้าแล้วส่งใหม่)
+// ตอนจดการใช้ (holdMemberMenu) ต่อคิวตามเลขสมาชิกไว้แล้ว จึงไม่ต้องล็อกช่วงข้อมูลในตาราง (เดิมล็อกทับสมาชิกคนอื่นจนติดกันเอง)
 async function usedToday(runner, memberId, day, exceptRef = '') {
   const rows = (await runner(
-    `SELECT MenuId, SUM(Qty) AS qty FROM dbo.MemberMenuUsage WITH (UPDLOCK, HOLDLOCK)
+    `SELECT MenuId, SUM(Qty) AS qty FROM dbo.MemberMenuUsage
       WHERE MemberId = @memberId AND UsageDay = @day AND [Status] IN ('held','used') AND OrderRef <> @ref GROUP BY MenuId`,
     { memberId, day, ref: exceptRef })).recordset;
   const byMenu = {}; let total = 0;
@@ -114,6 +115,7 @@ export const problemOf = (settings, used, wanted, channel) => {
 };
 
 // ตรวจโควตาแล้วจดการใช้ (ทรานแซกชันเดียว กันสั่งพร้อมกันหลายเครื่องจนเกิน)
+//   สมาชิกคนเดียวกันส่งพร้อมกันหลายเครื่อง → ต่อคิวทีละคำขอ (lockKey ตามเลขสมาชิก) · สมาชิกต่างคนไม่รอกัน
 //   ref เดิมส่งซ้ำ → แทนที่รายการเดิมของ ref นั้น · enforce = false → จดอย่างเดียว ไม่ปฏิเสธ (บิลพนักงานที่รับเงินแล้ว)
 export async function holdMemberMenu({ memberId, items, channel, branchId, ref, status = 'held', orderNumber = null, enforce = true }) {
   if (!/^MB-\d{7}$/.test(String(memberId || '')) || !ref) return { success: true, skipped: true };
@@ -124,6 +126,7 @@ export async function holdMemberMenu({ memberId, items, channel, branchId, ref, 
   const day = businessDay(settings);
   try {
     return await withTransaction(async (runner) => {
+      await lockKey(runner, 'member-menu:' + memberId);
       const used = await usedToday(runner, memberId, day, ref);
       const problem = enforce ? problemOf(settings, used, wanted, channel) : null;
       if (problem) return { success: false, memberQuota: true, error: problem };
@@ -134,7 +137,7 @@ export async function holdMemberMenu({ memberId, items, channel, branchId, ref, 
         { memberId, id, name: w.name, qty: w.qty, channel, branchId: branchId || null, ref, no: orderNumber, status, day });
       }
       return { success: true };
-    });
+    }, { isolation: 'READ_COMMITTED' });
   } catch (err) {
     // ฐานข้อมูลยังไม่ได้รัน sql:init (ยังไม่มีตาราง) → ไม่จำกัด ไม่ให้การขายสะดุด
     if (/Invalid object name/i.test(String(err && err.message))) return { success: true, skipped: true };
