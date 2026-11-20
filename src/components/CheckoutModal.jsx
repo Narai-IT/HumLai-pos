@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import QRCode from 'qrcode';
-import { X, CheckCircle, ArrowLeft, CreditCard, Ticket, Smartphone, Tag, ChevronRight, Split, Clock, Camera, Upload, Printer, UserRound, QrCode } from 'lucide-react';
+import { X, CheckCircle, ArrowLeft, CreditCard, Ticket, Smartphone, Tag, ChevronRight, Split, Clock, Printer, UserRound, QrCode } from 'lucide-react';
 import { crmEnabled, lookupMember, maskPhone, crmCall, newCouponRef } from '../utils/crm';
 import QrScanner from './QrScanner';
 import { isQrCode, scannerChar, useScannerWedge } from '../utils/qrScan';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { scopedSlipCss } from '../utils/print80mm';
-import { API_URL } from '../utils/api';
 import { getReceiptHeader } from '../utils/printServer';
 import { logoHtml } from '../utils/receiptStyle';
 import { menuCategoryLookup, discountAmount as calcDiscount } from '../utils/discount';
@@ -147,56 +146,7 @@ const CheckoutModal = ({
   const [approvalId] = useState('');
   const [approvalStatus, setApprovalStatus] = useState('approved');
 
-  const [slipPreview, setSlipPreview] = useState('');
-  const [slipUploading, setSlipUploading] = useState(false);
   const [pendingComplete, setPendingComplete] = useState(null);
-  const billNo = String(orderNumber || '').replace(/[^0-9A-Za-z]/g, '') || ('bill-' + Date.now());
-
-  const fileToResizedDataUrl = (file, maxDim = 1280, quality = 0.72) => new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
-        else if (height >= width && height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.onerror = reject;
-      img.src = ev.target.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-
-  const handleSlipFile = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file) return;
-    try { setSlipPreview(await fileToResizedDataUrl(file)); } catch (err) {}
-  };
-
-  const uploadSlip = async (dataUrl) => {
-    const base64 = String(dataUrl).split(',')[1];
-    if (!base64) return;
-    await fetch(API_URL, {
-      method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'uploadSlip', base64, mimeType: 'image/jpeg', filename: `${billNo}.jpg` })
-    });
-  };
-
-  const finishWithSlip = async (skip = false) => {
-    if (!skip && slipPreview) {
-      setSlipUploading(true);
-      try { await uploadSlip(slipPreview); } catch (e) {}
-      setSlipUploading(false);
-    }
-    setPaymentStep('success');
-  };
-
   const [splitTransfer, setSplitTransfer] = useState('');
   const [splitCard, setSplitCard] = useState('');
 
@@ -338,26 +288,16 @@ const CheckoutModal = ({
   };
 
   const handleConfirmPayment = (method) => {
-    if (method === 'เงินโอน') {
-      setPendingComplete({ method: 'เงินโอน' });
-      setSlipPreview('');
-      setPaymentStep('slip');
-    } else {
-      setPendingComplete({ method });
-      setPaymentStep('success');
-    }
+    // เงินโอน: ยืนยันรับเงินแล้วไปหน้าใบเสร็จเลย (ไม่มีหน้าแนบสลิปแล้ว)
+    setPendingComplete({ method });
+    setPaymentStep('success');
   };
 
   const handleConfirmSplit = () => {
     if (!splitValid) return;
     const details = { transfer: splitTransferN, card: splitCardN };
     setPendingComplete({ method: 'แยกจ่าย', details });
-    if (splitTransferN > 0) {
-      setSlipPreview('');
-      setPaymentStep('slip');
-    } else {
-      setPaymentStep('success');
-    }
+    setPaymentStep('success');
   };
 
   const PAY_PART = { voucher: 'Voucher', transfer: 'โอน', card: 'บัตร', cash: 'สด' };
@@ -1009,7 +949,7 @@ const CheckoutModal = ({
               <p style={{ color: '#475569', fontSize: '0.88rem', marginBottom: '1rem', fontWeight: '600' }}>
                 {lang === 'th' ? 'บิลเลขที่:' : 'Bill No:'} <strong style={{ color: '#ea580c' }}>{orderNumber}</strong>
               </p>
-              <button onClick={() => (transferDue !== null ? (setSlipPreview(''), setPaymentStep('slip')) : handleConfirmPayment('เงินโอน'))} className="confirm-btn" style={{ background: '#2563eb', color: '#ffffff', width: '100%', fontWeight: '800' }}>
+              <button onClick={() => (transferDue !== null ? setPaymentStep('success') : handleConfirmPayment('เงินโอน'))} className="confirm-btn" style={{ background: '#2563eb', color: '#ffffff', width: '100%', fontWeight: '800' }}>
                 <CheckCircle size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
                 {lang === 'th' ? 'ยืนยันรับเงินโอนแล้ว' : 'Confirm Transfer Received'}
               </button>
@@ -1043,67 +983,6 @@ const CheckoutModal = ({
               <button onClick={() => handleConfirmPayment('บัตรเครดิต')} className="confirm-btn" style={{ background: '#d97706', color: '#ffffff', width: '100%', fontWeight: '800' }}>
                 <CheckCircle size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
                 {lang === 'th' ? 'ยืนยันรับชำระบัตรแล้ว' : 'Confirm Card Payment Done'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ── Step 3e: แนบสลิปการโอน ── */}
-        {paymentStep === 'slip' && (
-          <>
-            <div className="modal-header">
-              <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0f172a', fontWeight: '800' }}>
-                <Camera size={22} color="#2563eb" /> {lang === 'th' ? 'แนบสลิปการโอน' : 'Attach Transfer Slip'}
-              </h2>
-              {/* ยังไม่ได้บันทึกบิล — ย้อนกลับไปเลือกวิธีชำระ (ปิดหน้าต่างตรงนี้ = บิลไม่ถูกบันทึกแต่พนักงานนึกว่าเสร็จแล้ว) */}
-              <button className="close-btn" onClick={() => setPaymentStep('payment_method')}><ArrowLeft size={22} color="#0f172a" /></button>
-            </div>
-
-            <div style={{ textAlign: 'center', padding: '0.25rem 0' }}>
-              <p style={{ color: '#475569', fontSize: '0.88rem', margin: '0 0 0.25rem', fontWeight: '600' }}>
-                {lang === 'th' ? 'ถ่ายรูปหรืออัปโหลดสลิป แล้วบันทึก' : 'Take a photo or upload the slip, then save'}
-              </p>
-              <p style={{ color: '#475569', fontSize: '0.85rem', marginBottom: '1rem', fontWeight: '600' }}>
-                {lang === 'th' ? 'บิลเลขที่:' : 'Bill No:'} <strong style={{ color: '#ea580c' }}>{orderNumber}</strong>
-                {' · '}<span style={{ color: '#ea580c', fontWeight: 800 }}>฿{qrAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              </p>
-
-              {slipPreview ? (
-                <div style={{ marginBottom: '1rem' }}>
-                  <img src={slipPreview} alt="slip" style={{ maxWidth: '100%', maxHeight: '320px', borderRadius: '12px', border: '1px solid #cbd5e1' }} />
-                </div>
-              ) : (
-                <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: '12px', padding: '2rem 1rem', marginBottom: '1rem', color: '#64748b', fontSize: '0.9rem', fontWeight: '600' }}>
-                  {lang === 'th' ? 'ยังไม่ได้เลือกรูปสลิป' : 'No slip selected yet'}
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem' }}>
-                <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.85rem', background: '#eff6ff', border: '1.5px solid #bfdbfe', borderRadius: '12px', color: '#2563eb', fontWeight: 800, cursor: 'pointer' }}>
-                  <Camera size={18} /> {lang === 'th' ? 'ถ่ายรูป' : 'Camera'}
-                  <input type="file" accept="image/*" capture="environment" onChange={handleSlipFile} style={{ display: 'none' }} />
-                </label>
-                <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', padding: '0.85rem', background: '#f1f5f9', border: '1.5px solid #cbd5e1', borderRadius: '12px', color: '#0f172a', fontWeight: 800, cursor: 'pointer' }}>
-                  <Upload size={18} /> {lang === 'th' ? 'อัปโหลดไฟล์' : 'Upload'}
-                  <input type="file" accept="image/*" onChange={handleSlipFile} style={{ display: 'none' }} />
-                </label>
-              </div>
-
-              <button
-                onClick={() => finishWithSlip(false)}
-                disabled={!slipPreview || slipUploading}
-                className="confirm-btn"
-                style={{ width: '100%', background: (slipPreview && !slipUploading) ? '#16a34a' : '#e2e8f0', color: (slipPreview && !slipUploading) ? '#ffffff' : '#94a3b8', cursor: (slipPreview && !slipUploading) ? 'pointer' : 'not-allowed', opacity: (slipPreview && !slipUploading) ? 1 : 0.6, fontWeight: '800' }}
-              >
-                <CheckCircle size={18} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
-                {slipUploading ? (lang === 'th' ? 'กำลังอัปโหลด...' : 'Uploading...') : (lang === 'th' ? 'บันทึกสลิปและเสร็จสิ้น' : 'Save Slip & Finish')}
-              </button>
-              <button
-                onClick={() => finishWithSlip(true)}
-                disabled={slipUploading}
-                style={{ width: '100%', marginTop: '0.6rem', padding: '0.6rem', background: 'none', border: 'none', color: '#64748b', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit', fontWeight: '600' }}
-              >
-                {lang === 'th' ? 'ข้ามไปก่อน (ไม่แนบสลิป)' : 'Skip (no slip)'}
               </button>
             </div>
           </>
