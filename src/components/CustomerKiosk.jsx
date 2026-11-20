@@ -1211,9 +1211,14 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 </div>
               );
             }
-            const tone = soldOut ? { bg: '#fef2f2', fg: '#b91c1c' } : qi.C > 0 ? { bg: '#eff6ff', fg: '#1e40af' } : { bg: '#f0fdf4', fg: '#166534' };
+            // มีของในตะกร้า = สีฟ้า (ยังไม่ได้จ่าย) · ใช้ครบวันนี้แล้ว = สีแดง · ยังเหลือ = สีเขียว
+            const tone = qi.C > 0 ? { bg: '#eff6ff', fg: '#1e40af' } : soldOut ? { bg: '#fef2f2', fg: '#b91c1c' } : { bg: '#f0fdf4', fg: '#166534' };
             const head = th
-              ? (qi.C > 0 ? `ใช้ไปแล้ว ${qi.U}/${qi.L} · ในตะกร้า ${qi.C} · เหลือ ${qi.R}` : `ใช้ไปแล้ว ${qi.U}/${qi.L} สิทธิ์วันนี้${!soldOut && qi.U > 0 ? ` · เหลือ ${qi.R}` : ''}`)
+              ? (qi.C > 0
+                  ? (qi.R === 0
+                      ? `ใช้ไปแล้ว ${qi.U + qi.C}/${qi.L} สิทธิ์ (${qi.U > 0 ? `ในตะกร้า ${qi.C}` : 'อยู่ในตะกร้า'})`
+                      : `ใช้ไปแล้ว ${qi.U}/${qi.L} · ในตะกร้า ${qi.C} · เหลือ ${qi.R}`)
+                  : `ใช้ไปแล้ว ${qi.U}/${qi.L} สิทธิ์วันนี้${!soldOut && qi.U > 0 ? ` · เหลือ ${qi.R}` : ''}`)
               : (qi.C > 0 ? `Used ${qi.U}/${qi.L} · in cart ${qi.C} · ${qi.R} left` : `Used ${qi.U}/${qi.L} today`);
             return (
               <div style={{ fontSize: '0.72rem', fontWeight: 800, borderRadius: 8, padding: '0.25rem 0.4rem', textAlign: 'center', background: tone.bg, color: tone.fg, lineHeight: 1.4 }}>
