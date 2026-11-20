@@ -945,8 +945,12 @@ const ManageMenu = () => {
                     const updateCount = (newCount) => {
                       let parsed = parseInt(newCount) || 0;
                       if (parsed < 0) parsed = 0;
-                      const others = (editingItem.bundledItems || []).map(String).filter(bId => bId !== String(m.id));
-                      for(let i=0; i<parsed; i++) others.push(String(m.id));
+                      // คงลำดับเดิมของเมนูนี้ไว้ (ถ้ามีอยู่แล้ว) ไม่ย้ายไปท้ายสุดตอนแก้จำนวน
+                      const cur = (editingItem.bundledItems || []).map(String);
+                      const firstIdx = cur.indexOf(String(m.id));
+                      const others = cur.filter(bId => bId !== String(m.id));
+                      const insertAt = firstIdx === -1 ? others.length : cur.slice(0, firstIdx).filter(bId => bId !== String(m.id)).length;
+                      others.splice(insertAt, 0, ...Array(parsed).fill(String(m.id)));
                       setEditingItem({ ...editingItem, bundledItems: others });
                     };
                     
@@ -967,6 +971,47 @@ const ManageMenu = () => {
                     </div>
                   )})}
                 </div>
+
+                {/* ลำดับการแสดงของเมนูแถม — ขึ้นตะกร้า/ครัวตามลำดับนี้ */}
+                {(() => {
+                  const ids = (editingItem.bundledItems || []).map(String);
+                  const order = [...new Set(ids)];
+                  if (order.length < 2) return null;
+                  const move = (idx, dir) => {
+                    const next = [...order];
+                    const j = idx + dir;
+                    if (j < 0 || j >= next.length) return;
+                    [next[idx], next[j]] = [next[j], next[idx]];
+                    const rebuilt = next.flatMap(id => ids.filter(b => b === id));
+                    setEditingItem({ ...editingItem, bundledItems: rebuilt });
+                  };
+                  const btn = (disabled) => ({
+                    padding: '0.15rem 0.45rem', margin: 0, borderRadius: 4, border: '1px solid var(--border-color)',
+                    background: 'var(--bg-main)', color: disabled ? 'var(--text-muted)' : 'var(--text-main)',
+                    cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.4 : 1, fontSize: '0.75rem'
+                  });
+                  return (
+                    <div style={{ marginTop: '0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                        {lang === 'th' ? 'ลำดับการแสดงในตะกร้า (กด ▲▼ เพื่อเลื่อน):' : 'Display order in cart (use ▲▼ to reorder):'}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                        {order.map((id, idx) => {
+                          const m = menuItems.find(x => String(x.id) === id);
+                          const qty = ids.filter(b => b === id).length;
+                          return (
+                            <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+                              <span style={{ width: 18, color: 'var(--text-muted)' }}>{idx + 1}.</span>
+                              <span style={{ flex: 1, fontWeight: 600 }}>{m ? m.name : id}{qty > 1 ? ` ×${qty}` : ''}</span>
+                              <button type="button" style={btn(idx === 0)} disabled={idx === 0} onClick={() => move(idx, -1)}>▲</button>
+                              <button type="button" style={btn(idx === order.length - 1)} disabled={idx === order.length - 1} onClick={() => move(idx, 1)}>▼</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* ── Popup / ตัวเลือกตอนสั่ง (Order Wizard) ───────────── */}

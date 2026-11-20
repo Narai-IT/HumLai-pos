@@ -1556,7 +1556,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                   <span style={{ minWidth: 0 }}>
                     + {th ? m.food.name : (m.food.nameEn || m.food.name)}
                     {m.allPopups && m.allPopups.length > 0 && <span style={{ color: '#64748b' }}> ({m.allPopups.map(p => p.name).join(', ')})</span>}
-                    {m.food.isBundled && <span style={{ color: '#16a34a', fontWeight: 800 }}> {th ? '🎁 แถม' : '🎁 free'}</span>}
+                    {m.food.isBundled && <span style={{ color: '#16a34a', fontWeight: 800 }}> {th ? '🎁 ฟรี' : '🎁 free'}</span>}
                   </span>
                   {unitTotal(m) > 0 && <span style={{ flexShrink: 0, color: '#64748b', fontWeight: 700 }}>฿{unitTotal(m).toLocaleString()}</span>}
                 </div>
@@ -1567,7 +1567,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           {item.fromPopupOf && (
             <div style={{ fontSize: '0.74rem', color: '#1d4ed8', fontWeight: 700, marginTop: 2 }}>
               {item.food.isBundled
-                ? (th ? `🎁 แถมกับ ${item.fromPopupOf}` : `🎁 Free with ${item.fromPopupOf}`)
+                ? `🎁 ${item.fromPopupOf}`
                 : (th ? `พ่วงกับ ${item.fromPopupOf}` : `with ${item.fromPopupOf}`)}
             </div>
           )}
