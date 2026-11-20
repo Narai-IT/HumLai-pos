@@ -121,6 +121,14 @@ async function postOrderPayload(payload) {
 // ส่งบิลค้างซ้ำเองทุก ๆ เท่านี้ — กรณีเน็ตเครื่องปกติแต่ API/ฐานข้อมูลล่ม จะไม่มี event 'online' มาปลุก
 const PENDING_RETRY_MS = 90 * 1000;
 
+// '1.6.2' < '1.7.0' — เทียบเลขเวอร์ชัน Print Server ทีละหลัก
+const versionBelow = (v, min) => {
+  const a = String(v).split('.').map(n => parseInt(n, 10) || 0);
+  const b = String(min).split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0); }
+  return false;
+};
+
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -1091,11 +1099,24 @@ function App() {
 
   // พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนชำระเงิน (ไม่เปิดลิ้นชักเก็บเงิน)
   const handlePrintPreBill = async (order) => {
-    // QR สแกนจ่ายท้ายใบแจ้งยอด (QR ของสาขานี้ ใส่ยอดสุทธิให้แล้ว) · สร้างไม่ได้ก็พิมพ์ใบแจ้งยอดแบบเดิม
+    // QR สแกนจ่ายท้ายใบแจ้งยอด (QR ของสาขานี้ ใส่ยอดสุทธิให้แล้ว) · สร้างไม่ได้ก็พิมพ์ใบแจ้งยอดแบบเดิม แล้วเตือนว่าทำไมไม่มี QR
     let payQr = null;
+    let qrProblem = '';
     try { payQr = await makePayQr(checkoutSettings, order.totalAmount, getReceiptHeader()?.paper); } catch (e) { console.warn('pay QR skipped:', e); }
+    if (!payQr && Number(order.totalAmount) > 0) qrProblem = 'สร้างรูป QR ไม่ได้ — เช็กการตั้งค่า QR ที่ หลังบ้าน > ตั้งค่าร้าน (ถ้าใช้รูป QR คงที่ ลองอัปโหลดรูปใหม่)';
     const res = await printPreBill(payQr ? { ...order, payQr } : order);
     if (res.success) {
+      if (payQr && res.serverVersion && versionBelow(res.serverVersion, '1.7.0')) {
+        qrProblem = `Print Server ยังเป็นเวอร์ชันเก่า (v${res.serverVersion === '0' ? '?' : res.serverVersion}) — รัน update-printer.bat ที่คอมเครื่อง Print Server`;
+      } else if (payQr && /QR/.test(res.warning || '')) {
+        // Print Server ต่อข้อความเตือนหลายเรื่องด้วย ' · ' — เอาเฉพาะเรื่อง QR
+        qrProblem = (res.warning.split(' · ').find(w => /QR/.test(w)) || res.warning).replace(/^ไม่มี QR สแกนจ่าย:\s*/, '');
+      }
+      if (qrProblem) {
+        setSaveAlert({ type: 'warning', msg: `🧾 พิมพ์ใบแจ้งยอดแล้ว แต่ไม่มี QR สแกนจ่าย — ${qrProblem}` });
+        setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'warning' ? null : cur)), 12000);
+        return;
+      }
       setSaveAlert({ type: 'success', msg: '🧾 พิมพ์ใบแจ้งยอดให้ลูกค้าแล้ว' });
       setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
     } else {
@@ -1592,8 +1613,8 @@ function App() {
           onClick={() => setSaveAlert(null)}
           style={{
             position: 'fixed', top: 0, left: 0, right: 0, zIndex: 5000,
-            background: saveAlert.type === 'success' ? '#16a34a' : '#dc2626',
-            color: 'white', padding: '0.85rem 1.25rem',
+            background: saveAlert.type === 'success' ? '#16a34a' : saveAlert.type === 'warning' ? '#f59e0b' : '#dc2626',
+            color: saveAlert.type === 'warning' ? '#1f2937' : 'white', padding: '0.85rem 1.25rem',
             fontSize: '0.9rem', fontWeight: 700, textAlign: 'center', cursor: 'pointer',
             boxShadow: '0 4px 20px rgba(0,0,0,0.4)', lineHeight: 1.4
           }}

@@ -233,12 +233,18 @@ const sendDirect = async ({ ip, printerType, orderData }, timeoutMs) => {
     : [serverOk, data.success
       ? { key: 'send', status: 'ok', detail: 'ส่งงานแล้ว (Print Server รุ่นเก่า ตรวจสถานะเครื่องพิมพ์ไม่ได้ — อัปเดตด้วย update-printer.bat)' }
       : { key: 'connect', status: 'fail', detail: data.error || 'พิมพ์ไม่สำเร็จ' }];
+  // เวอร์ชัน Print Server (1.7.1+ ส่งมากับผลพิมพ์ · รุ่นก่อนหน้าถามจาก /health เฉพาะใบแจ้งยอดที่มี QR)
+  let serverVersion = data.version || '';
+  if (!serverVersion && data.success && printerType === 'prebill' && orderData && orderData.payQr) {
+    try { const h = await (await fetchWithTimeout(`${url}/health`, {}, 3000)).json(); serverVersion = (h && h.version) || '0'; } catch (e) { /* ไม่รู้เวอร์ชัน */ }
+  }
   return {
     success: !!data.success,
     confirmed: !!data.confirmed,
     stage: data.stage || (data.success ? 'done' : 'connect'),
     error: data.error || (data.success ? null : 'พิมพ์ไม่สำเร็จ'),
     warning: data.warning || null,
+    serverVersion,
     steps
   };
 };
@@ -313,6 +319,7 @@ const sendViaQueue = async ({ ip, printerType, orderData, label }, onQueued) => 
         error: job.status === 'done' ? null : (job.error || 'พิมพ์ไม่สำเร็จ'),
         warning: job.warning || null,
         via: 'queue',
+        serverVersion: (res.agent && res.agent.version) || '',
         steps
       };
     }

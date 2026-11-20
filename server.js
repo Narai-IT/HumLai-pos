@@ -7,10 +7,10 @@ import { registerAutoPrint } from './auto-print.js';
 import { registerPrintQueue } from './print-queue.js';
 
 const SERVER_NAME = 'humlai-print-server';
-const SERVER_VERSION = '1.7.0';
+const SERVER_VERSION = '1.7.1';
 // ความสามารถที่ Print Server ตัวนี้มี — หน้าเว็บใช้เช็คว่าเครื่องนี้รันโค้ดเวอร์ชันใหม่พอไหม
 // (เครื่องที่ยังรันตัวเก่าจะไม่มี features กลับมา หน้าเว็บจะได้บอกให้อัปเดตแทนที่จะฟ้อง 404 เฉย ๆ)
-const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice', 'printerStatus', 'printSteps', 'printQueue'];
+const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice', 'printerStatus', 'printSteps', 'printQueue', 'payQr'];
 const DEFAULT_PRINTER_PORT = 9100;
 
 const app = express();
@@ -162,7 +162,7 @@ app.post('/print', async (req, res) => {
   // ส่งผลทีละขั้น (steps) กลับไปด้วย หน้าเว็บจะได้บอกได้ว่าพิมพ์เสร็จจริง หรือติดที่ขั้นไหน
   const result = await printTicket({ ip, orderData, printerType });
   const { success, confirmed = false, stage = null, error = null, warning = null, steps = [] } = result;
-  res.status(success ? 200 : 500).json({ success, confirmed, stage, error, warning, steps });
+  res.status(success ? 200 : 500).json({ success, confirmed, stage, error, warning, steps, version: SERVER_VERSION });
 });
 
 // ── ดึงออเดอร์จากชีตมาพิมพ์เอง (ออเดอร์ที่ลูกค้าสั่งผ่าน QR) ──
