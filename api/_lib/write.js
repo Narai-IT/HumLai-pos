@@ -365,26 +365,40 @@ export async function insertOrder(data) {
   return result;
 }
 
+// ค้นบิลด้วยเลขบิลตรง ๆ (ใช้ดัชนี IX_Orders_OrderNumber อ่านแค่แถวของบิลนั้น)
+//   เดิมเขียนเป็น ISNULL(OrderNumber,'') = @id OR ISNULL([Timestamp],'') = @id — ฐานข้อมูลใช้ดัชนีไม่ได้
+//   ต้องอ่านบิลทุกแถวทุกครั้งที่ครัวกด "สำเร็จแล้ว"/"ยกเลิก" และล็อกตารางบิลไว้ระหว่างนั้น หน้าอื่นต้องรอ ช่วงคนเยอะช้าหลายวินาทีและชนกับการออกบิลจนล้ม
+// บิลรุ่นเก่ามากที่ไม่มีเลขบิล หน้าเว็บส่งเวลาสั่ง (เช่น 2026-01-31T12:00:00) มาแทน → ค้นด้วยเวลาเป็นทางสำรองเฉพาะกรณีนั้น
+const looksLikeTimestamp = (v) => /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(v);
+
 export async function updateStatus(data) {
   const status = String(data.status || '');
-  const res = await query(
-    `UPDATE dbo.Orders
-        SET [Status] = @status,
-            CompletionTime = CASE WHEN LOWER(@status) = 'completed' AND @completion <> '' THEN @completion ELSE CompletionTime END
-      WHERE ISNULL(OrderNumber, '') = @id OR ISNULL([Timestamp], '') = @id`,
-    { status, completion: String(data.completionTime || ''), id: String(data.orderId ?? '') }
-  );
-  if (res.rowsAffected[0] > 0 && /cancel/i.test(status)) await releaseMemberMenu(String(data.orderId ?? ''));
-  return { success: res.rowsAffected[0] > 0 };
+  const id = String(data.orderId ?? '').trim();
+  if (!id || !status) return { success: false, error: 'ไม่ได้ระบุเลขบิลหรือสถานะ' };
+  const params = { status, completion: String(data.completionTime || ''), id };
+  const SET = `SET [Status] = @status,
+            CompletionTime = CASE WHEN LOWER(@status) = 'completed' AND @completion <> '' THEN @completion ELSE CompletionTime END`;
+  // ทรานแซกชันเดียว = ชนกับการออกบิลแล้วลองใหม่เองอัตโนมัติ (withTransaction) ไม่ตอบ error ให้ครัวต้องกดซ้ำ
+  const affected = await withTransaction(async (runner) => {
+    let res = await runner(`UPDATE dbo.Orders ${SET} WHERE OrderNumber = @id`, params);
+    if (res.rowsAffected[0] === 0 && looksLikeTimestamp(id)) {
+      res = await runner(`UPDATE dbo.Orders ${SET} WHERE OrderNumber IS NULL AND [Timestamp] = @id`, params);
+    }
+    return res.rowsAffected[0];
+  }, { isolation: 'READ_COMMITTED' });
+  if (affected > 0 && /cancel/i.test(status)) await releaseMemberMenu(id);
+  return { success: affected > 0 };
 }
 
 export async function cancelOrder(data) {
-  const res = await query(
-    `UPDATE dbo.Orders SET [Status] = 'cancelled' WHERE ISNULL(OrderNumber, '') = @n`,
-    { n: String(data.orderNumber || '') }
-  );
-  if (res.rowsAffected[0] > 0) await releaseMemberMenu(String(data.orderNumber || ''));   // ยกเลิกบิล = คืนสิทธิ์เมนูสมาชิก
-  return { success: res.rowsAffected[0] > 0 };
+  const n = String(data.orderNumber || '').trim();
+  // เลขบิลว่าง = ไม่ทำอะไร (เดิม ISNULL(OrderNumber,'') = '' จะไปยกเลิกทุกแถวที่ไม่มีเลขบิล)
+  if (!n) return { success: false, error: 'ไม่ได้ระบุเลขบิล' };
+  const affected = await withTransaction(async (runner) =>
+    (await runner(`UPDATE dbo.Orders SET [Status] = 'cancelled' WHERE OrderNumber = @n`, { n })).rowsAffected[0],
+  { isolation: 'READ_COMMITTED' });
+  if (affected > 0) await releaseMemberMenu(n);   // ยกเลิกบิล = คืนสิทธิ์เมนูสมาชิก
+  return { success: affected > 0 };
 }
 
 // ── บิลค้าง (ตอนปิดกะมีโต๊ะยังไม่ชำระ) ──
