@@ -419,7 +419,23 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
         printer.println("--------------------------------");
       }
       printer.alignCenter();
-      printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "Thank you!"));
+      // ใบแจ้งยอด + QR สแกนจ่าย (หน้าเว็บสร้างรูป QR ของสาขาให้แล้ว) · พิมพ์รูปไม่ได้ก็ยังออกใบแจ้งยอดแบบเดิม
+      const payQr = isPreBill && orderData.payQr && typeof orderData.payQr === 'object' ? orderData.payQr : null;
+      const qrMatch = payQr ? /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(payQr.image || '')) : null;
+      let qrPrinted = false;
+      if (qrMatch) {
+        printer.println("สแกนจ่ายด้วยแอปธนาคาร");
+        try { await printer.printImageBuffer(Buffer.from(qrMatch[1], 'base64')); qrPrinted = true; }
+        catch (err) { console.error('Pay QR print skipped:', err.message || err); }
+        if (qrPrinted) {
+          const amt = (Number(payQr.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          printer.println(`ยอดชำระ B ${amt}`);
+          if (clean(payQr.shop)) printer.println(clean(payQr.shop));
+          printer.println(payQr.dynamic ? "ยอดเงินขึ้นอัตโนมัติ ไม่ต้องพิมพ์" : `กรุณาใส่ยอด B ${amt} ในแอปธนาคาร`);
+          printer.println("โอนแล้วแสดงสลิปให้พนักงาน");
+        }
+      }
+      if (!qrPrinted) printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "Thank you!"));
     } else {
       printer.alignCenter();
       printer.println("*** END OF TICKET ***");
