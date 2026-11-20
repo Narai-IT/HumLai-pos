@@ -98,11 +98,7 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
                   <BarChart2 size={20} /> {lang === 'th' ? 'รายงาน' : 'Reports'}
                </NavLink>
              )}
-             {allowAll && (
-               <a href="/kitchen" className="admin-link" onClick={(e) => { e.preventDefault(); navigate('/kitchen'); }}>
-                  <Store size={20} /> {lang === 'th' ? 'หน้าจอห้องครัว' : 'Kitchen Monitor'}
-               </a>
-             )}
+             {/* หน้าจอห้องครัว (/kitchen) ซ่อนลิงก์ไว้ก่อน — ร้านยังไม่มีจอสำหรับครัว (ใช้ใบครัวจาก Print Server) · หน้ายังเปิดได้ที่ /kitchen ถ้าต้องการใช้ภายหลัง */}
              {allowAll && (
                <a href="https://docs.google.com/spreadsheets/" target="_blank" rel="noopener noreferrer" className="admin-link">
                   <FileSpreadsheet size={20} /> {lang === 'th' ? 'กูเกิลชีต (ข้อมูล)' : 'Google Sheets'}
