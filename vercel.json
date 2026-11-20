@@ -1,29 +1,10 @@
 {
+  "buildCommand": "node scripts/build-vercel-redirect.mjs",
+  "outputDirectory": "dist-redirect",
   "rewrites": [
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
-  ],
-  "images": {
-    "sizes": [
-      256,
-      640,
-      1080
-    ],
-    "formats": [
-      "image/webp"
-    ],
-    "minimumCacheTTL": 2592000,
-    "remotePatterns": [
-      {
-        "protocol": "https",
-        "hostname": "i.ibb.co"
-      },
-      {
-        "protocol": "https",
-        "hostname": "lh3.googleusercontent.com"
-      }
-    ]
-  }
+  ]
 }
