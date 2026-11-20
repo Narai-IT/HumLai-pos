@@ -415,7 +415,8 @@ const PosSalesScreen = ({
         };
       }),
       summary,
-      total: grandTotal.toLocaleString()
+      total: grandTotal.toLocaleString(),
+      totalAmount: grandTotal   // ยอดตัวเลขสำหรับ QR สแกนจ่ายท้ายบิล
     });
   };
 

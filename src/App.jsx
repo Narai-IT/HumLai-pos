@@ -42,10 +42,11 @@ import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining
 import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
-import { sendPrintJob, setReceiptHeader, setPrintBranch } from './utils/printServer';
+import { sendPrintJob, setReceiptHeader, setPrintBranch, getReceiptHeader } from './utils/printServer';
 import { receiptHeaderStyle } from './utils/receiptStyle';
 import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
+import { makePayQr } from './utils/payQr';
 import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
 
 const MENU_ITEMS = [];
@@ -1090,7 +1091,10 @@ function App() {
 
   // พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนชำระเงิน (ไม่เปิดลิ้นชักเก็บเงิน)
   const handlePrintPreBill = async (order) => {
-    const res = await printPreBill(order);
+    // QR สแกนจ่ายท้ายใบแจ้งยอด (QR ของสาขานี้ ใส่ยอดสุทธิให้แล้ว) · สร้างไม่ได้ก็พิมพ์ใบแจ้งยอดแบบเดิม
+    let payQr = null;
+    try { payQr = await makePayQr(checkoutSettings, order.totalAmount, getReceiptHeader()?.paper); } catch (e) { console.warn('pay QR skipped:', e); }
+    const res = await printPreBill(payQr ? { ...order, payQr } : order);
     if (res.success) {
       setSaveAlert({ type: 'success', msg: '🧾 พิมพ์ใบแจ้งยอดให้ลูกค้าแล้ว' });
       setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
