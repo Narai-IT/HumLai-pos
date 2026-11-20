@@ -227,14 +227,9 @@ const PosSalesScreen = ({
   const [selectedDiscount, setSelectedDiscount] = useState(null);
   const [showDiscounts, setShowDiscounts] = useState(false);   // หน้าต่างสมาชิก / คูปองสมาชิก
   // ── ส่วนลดของร้าน (ปุ่ม "ส่วนลด") — ไม่ต้องสแกนสมาชิก ──
-  //   ส่วนลดที่ตั้งไว้ในหลังบ้าน > โปรโมชั่น/ส่วนลด ใช้ได้ทุกคน · ใส่ส่วนลดเอง (บาท/%) ได้เฉพาะแคชเชียร์/แอดมิน
+  //   ใช้ได้เฉพาะส่วนลดที่ตั้งไว้ในหลังบ้าน > โปรโมชั่น/ส่วนลด (ไม่มีให้พนักงานใส่เอง)
   //   ใช้ได้ทีละอย่าง: เลือกส่วนลดร้าน = เอาคูปองสมาชิกออก (เหมือนเดิม)
   const [showStoreDisc, setShowStoreDisc] = useState(false);
-  const [customType, setCustomType] = useState('baht');
-  const [customValue, setCustomValue] = useState('');
-  const [customReason, setCustomReason] = useState('');
-  const [customErr, setCustomErr] = useState('');
-  const canCustomDiscount = !!(isAdmin || isCashier);
   // ── สมาชิก: คูปองสมาชิกต้องสแกน QR บัตรสมาชิก (หรือ QR คูปอง) ก่อน · จำสมาชิกไว้ส่งต่อให้หน้าชำระเงิน ──
   const [crmOn, setCrmOn] = useState(false);
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
@@ -455,18 +450,6 @@ const PosSalesScreen = ({
                 </div>
               </div>
   );
-
-  // ใส่ส่วนลดเอง (แคชเชียร์/แอดมิน): บาท หรือ % ของยอดอาหาร · เหตุผลติดไปกับชื่อส่วนลดในใบเสร็จ/รายงาน
-  const applyCustomDiscount = () => {
-    const v = Math.round((Number(customValue) || 0) * 100) / 100;
-    if (!(v > 0)) { setCustomErr(t('ใส่จำนวนส่วนลด', 'Enter an amount')); return; }
-    if (customType === 'percent' && v > 100) { setCustomErr(t('เปอร์เซ็นต์ต้องไม่เกิน 100', 'Max 100%')); return; }
-    if (customType === 'baht' && v > subtotal) { setCustomErr(t(`ส่วนลดต้องไม่เกินยอดอาหาร ฿${subtotal.toLocaleString()}`, 'More than the bill')); return; }
-    const reason = customReason.trim().slice(0, 60);
-    const label = customType === 'percent' ? `${v}%` : `${v.toLocaleString()} บาท`;
-    setSelectedDiscount({ id: 'custom', name: `ส่วนลดพิเศษ ${label}${reason ? ` (${reason})` : ''}`, type: customType, value: v, categories: [], custom: true, by: currentUser?.username || '' });
-    setCustomValue(''); setCustomReason(''); setCustomErr(''); setShowStoreDisc(false);
-  };
 
   const optionText = (item) => {
     const parts = [];
@@ -878,7 +861,7 @@ const PosSalesScreen = ({
               )}
               <button
                 className="pos2-tool"
-                onClick={() => { setCustomErr(''); setShowStoreDisc(true); }}
+                onClick={() => setShowStoreDisc(true)}
                 title={t('ส่วนลดของร้าน — ไม่ต้องสแกนสมาชิก', 'Store discount — no member needed')}
                 style={{ minWidth: 0, ...(storeDiscActive ? { borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' } : {}) }}
               >
@@ -1065,33 +1048,6 @@ const PosSalesScreen = ({
                   </button>
                 );
               })}
-            </div>
-            <div style={{ border: '1.5px dashed #cbd5e1', borderRadius: '12px', padding: '0.65rem 0.75rem', marginTop: '0.6rem', textAlign: 'left' }}>
-              <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.45rem' }}>✏️ {t('ใส่ส่วนลดเอง', 'Custom discount')}</div>
-              {canCustomDiscount ? (
-                <>
-                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.45rem' }}>
-                    {[['baht', t('บาท', 'Baht')], ['percent', '%']].map(([k, label]) => (
-                      <button key={k} type="button" className="pos2-btn" onClick={() => setCustomType(k)}
-                        style={{ flex: 1, ...(customType === k ? { background: '#0f172a', color: '#fff', borderColor: '#0f172a' } : {}) }}>{label}</button>
-                    ))}
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.4rem' }}>
-                    <input type="number" inputMode="decimal" min="0" step="any" value={customValue} onChange={(e) => { setCustomValue(e.target.value); setCustomErr(''); }}
-                      placeholder={customType === 'percent' ? t('เช่น 10', 'e.g. 10') : t('เช่น 20', 'e.g. 20')} aria-label={t('จำนวนส่วนลด', 'Amount')}
-                      style={{ width: '6.5rem', padding: '0.5rem 0.6rem', border: '1.5px solid #cbd5e1', borderRadius: '9px', fontSize: '0.95rem' }} />
-                    <input type="text" value={customReason} onChange={(e) => setCustomReason(e.target.value)} maxLength={60}
-                      placeholder={t('เหตุผล (เช่น อาหารช้า)', 'Reason (optional)')} aria-label={t('เหตุผล', 'Reason')}
-                      style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.6rem', border: '1.5px solid #cbd5e1', borderRadius: '9px', fontSize: '0.9rem' }} />
-                  </div>
-                  {customErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 700, marginTop: '0.35rem' }}>{customErr}</div>}
-                  <button type="button" className="pos2-btn primary" style={{ width: '100%', marginTop: '0.5rem' }} onClick={applyCustomDiscount}>
-                    {t('ใช้ส่วนลดนี้', 'Apply')}
-                  </button>
-                </>
-              ) : (
-                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{t('🔒 ใส่ส่วนลดเองได้เฉพาะแคชเชียร์/แอดมิน', '🔒 Cashier/admin only')}</div>
-              )}
             </div>
             {storeDiscActive && (
               <div className="pos2-action-list" style={{ marginTop: '0.6rem' }}>
