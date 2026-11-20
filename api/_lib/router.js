@@ -108,7 +108,12 @@ const POST_ACTIONS = {
   crmKioskJoinLink:  async (data) => joinLink(await branchForWrite(data)),
   // เมนูสมาชิก: สิทธิ์ที่เหลือวันนี้ · หน้าลูกค้าต้องล็อกอินสมาชิก (ตรวจ verifyToken กับระบบสมาชิก) · หน้าขายพนักงานล็อกอินแล้ว
   // หน้าลูกค้าสั่งเอง: ต้องใส่รหัส 6 หลักไหม + จำสมาชิกไว้กี่วัน
-  memberMenuConfig:  async () => { const s = await getMemberMenuSettings(); return { success: true, requireCode: s.requireCode, rememberDays: s.rememberDays }; },
+  memberMenuConfig:  async () => {
+    const s = await getMemberMenuSettings();
+    // จำนวนสิทธิ์ต่อวัน (ให้หน้าลูกค้าบอกกติกาได้ตั้งแต่ยังไม่ล็อกอิน) · ปิดการจำกัด = null
+    const limit = s.limitEnabled && s.applyKiosk ? { total: s.totalLimit || null, perMenu: s.perMenu || {} } : null;
+    return { success: true, requireCode: s.requireCode, rememberDays: s.rememberDays, limit };
+  },
   memberMenuQuota:   async (data) => {
     if (!(await getMemberMenuSettings()).requireCode) {
       return /^MB-\d{7}$/.test(String(data.memberId || '')) ? memberQuota(String(data.memberId), 'kiosk') : { success: false, needLogin: true, error: 'ไม่พบเลขสมาชิก' };
