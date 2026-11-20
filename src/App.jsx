@@ -1171,6 +1171,10 @@ function App() {
       memberId: printInfo.member ? printInfo.member.id : undefined,
       // ส่วนลดเป็นคูปองสมาชิก → ส่งเป็นคูปอง (ระบบสมาชิกตัดคูปองตอนบันทึกบิล) ไม่ใช่ส่วนลดร้าน
       storeDiscount: printInfo.crmCoupon ? 0 : (Number(printInfo.discountAmount) || 0),
+      // บันทึกส่วนลดของบิล (ชื่อ/ยอด/ประเภท) → หลังบ้าน > รายงาน > ส่วนลด
+      discount: Number(printInfo.discountAmount) > 0
+        ? { name: printInfo.discountName || 'ส่วนลด', amount: Number(printInfo.discountAmount) || 0, kind: printInfo.crmCoupon ? 'coupon' : 'store' }
+        : undefined,
       couponIds: printInfo.crmCoupon ? printInfo.crmCoupon.ids : undefined,
       couponRef: printInfo.crmCoupon ? printInfo.crmCoupon.ref : undefined,
       couponDiscount: printInfo.crmCoupon ? printInfo.crmCoupon.discount : undefined,

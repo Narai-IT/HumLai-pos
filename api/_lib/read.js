@@ -212,6 +212,35 @@ export async function handleGet(action, params) {
       return { success: true, approvals: res.recordset.map(mapApproval) };
     }
 
+    // ── รายงานส่วนลด: บิลที่ใช้ส่วนลดในช่วงวันที่ (ชื่อส่วนลด ยอด ประเภท พนักงาน) ──
+    case 'getDiscountReport': {
+      const ymd = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : '');
+      const from = ymd(params.from), to = ymd(params.to);
+      if (!from || !to) return { success: false, error: 'ระบุช่วงวันที่ (from, to)' };
+      const next = new Date(`${to}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
+      const branchId = requestedBranch(params);
+      try {
+        const res = await query(
+          `SELECT p.[timestamp], p.orderNumber, p.tableNo, p.paymentMethod, p.grandTotal, p.staff, p.BranchId,
+                  p.DiscountName, p.DiscountAmount, p.DiscountKind,
+                  CASE WHEN EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.OrderNumber = p.orderNumber AND LOWER(o.[Status]) = 'cancelled') THEN 1 ELSE 0 END AS cancelled
+             FROM dbo.PaymentSummary p
+            WHERE p.DiscountAmount > 0 AND p.[timestamp] >= @from AND p.[timestamp] < @to${branchFilter(branchId, 'p.BranchId')}
+            ORDER BY p.[timestamp] ASC`,
+          { from: `${from}T00:00:00`, to: next.toISOString().slice(0, 10) + 'T00:00:00', branchId });
+        return { success: true, rows: res.recordset.map(r => ({
+          timestamp: String(r.timestamp || ''), orderNumber: String(r.orderNumber || ''), tableNo: String(r.tableNo || ''),
+          paymentMethod: String(r.paymentMethod || ''), grandTotal: Number(r.grandTotal) || 0, staff: String(r.staff || ''),
+          branchId: String(r.BranchId || ''), name: String(r.DiscountName || ''), amount: Number(r.DiscountAmount) || 0,
+          kind: String(r.DiscountKind || 'store'), cancelled: r.cancelled === 1
+        })) };
+      } catch (err) {
+        // ยังไม่ได้รัน sql:init (ยังไม่มีคอลัมน์ส่วนลด)
+        if (/Invalid column name/i.test(String(err && err.message))) return { success: true, rows: [], notReady: true };
+        throw err;
+      }
+    }
+
     case 'getOutstandingBills':
       return { success: true, bills: await lastRows('OutstandingBills', OUTSTAND_COLS, mapOutstanding) };
 

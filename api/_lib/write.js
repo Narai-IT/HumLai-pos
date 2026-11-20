@@ -97,6 +97,28 @@ async function hasClientRef() {
   return clientRefReady;
 }
 
+// ส่วนลดของบิล (ชื่อ/ยอด/ประเภท) — ฐานข้อมูลที่ยังไม่ได้รัน sql:init ไม่มีคอลัมน์ → ข้ามไป บิลยังบันทึกได้ตามปกติ
+let discountColsReady = false;
+async function hasDiscountCols(runner) {
+  if (discountColsReady) return true;
+  try {
+    const res = await runner(`SELECT COL_LENGTH('dbo.PaymentSummary', 'DiscountKind') AS n`);
+    discountColsReady = !!(res.recordset[0] && res.recordset[0].n);
+  } catch { /* ถือว่ายังไม่มี */ }
+  return discountColsReady;
+}
+const cleanDiscount = (d) => {
+  const amount = Math.round((Number(d && d.amount) || 0) * 100) / 100;
+  if (!(amount > 0)) return null;
+  return { name: toText(d.name).slice(0, 200) || 'ส่วนลด', amount, kind: d.kind === 'coupon' ? 'coupon' : 'store' };
+};
+async function saveBillDiscount(runner, orderNumber, discount) {
+  const d = cleanDiscount(discount);
+  if (!d || !orderNumber || !(await hasDiscountCols(runner))) return;
+  await runner(`UPDATE dbo.PaymentSummary SET DiscountName = @name, DiscountAmount = @amount, DiscountKind = @kind WHERE orderNumber = @no`,
+    { ...d, no: orderNumber });
+}
+
 // id ของกะที่เปิดค้างอยู่ — คีออสไม่รู้จักกะ จึงต้องให้ฝั่งเซิร์ฟเวอร์ผูกให้ตอนบันทึกยอด
 async function openShiftId(runner) {
   const res = await runner(`SELECT TOP (1) id FROM dbo.Shifts WHERE LOWER(ISNULL([status], '')) = 'open' ORDER BY Seq DESC`);
@@ -157,6 +179,8 @@ export async function handleKioskPaidOrder(data) {
     // 2) ยอดชำระ — ผูกกับกะที่เปิดอยู่ ให้สรุปกะและรายงานนับยอดจากคีออสด้วย
     const shiftId = await openShiftId(runner);
     await insertRows('PaymentSummary', PAYMENT_COLS, [[time, orderNo, table, method, total, by, shiftId, null, branchId]], runner);
+    // ลูกค้าใช้คูปองสมาชิกในหน้าสั่งเอง → บันทึกเป็นส่วนลดของบิล (รายงานส่วนลด)
+    await saveBillDiscount(runner, orderNo, { name: 'คูปองสมาชิก (สั่งเอง)', amount: data.couponDiscount, kind: 'coupon' });
 
     // 3) รายการรายโต๊ะ สถานะ paid — โต๊ะยังโชว์ว่ามีลูกค้า แต่ระบบไม่เก็บเงินซ้ำ
     const tableRows = items.map(item => {
@@ -337,6 +361,8 @@ export async function insertOrder(data) {
       ];
       if (useRef) await insertRows('PaymentSummary', [...PAYMENT_COLS, 'ClientRef'], [[...row, clientRef]], runner);
       else await insertRows('PaymentSummary', PAYMENT_COLS, [row], runner);
+      // ส่วนลดที่ใช้กับบิลนี้ (ชื่อ/ยอด/ประเภท) → หลังบ้าน > รายงาน > ส่วนลด
+      if (data.discount) await saveBillDiscount(runner, assign ? orderNo : toText(p.orderNumber), data.discount);
       // ระบบสมาชิก: เข้าคิวในทรานแซกชันเดียวกับบิล (บิลไม่ใช่สมาชิกก็ส่ง เพื่อให้ CRM รู้สัดส่วนยอดขายสมาชิก)
       if (orderNo) {
         await queueBill(runner, branchId, billPayload({

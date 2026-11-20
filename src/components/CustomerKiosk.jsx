@@ -273,11 +273,11 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   const verified = !!verifyToken || !needVerify;
   // ── เมนูเฉพาะสมาชิก: ต้องล็อกอินสมาชิก = ใส่เลขสมาชิก + ยืนยันรหัส 6 หลักในบัตร LINE (บังคับเสมอ ไม่ขึ้นกับการตั้งค่าคูปอง) ──
   // หลังบ้านเลือกได้ว่าต้องใส่รหัส 6 หลักไหม (หลังบ้าน > เมนูสมาชิก) · null = ยังโหลดไม่เสร็จ (ถือว่าต้องใส่ไว้ก่อน)
-  const [memberCfg, setMemberCfg] = useState({ requireCode: null, rememberDays: 30 });
+  const [memberCfg, setMemberCfg] = useState({ requireCode: null, rememberDays: 30, limit: null });
   useEffect(() => {
     if (!crmOn) return undefined;
     let alive = true;
-    crmCall('memberMenuConfig', {}).then(res => { if (alive && res && res.success) setMemberCfg({ requireCode: res.requireCode === true, rememberDays: Number(res.rememberDays) || 0 }); });
+    crmCall('memberMenuConfig', {}).then(res => { if (alive && res && res.success) setMemberCfg({ requireCode: res.requireCode === true, rememberDays: Number(res.rememberDays) || 0, limit: res.limit || null }); });
     return () => { alive = false; };
   }, [crmOn]);
   const noCode = memberCfg.requireCode === false;
@@ -633,6 +633,26 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (q && q.limit) lefts.push(Math.max(0, q.limit - q.used - inCart(r => String(r.food.id) === String(food.id))));
     if (kQuota.total) lefts.push(Math.max(0, kQuota.total.left - inCart(r => isMemberOnly(r.food))));
     return lefts.length ? Math.min(...lefts) : null;
+  };
+  // สิทธิ์เมนูสมาชิกของการ์ด: L = สิทธิ์ต่อวัน · U = ใช้ไปแล้ว (ทุกสาขา) · C = อยู่ในตะกร้า · R = เหลือ
+  //   ยังไม่ล็อกอิน → บอกแค่กติกา (L) จากการตั้งค่า · ไม่ได้จำกัด → null
+  const quotaInfo = (food) => {
+    if (!isMemberOnly(food)) return null;
+    const minOf = (arr) => { const v = arr.filter(x => Number(x) > 0).map(Number); return v.length ? Math.min(...v) : null; };
+    if (!memberLoggedIn) {
+      const lim = memberCfg.limit;
+      const L = lim ? minOf([lim.perMenu && lim.perMenu[String(food.id)], lim.total]) : null;
+      return L ? { L, loggedIn: false } : null;
+    }
+    if (!kQuota || !kQuota.enabled) return null;
+    const q = kQuota.menus && kQuota.menus[String(food.id)];
+    const L = minOf([q && q.limit, kQuota.total && kQuota.total.limit]);
+    if (!L) return null;
+    const serverLeft = q && q.left !== null && q.left !== undefined ? q.left : (kQuota.total ? kQuota.total.left : L);
+    const U = Math.max(0, L - serverLeft);
+    const R = Math.max(0, memberLeft(food) ?? serverLeft);
+    const C = Math.max(0, L - U - R);
+    return { L, U, C, R, loggedIn: true };
   };
   const handleFoodClick = (food) => {
     // เมนูเฉพาะสมาชิกที่ครบโควตาวันนี้แล้ว (รวมที่อยู่ในตะกร้า)
@@ -1086,6 +1106,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const locked = memberOnly && !memberLoggedIn;
     const left = memberOnly && memberLoggedIn ? memberLeft(food) : null;
     const soldOut = left === 0;
+    const qi = quotaInfo(food);
 
     return (
       <div
@@ -1180,15 +1201,39 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             )}
           </div>
 
-          {left !== null && (
-            <div style={{ fontSize: '0.72rem', fontWeight: 800, borderRadius: 8, padding: '0.2rem 0.4rem', textAlign: 'center',
-              background: soldOut ? '#fef2f2' : '#f0fdf4', color: soldOut ? '#b91c1c' : '#166534' }}>
-              {soldOut ? (lang === 'th' ? 'ครบโควตาวันนี้ · สั่งได้อีกพรุ่งนี้' : "Today's limit reached") : (lang === 'th' ? `วันนี้สั่งได้อีก ${left} ชิ้น` : `${left} left today`)}
-            </div>
-          )}
+          {qi && (() => {
+            const th = lang === 'th';
+            const rule = th ? `${qi.L} สิทธิ์ / 1 หมายเลขสมาชิก / วัน` : `${qi.L} per member per day`;
+            if (!qi.loggedIn) {
+              return (
+                <div style={{ fontSize: '0.72rem', fontWeight: 800, borderRadius: 8, padding: '0.25rem 0.4rem', textAlign: 'center', background: '#fff7ed', color: '#9a3412', border: '1px dashed #fdba74' }}>
+                  👑 {rule}
+                </div>
+              );
+            }
+            const tone = soldOut ? { bg: '#fef2f2', fg: '#b91c1c' } : qi.C > 0 ? { bg: '#eff6ff', fg: '#1e40af' } : { bg: '#f0fdf4', fg: '#166534' };
+            const head = th
+              ? (qi.C > 0 ? `ใช้ไปแล้ว ${qi.U}/${qi.L} · ในตะกร้า ${qi.C} · เหลือ ${qi.R}` : `ใช้ไปแล้ว ${qi.U}/${qi.L} สิทธิ์วันนี้${!soldOut && qi.U > 0 ? ` · เหลือ ${qi.R}` : ''}`)
+              : (qi.C > 0 ? `Used ${qi.U}/${qi.L} · in cart ${qi.C} · ${qi.R} left` : `Used ${qi.U}/${qi.L} today`);
+            return (
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, borderRadius: 8, padding: '0.25rem 0.4rem', textAlign: 'center', background: tone.bg, color: tone.fg, lineHeight: 1.4 }}>
+                {head}
+                {qi.L <= 8 && (
+                  <div aria-hidden="true" style={{ display: 'flex', gap: 3, justifyContent: 'center', margin: '2px 0' }}>
+                    {Array.from({ length: qi.L }, (_, i) => (
+                      <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: i < qi.U ? '#16a34a' : i < qi.U + qi.C ? '#3b82f6' : '#d1d5db' }} />
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontWeight: 600, fontSize: '0.66rem' }}>{soldOut && qi.C === 0 ? (th ? 'ใช้ได้อีกครั้งพรุ่งนี้' : 'Available again tomorrow') : rule}</div>
+              </div>
+            );
+          })()}
           {soldOut ? (
             <button disabled style={{ marginTop: 'auto', background: '#f1f5f9', color: '#94a3b8', border: 'none', borderRadius: '11px', padding: '0.6rem 0.4rem', fontWeight: '800', fontSize: '0.84rem', width: '100%', fontFamily: 'inherit' }}>
-              {lang === 'th' ? 'ครบโควตาวันนี้' : 'Limit reached'}
+              {qi && qi.C > 0
+                ? (lang === 'th' ? 'ใช้สิทธิ์ครบแล้ว' : 'All rights used')
+                : (lang === 'th' ? 'ใช้สิทธิ์ครบแล้ววันนี้' : 'Used up today')}
             </button>
           ) : locked ? (
             <button
@@ -1212,7 +1257,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               boxShadow: '0 4px 12px rgba(217,119,6,0.3)', width: '100%', fontFamily: 'inherit'
             }}
           >
-            <Plus size={16} /> {lang === 'th' ? 'ใส่ตะกร้า' : 'Add to cart'}
+            <Plus size={16} /> {lang === 'th' ? 'ใส่ตะกร้า' : 'Add to cart'}{qi && qi.loggedIn && qi.C > 0 && qi.R > 0 ? (lang === 'th' ? ` (เหลือ ${qi.R})` : ` (${qi.R} left)`) : ''}
           </button>
           )}
         </div>

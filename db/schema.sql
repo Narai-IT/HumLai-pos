@@ -436,6 +436,16 @@ GO
 IF COL_LENGTH('dbo.PaymentSummary', 'BranchId') IS NULL
   ALTER TABLE dbo.PaymentSummary ADD BranchId NVARCHAR(60) NULL;
 GO
+-- ส่วนลดของบิล (หลังบ้าน > รายงาน > ส่วนลด): ชื่อส่วนลด / ยอดที่ลด / ประเภท (store = ส่วนลดร้าน, coupon = คูปองสมาชิก)
+IF COL_LENGTH('dbo.PaymentSummary', 'DiscountName') IS NULL
+  ALTER TABLE dbo.PaymentSummary ADD DiscountName NVARCHAR(200) NULL;
+GO
+IF COL_LENGTH('dbo.PaymentSummary', 'DiscountAmount') IS NULL
+  ALTER TABLE dbo.PaymentSummary ADD DiscountAmount DECIMAL(12, 2) NULL;
+GO
+IF COL_LENGTH('dbo.PaymentSummary', 'DiscountKind') IS NULL
+  ALTER TABLE dbo.PaymentSummary ADD DiscountKind NVARCHAR(10) NULL;
+GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TableOrders_Branch' AND object_id = OBJECT_ID('dbo.TableOrders'))
   CREATE INDEX IX_TableOrders_Branch ON dbo.TableOrders (BranchId, TableNumber);
 GO

@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download, FileText, List } from 'lucide-react';
+import { BarChart2, TrendingUp, Receipt, XCircle, Clock, RefreshCw, Download, FileText, List, Tag } from 'lucide-react';
 import { API_URL } from '../../utils/api';
 import TaxInvoiceModal from './TaxInvoiceModal';
 import { getReceiptHeader } from '../../utils/printServer';
@@ -12,6 +12,7 @@ const TABS = [
   { key: 'detail',  label: 'รายละเอียดการขาย',   icon: <List      size={15} /> },
   { key: 'income',  label: 'รายรับ-รายจ่าย',   icon: <TrendingUp size={15} /> },
   { key: 'menu',    label: 'ยอดขายตามเมนู',      icon: <BarChart2  size={15} /> },
+  { key: 'discount', label: 'ส่วนลด',            icon: <Tag       size={15} /> },
   { key: 'cancel',  label: 'ประวัติการยกเลิก',    icon: <XCircle   size={15} /> },
   { key: 'shift',   label: 'รายงานปิดกะ',         icon: <Clock     size={15} /> },
 ];
@@ -144,6 +145,18 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   React.useEffect(() => {
     load(from, to);
   }, [load, from, to]);
+
+  // ── รายงานส่วนลด: บิลที่ใช้ส่วนลด (ชื่อ ยอด ประเภท พนักงาน) — บันทึกตอนปิดบิลตั้งแต่อัปเดตระบบ ──
+  const [discRows, setDiscRows] = useState([]);
+  const [discNotReady, setDiscNotReady] = useState(false);
+  React.useEffect(() => {
+    let alive = true;
+    fetch(`${API_URL}?action=getDiscountReport&from=${from}&to=${to}&branch=${encodeURIComponent(branchFilter || '')}`)
+      .then(r => r.json())
+      .then(json => { if (!alive) return; setDiscRows(json && json.success && Array.isArray(json.rows) ? json.rows : []); setDiscNotReady(!!(json && json.notReady)); })
+      .catch(() => { if (alive) setDiscRows([]); });
+    return () => { alive = false; };
+  }, [from, to, branchFilter]);
 
   // ─── Derived ────────────────────────────────────────────────
   const payMap = {};
@@ -391,7 +404,25 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     ], `รายงานทั้งหมด_${from}_${to}`);
   };
 
-  const TAB_EXPORT = { daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, vat: exportVat, detail: exportDetail, cancel: exportCancel, shift: exportShift };
+  // ส่วนลด: นับเฉพาะบิลที่ไม่ถูกยกเลิก
+  const discValid = discRows.filter(r => !r.cancelled);
+  const discTotal = Math.round(discValid.reduce((s, r) => s + r.amount, 0) * 100) / 100;
+  const groupBy = (keyOf) => {
+    const m = new Map();
+    discValid.forEach(r => { const k = keyOf(r); const g = m.get(k) || { key: k, kind: r.kind, bills: 0, amount: 0 }; g.bills++; g.amount = Math.round((g.amount + r.amount) * 100) / 100; m.set(k, g); });
+    return [...m.values()].sort((a, b) => b.amount - a.amount);
+  };
+  const discByName  = groupBy(r => r.name || 'ส่วนลด');
+  const discByStaff = groupBy(r => r.staff || '—');
+  const kindLabel = (k) => (k === 'coupon' ? 'คูปองสมาชิก' : 'ส่วนลดร้าน');
+  const exportDiscount = () => exportXLSX([
+    { name: 'ตามประเภทส่วนลด', headers: ['ส่วนลด', 'ประเภท', 'จำนวนบิล', 'ยอดลดรวม', 'เฉลี่ยต่อบิล'], rows: discByName.map(g => [g.key, kindLabel(g.kind), g.bills, g.amount, Math.round(g.amount / g.bills * 100) / 100]) },
+    { name: 'ตามพนักงาน', headers: ['พนักงาน', 'จำนวนบิล', 'ยอดลดรวม'], rows: discByStaff.map(g => [g.key, g.bills, g.amount]) },
+    { name: 'รายบิล', headers: ['วันเวลา', 'เลขบิล', 'โต๊ะ', 'สาขา', 'ส่วนลด', 'ประเภท', 'ยอดลด', 'ยอดบิล (หลังลด)', 'พนักงาน', 'สถานะ'],
+      rows: discRows.map(r => [fmtD(r.timestamp), r.orderNumber, r.tableNo, r.branchId, r.name, kindLabel(r.kind), r.amount, r.grandTotal, r.staff, r.cancelled ? 'ยกเลิก' : '']) },
+  ], `รายงานส่วนลด_${from}_${to}`);
+
+  const TAB_EXPORT = { discount: exportDiscount, daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, vat: exportVat, detail: exportDetail, cancel: exportCancel, shift: exportShift };
 
   return (
     <div style={{ color: 'var(--text-main)', fontFamily: 'inherit' }}>
@@ -706,6 +737,69 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                 ยอดเงินรายการเป็นราคาก่อนส่วนลด/ค่าบริการท้ายบิล — ยอดขายสุทธิดูที่แท็บรายงานยอดขาย
               </p>
             </>
+          )}
+
+          {/* ── Tab: ส่วนลด ── */}
+          {tab === 'discount' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: '0.75rem' }}>
+                {[
+                  { label: 'บิลที่ใช้ส่วนลด', value: `${fmt(discValid.length)} บิล` },
+                  { label: 'ส่วนลดรวม', value: `฿${fmt(discTotal)}`, color: '#16a34a' },
+                  { label: 'คิดเป็นของยอดขาย', value: totalSales > 0 ? `${(discTotal / (totalSales + discTotal) * 100).toFixed(1)}%` : '—' },
+                  { label: 'เฉลี่ยต่อบิล', value: discValid.length ? `฿${fmt(Math.round(discTotal / discValid.length * 100) / 100)}` : '—' },
+                ].map(c => (
+                  <div key={c.label} style={card}>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{c.label}</div>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 800, color: c.color || 'var(--text-main)' }}>{c.value}</div>
+                  </div>
+                ))}
+              </div>
+              {discNotReady && (
+                <div style={{ ...card, color: '#b45309', fontSize: '0.85rem' }}>ฐานข้อมูลยังไม่มีช่องเก็บส่วนลด — รัน update-api.bat ที่เครื่อง API หนึ่งครั้ง</div>
+              )}
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>ตามประเภทส่วนลด</div>
+                <TableWrap empty={discByName.length === 0} emptyMsg="ไม่มีบิลที่ใช้ส่วนลดในช่วงเวลานี้" headers={['ส่วนลด', 'ประเภท', 'จำนวนบิล', 'ยอดลดรวม', 'เฉลี่ยต่อบิล']}>
+                  {discByName.map(g => (
+                    <tr key={g.key}>
+                      <Td bold>{g.key}</Td>
+                      <Td muted>{kindLabel(g.kind)}</Td>
+                      <Td>{fmt(g.bills)}</Td>
+                      <Td bold color="#16a34a">฿{fmt(g.amount)}</Td>
+                      <Td muted>฿{fmt(Math.round(g.amount / g.bills * 100) / 100)}</Td>
+                    </tr>
+                  ))}
+                </TableWrap>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>ตามพนักงานที่ปิดบิล</div>
+                <TableWrap empty={discByStaff.length === 0} emptyMsg="—" headers={['พนักงาน', 'จำนวนบิล', 'ยอดลดรวม']}>
+                  {discByStaff.map(g => (
+                    <tr key={g.key}><Td bold>{g.key}</Td><Td>{fmt(g.bills)}</Td><Td bold color="#16a34a">฿{fmt(g.amount)}</Td></tr>
+                  ))}
+                </TableWrap>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>รายบิล ({fmt(discRows.length)})</div>
+                <TableWrap empty={discRows.length === 0} emptyMsg="—" headers={['วันเวลา', 'เลขบิล', 'โต๊ะ', 'ส่วนลด', 'ยอดลด', 'ยอดบิล', 'พนักงาน']}>
+                  {discRows.map((r, i) => (
+                    <tr key={i} style={r.cancelled ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
+                      <Td muted nowrap>{fmtD(r.timestamp)}</Td>
+                      <Td bold>{r.orderNumber}{r.cancelled ? ' (ยกเลิก)' : ''}</Td>
+                      <Td>{r.tableNo || '—'}</Td>
+                      <Td>{r.name}</Td>
+                      <Td bold color="#16a34a">-฿{fmt(r.amount)}</Td>
+                      <Td>฿{fmt(r.grandTotal)}</Td>
+                      <Td muted>{r.staff || '—'}</Td>
+                    </tr>
+                  ))}
+                </TableWrap>
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+                บันทึกชื่อส่วนลดตั้งแต่อัปเดตระบบ (บิลก่อนหน้านั้นไม่มีชื่อส่วนลด) · บิลที่ยกเลิกแสดงขีดฆ่าและไม่นับในยอดรวม · คิดเป็น % ของยอดขายก่อนหักส่วนลด
+              </p>
+            </div>
           )}
 
           {/* ── Tab: ประวัติการยกเลิก ── */}
