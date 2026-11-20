@@ -1567,7 +1567,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
           {item.fromPopupOf && (
             <div style={{ fontSize: '0.74rem', color: '#1d4ed8', fontWeight: 700, marginTop: 2 }}>
               {item.food.isBundled
-                ? (th ? `🎁 ฟรีกับ ${item.fromPopupOf}` : `🎁 Free with ${item.fromPopupOf}`)
+                ? (th ? `🎁 ${item.fromPopupOf}` : `🎁 ${item.fromPopupOf}`)
                 : (th ? `พ่วงกับ ${item.fromPopupOf}` : `with ${item.fromPopupOf}`)}
             </div>
           )}
