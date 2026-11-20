@@ -1230,10 +1230,14 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             );
           })()}
           {soldOut ? (
-            <button disabled style={{ marginTop: 'auto', background: '#f1f5f9', color: '#94a3b8', border: 'none', borderRadius: '11px', padding: '0.6rem 0.4rem', fontWeight: '800', fontSize: '0.84rem', width: '100%', fontFamily: 'inherit' }}>
-              {qi && qi.C > 0
-                ? (lang === 'th' ? 'ใช้สิทธิ์ครบแล้ว' : 'All rights used')
-                : (lang === 'th' ? 'ใช้สิทธิ์ครบแล้ววันนี้' : 'Used up today')}
+            /* ใช้สิทธิ์ครบ (ในตะกร้าแล้ว / สั่งครบวันนี้) → ปุ่มใส่ตะกร้าสีเทา กดไม่ได้ · เหตุผลอยู่ในกรอบสิทธิ์ด้านบน */
+            <button disabled aria-disabled="true"
+              style={{
+                marginTop: 'auto', background: '#e5e7eb', color: '#9ca3af', border: 'none', borderRadius: '11px',
+                padding: '0.6rem 0.5rem', fontWeight: '800', fontSize: '0.88rem', cursor: 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%', fontFamily: 'inherit'
+              }}>
+              <Plus size={16} /> {lang === 'th' ? 'ใส่ตะกร้า' : 'Add to cart'}
             </button>
           ) : locked ? (
             <button
