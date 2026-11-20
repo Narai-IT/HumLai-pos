@@ -4,12 +4,16 @@
 //   node --env-file=.env sql-api-server.js
 //   (หรือ npm run api:serve)
 //
-// จากนั้น build หน้าเว็บด้วย VITE_API_URL=http://<ip เครื่องนี้>:8080/api/pos
+// เซิร์ฟเวอร์นี้เปิดหน้าเว็บ POS ด้วย (โฟลเดอร์ dist ที่ update-api.bat สร้างให้ — npm run web:build)
+// เปิดผ่าน Cloudflare Tunnel เป็น https://pos.<โดเมนร้าน> → หน้าเว็บกับ API อยู่โดเมนเดียวกัน ไม่ต้องพึ่ง Vercel
 import express from 'express';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import cors from 'cors';
 import { route } from './api/_lib/router.js';
 import { query } from './api/_lib/db.js';
 import { flushCrmQueue, syncMenuToCrm } from './api/_lib/crm.js';
+import { imageProxy } from './api/_lib/imageProxy.js';
 
 const app = express();
 const PORT = Number(process.env.API_PORT || 8080);
@@ -47,6 +51,37 @@ app.get('/api/image', async (req, res) => {
   }
 });
 
+// ย่อรูปเมนูจาก ImgBB / Google Drive (แทนตัวย่อรูปของ Vercel)
+app.get('/api/img', (req, res) => imageProxy(req, res).catch(err => {
+  console.error('[img]', err);
+  if (!res.headersSent) res.status(500).json({ success: false, error: String(err.message || err) });
+}));
+
+// ── หน้าเว็บ POS (dist) ──
+// ไฟล์ใน assets/ มีรหัสในชื่อไฟล์ (เปลี่ยนทุกครั้งที่ build) จึงแคชยาวได้ · index.html ต้องโหลดใหม่เสมอ ไม่งั้นเครื่องค้างรุ่นเก่า
+const WEB_DIR = join(process.cwd(), 'dist');
+const sendIndex = (res) => {
+  const file = join(WEB_DIR, 'index.html');
+  if (!existsSync(file)) {
+    return res.status(503).type('html').send('<meta charset="utf-8"><h3>ยังไม่ได้สร้างหน้าเว็บ</h3><p>รัน <b>update-api.bat</b> (Run as administrator) ที่เครื่องนี้หนึ่งครั้ง</p>');
+  }
+  res.set('Cache-Control', 'no-cache');
+  return res.sendFile(file);
+};
+app.use(express.static(WEB_DIR, {
+  index: false,
+  setHeaders: (res, path) => {
+    if (/[\\/]assets[\\/]/.test(path)) res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    else if (/[\\/](images|icons|audio)[\\/]|\.(png|jpe?g|webp|svg|ico)$/i.test(path)) res.set('Cache-Control', 'public, max-age=604800');
+    else res.set('Cache-Control', 'no-cache');
+  }
+}));
+// ลิงก์หน้าใด ๆ ของแอป (/kiosk, /admin/...) → index.html ให้ React Router พาไปเอง (แทน rewrites ใน vercel.json)
+app.get(/^\/(?!api\/).*/, (req, res, next) => {
+  if (/\.[a-z0-9]{2,5}$/i.test(req.path)) return next();   // ไฟล์ที่ไม่มีจริง → 404 ไม่ใช่หน้าเว็บ
+  return sendIndex(res);
+});
+
 // ระบบสมาชิก: ส่งบิลที่ค้างในคิว (ตอนเน็ตหลุด/CRM ปิด) ทุก 1 นาที
 if (process.env.CRM_URL) setInterval(() => { flushCrmQueue(50).catch((e) => console.error('[crm]', e)); }, 60 * 1000);
 // ส่งเมนูให้ระบบสมาชิก (เลือกของฟรี/เงื่อนไขสินค้าในคูปอง) ตอนเปิดเครื่องและทุก 30 นาที
@@ -58,5 +93,6 @@ if (process.env.CRM_URL) {
 
 app.listen(PORT, () => {
   console.log(`POS API พร้อมใช้งานที่ http://localhost:${PORT}/api/pos`);
+  console.log(existsSync(join(WEB_DIR, 'index.html')) ? `หน้าเว็บ POS: http://localhost:${PORT}/` : 'ยังไม่มีหน้าเว็บ (dist) — รัน update-api.bat หรือ npm run web:build');
   console.log(`ทดสอบการต่อฐานข้อมูล: http://localhost:${PORT}/api/pos?action=ping`);
 });

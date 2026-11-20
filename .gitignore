@@ -35,3 +35,8 @@ print-queue-config.json
 
 # ไฟล์ดาวน์โหลด Print Server — สร้างเองตอน build (scripts/build-print-server-package.mjs)
 public/downloads/
+
+# หน้าเว็บที่สร้างบนเซิร์ฟเวอร์ร้าน (npm run web:build) และรูปที่ย่อแล้ว
+dist-next
+dist-old
+cache/

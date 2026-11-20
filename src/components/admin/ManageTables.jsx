@@ -24,6 +24,63 @@ const serverTablesFor = (branchId) => {
   } catch { return null; }
 };
 
+// ลิงก์หน้าสั่งอาหารของโต๊ะ — ใช้ที่อยู่ของหน้าที่เปิดอยู่ (เปิดหลังบ้านจากที่อยู่ไหน QR ก็ชี้ที่อยู่นั้น)
+// ?b= = สาขาของโต๊ะนี้ ออเดอร์ที่ลูกค้าสั่งเองจะเข้าโต๊ะของสาขานี้ (QR เก่าที่ไม่มี b ยังใช้ได้ — ลงสาขาหลัก)
+const kioskLinkFor = (table, branchId) =>
+  `${window.location.protocol}//${window.location.host}/kiosk?table=${encodeURIComponent(table.name)}${branchId ? `&b=${encodeURIComponent(branchId)}` : ''}`;
+const tableLabel = (name) => (isNaN(name) ? String(name) : `โต๊ะ ${name}`);
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// โต๊ะเดลิเวอรี่ (LineMan/Grab ฯลฯ) ไม่มีลูกค้านั่ง ไม่ต้องมี QR
+const qrTablesOf = (tables) => tables.filter(t => t.active !== false && t.zone !== 'Delivery');
+
+// พิมพ์สติกเกอร์ QR (โต๊ะเดียวหรือหลายโต๊ะ) ในหน้าต่างใหม่ — กระดาษ A4 แผ่นละ 6 ดวง มีเส้นประให้ตัด
+// เปิดหน้าต่างก่อน (ต้องอยู่ในจังหวะกดปุ่ม ไม่งั้นเบราว์เซอร์บล็อก) แล้วค่อยใส่ QR ที่สร้างเสร็จ
+async function printQrStickers(list, branchId, branchName = '') {
+  const win = window.open('', '_blank');
+  if (!win) { window.alert('เบราว์เซอร์บล็อกหน้าต่างพิมพ์ — อนุญาตป๊อปอัปของเว็บนี้แล้วกดใหม่'); return; }
+  win.document.write('<meta charset="utf-8"><p style="font-family:sans-serif">กำลังสร้าง QR...</p>');
+  const items = await Promise.all(list.map(async (t) => ({
+    t, qr: await QRCode.toDataURL(kioskLinkFor(t, branchId), { width: 600, margin: 2, errorCorrectionLevel: 'H' })
+  })));
+  const host = window.location.host;
+  const logo = `${window.location.origin}/logo.png`;
+  const cards = items.map(({ t, qr }) => `
+    <div class="card"><div class="in">
+      <img class="logo" src="${logo}" alt="">
+      <div class="shop">ข้าวมันไก่หำไหล</div>
+      <div class="table">${esc(tableLabel(t.name))}</div>
+      <img class="qr" src="${qr}" alt="">
+      <div class="cap">📱 สแกน QR เพื่อสั่งอาหาร &amp; ชำระเงินได้ด้วยตนเอง</div>
+      <div class="host">${esc(host)}${branchName ? ' · ' + esc(branchName) : ''}</div>
+    </div></div>`).join('');
+  win.document.open();
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR โต๊ะ ${esc(branchName)}</title>
+<style>
+  @page { size: A4; margin: 8mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", Tahoma, sans-serif; color: #0f172a; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; }
+  .card { height: 93mm; border: 1px dashed #94a3b8; padding: 3mm; overflow: hidden; break-inside: avoid; page-break-inside: avoid; }
+  .in { height: 100%; border: 2px solid #0f172a; border-radius: 5mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.6mm; text-align: center; padding: 2.5mm 2mm; overflow: hidden; }
+  .logo { height: 9mm; max-width: 40mm; object-fit: contain; }
+  .shop { font-weight: 900; font-size: 12pt; line-height: 1.15; }
+  .table { font-weight: 900; font-size: 19pt; line-height: 1.1; color: #ea580c; }
+  .qr { width: 46mm; height: 46mm; }
+  .cap { font-size: 8.5pt; line-height: 1.2; font-weight: 700; color: #475569; }
+  .host { font-size: 7pt; line-height: 1.2; color: #94a3b8; }
+  .tip { font-size: 10pt; color: #475569; padding: 4mm 0; }
+  @media print { .tip { display: none; } }
+</style></head><body>
+<div class="tip">${items.length} ดวง · กระดาษ A4 แผ่นละ 6 ดวง · ตัดตามเส้นประ · QR ชี้ไปที่ <b>${esc(host)}</b></div>
+<div class="grid">${cards}</div>
+<script>
+  // รอรูปโลโก้/QR โหลดครบก่อนพิมพ์ ไม่งั้นรูปหายในกระดาษ
+  const imgs = Array.from(document.images);
+  Promise.all(imgs.map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; }))).then(() => setTimeout(() => window.print(), 200));
+</script></body></html>`);
+  win.document.close();
+}
+
 // branchId = สาขาที่กำลังจัดผังโต๊ะ (สาขาของผู้ใช้ที่ล็อกอิน หรือสาขาหลัก)
 const ManageTables = ({ branchId = '', branches = [] }) => {
   const { lang } = useOutletContext();
@@ -148,11 +205,7 @@ const ManageTables = ({ branchId = '', branches = [] }) => {
 
   const handleGenerateQR = (table) => {
     setQrModalTable(table);
-    const host = window.location.host;
-    const protocol = window.location.protocol;
-    // ?b= = สาขาของโต๊ะนี้ ออเดอร์ที่ลูกค้าสั่งเองจะเข้าโต๊ะของสาขานี้ (QR เก่าที่ไม่มี b ยังใช้ได้ — ลงสาขาหลัก)
-    const branchQs = branchId ? `&b=${encodeURIComponent(branchId)}` : '';
-    const kioskLink = `${protocol}//${host}/kiosk?table=${encodeURIComponent(table.name)}${branchQs}`;
+    const kioskLink = kioskLinkFor(table, branchId);
 
     QRCode.toDataURL(kioskLink, { width: 300, margin: 2, errorCorrectionLevel: 'H' })
       .then(url => setQrUrl(url))
@@ -198,15 +251,34 @@ const ManageTables = ({ branchId = '', branches = [] }) => {
           )}
         </div>
 
-        <button
-          onClick={handleOpenAddModal}
-          className="admin-btn primary"
-          style={{ padding: '0.65rem 1.2rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px' }}
-        >
-          <Plus size={18} />
-          {lang === 'th' ? '+ เพิ่มโต๊ะใหม่' : '+ Add New Table'}
-        </button>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button
+            onClick={() => printQrStickers(qrTablesOf(tables), branchId, branchName)}
+            disabled={qrTablesOf(tables).length === 0}
+            className="admin-btn secondary"
+            style={{ padding: '0.65rem 1.2rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px' }}
+            title={lang === 'th' ? 'ทุกโต๊ะที่เปิดใช้งาน ยกเว้นโต๊ะเดลิเวอรี่ · A4 แผ่นละ 6 ดวง' : 'All active tables except delivery · 6 per A4 page'}
+          >
+            <Printer size={18} />
+            {lang === 'th' ? `พิมพ์ QR ทุกโต๊ะ (${qrTablesOf(tables).length})` : `Print all QR (${qrTablesOf(tables).length})`}
+          </button>
+          <button
+            onClick={handleOpenAddModal}
+            className="admin-btn primary"
+            style={{ padding: '0.65rem 1.2rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '10px' }}
+          >
+            <Plus size={18} />
+            {lang === 'th' ? '+ เพิ่มโต๊ะใหม่' : '+ Add New Table'}
+          </button>
+        </div>
       </div>
+      {/vercel\.app$/i.test(window.location.hostname) && (
+        <div style={{ background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412', borderRadius: 12, padding: '0.7rem 0.9rem', marginBottom: '1rem', fontSize: '0.88rem', fontWeight: 600 }}>
+          {lang === 'th'
+            ? `⚠️ ตอนนี้เปิดหลังบ้านจากที่อยู่เดิม (${window.location.host}) — QR ที่พิมพ์จะชี้ไปที่ Vercel · ถ้าจะพิมพ์ QR ชุดใหม่ ให้เปิดหลังบ้านจากที่อยู่ใหม่ของร้านก่อน`
+            : `⚠️ You are on the old address (${window.location.host}) — printed QR codes will point to Vercel. Open the admin from the new address to print new QR codes.`}
+        </div>
+      )}
 
       {/* Grid of Tables */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1.25rem' }}>
@@ -409,7 +481,7 @@ const ManageTables = ({ branchId = '', branches = [] }) => {
 
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.25rem' }}>
               <button
-                onClick={() => window.print()}
+                onClick={() => printQrStickers([qrModalTable], branchId, branchName)}
                 className="admin-btn primary"
                 style={{ flex: 1, fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
               >
