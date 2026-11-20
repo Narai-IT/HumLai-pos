@@ -286,6 +286,8 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     // ใบแจ้งยอด = ให้ลูกค้าตรวจก่อนจ่าย หน้าตาเหมือนใบเสร็จแต่ยังไม่ใช่ใบเสร็จ
     // และต้องไม่เปิดลิ้นชักเก็บเงิน เพราะยังไม่ได้รับเงิน
     const isPreBill = printerType === 'prebill';
+    // ใบแจ้งยอดที่ส่ง QR มาแต่พิมพ์ QR ไม่ได้ → แจ้งกลับหน้าเว็บทาง warning (ใบยังพิมพ์ออกตามปกติ)
+    let qrNote = '';
     const isCustomerCopy = printerType === 'receipt' || isPreBill;
 
     // หัวใบเสร็จของสาขา (ตั้งที่หลังบ้าน > สาขา) — หน้าเว็บ/ตัวพิมพ์อัตโนมัติส่งมาใน orderData.header
@@ -423,10 +425,11 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       const payQr = isPreBill && orderData.payQr && typeof orderData.payQr === 'object' ? orderData.payQr : null;
       const qrMatch = payQr ? /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(payQr.image || '')) : null;
       let qrPrinted = false;
+      if (payQr && !qrMatch) qrNote = 'ไม่มี QR สแกนจ่าย: รูป QR ที่ส่งมาผิดรูปแบบ';
       if (qrMatch) {
         printer.println("สแกนจ่ายด้วยแอปธนาคาร");
         try { await printer.printImageBuffer(Buffer.from(qrMatch[1], 'base64')); qrPrinted = true; }
-        catch (err) { console.error('Pay QR print skipped:', err.message || err); }
+        catch (err) { console.error('Pay QR print skipped:', err.message || err); qrNote = `ไม่มี QR สแกนจ่าย: พิมพ์รูป QR ไม่ได้ (${err.message || err})`; }
         if (qrPrinted) {
           const amt = (Number(payQr.amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           printer.println(`ยอดชำระ B ${amt}`);
@@ -449,7 +452,9 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       printer.openCashDrawer();
     }
 
-    return send(`Print job ${orderData.orderNumber || ''}`.trim());
+    const sent = await send(`Print job ${orderData.orderNumber || ''}`.trim());
+    if (qrNote && sent.success) sent.warning = [sent.warning, qrNote].filter(Boolean).join(' · ');
+    return sent;
   } catch (error) {
     // พังตอนจัดหน้าใบ (ข้อมูลออเดอร์แปลก) — ยังไม่ได้ส่งอะไรไปเครื่องพิมพ์
     console.error('Print failed:', error);
