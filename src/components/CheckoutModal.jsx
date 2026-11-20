@@ -461,7 +461,7 @@ const CheckoutModal = ({
     const usedVouchers = pc.details && pc.details.voucher > 0 ? { list: voucherAlloc(), ref: voucherRef.current } : null;
     // สแกน Voucher ไว้แต่สุดท้ายจ่ายวิธีอื่น → ปล่อยคืน
     if (!usedVouchers) vouchers.forEach(v => crmCall('crmVoucherRelease', { voucherId: v.id, ref: voucherRef.current, branchId }));
-    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount, crmCoupon, vouchers: usedVouchers });
+    onComplete(grand, pc.method, pc.details, { print, receiptOrder: buildReceiptOrder(), buildReceiptHtml, member, discountAmount, discountName: selectedDiscount ? selectedDiscount.name : '', crmCoupon, vouchers: usedVouchers });
   };
 
   const PriceBreakdown = ({ compact = false }) => (

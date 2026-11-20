@@ -150,7 +150,7 @@ const HQ_ONLY = new Set([
 const ADMIN = new Set(['getPrintAgentKey', 'crmSyncMenu', 'cancelTaxInvoice', 'deleteTaxCustomer', 'savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
 
 // แคชเชียร์ขึ้นไป — หน้าหลังบ้านที่แคชเชียร์เข้าได้
-const BACKOFFICE = new Set(['getTaxInvoices', 'issueTaxInvoice', 'reissueTaxInvoice', 'getTaxCustomers', 'saveTaxCustomer', 'saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);
+const BACKOFFICE = new Set(['getDiscountReport', 'getTaxInvoices', 'issueTaxInvoice', 'reissueTaxInvoice', 'getTaxCustomers', 'saveTaxCustomer', 'saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);
 
 const RANK = { staff: 1, cashier: 2, admin: 3 };
 const need = (action) => {
