@@ -1211,9 +1211,14 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 </div>
               );
             }
-            const tone = soldOut ? { bg: '#fef2f2', fg: '#b91c1c' } : qi.C > 0 ? { bg: '#eff6ff', fg: '#1e40af' } : { bg: '#f0fdf4', fg: '#166534' };
+            // มีของในตะกร้า = สีฟ้า (ยังไม่ได้จ่าย) · ใช้ครบวันนี้แล้ว = สีแดง · ยังเหลือ = สีเขียว
+            const tone = qi.C > 0 ? { bg: '#eff6ff', fg: '#1e40af' } : soldOut ? { bg: '#fef2f2', fg: '#b91c1c' } : { bg: '#f0fdf4', fg: '#166534' };
             const head = th
-              ? (qi.C > 0 ? `ใช้ไปแล้ว ${qi.U}/${qi.L} · ในตะกร้า ${qi.C} · เหลือ ${qi.R}` : `ใช้ไปแล้ว ${qi.U}/${qi.L} สิทธิ์วันนี้${!soldOut && qi.U > 0 ? ` · เหลือ ${qi.R}` : ''}`)
+              ? (qi.C > 0
+                  ? (qi.R === 0
+                      ? `ใช้ไปแล้ว ${qi.U + qi.C}/${qi.L} สิทธิ์ (${qi.U > 0 ? `ในตะกร้า ${qi.C}` : 'อยู่ในตะกร้า'})`
+                      : `ใช้ไปแล้ว ${qi.U}/${qi.L} · ในตะกร้า ${qi.C} · เหลือ ${qi.R}`)
+                  : `ใช้ไปแล้ว ${qi.U}/${qi.L} สิทธิ์วันนี้${!soldOut && qi.U > 0 ? ` · เหลือ ${qi.R}` : ''}`)
               : (qi.C > 0 ? `Used ${qi.U}/${qi.L} · in cart ${qi.C} · ${qi.R} left` : `Used ${qi.U}/${qi.L} today`);
             return (
               <div style={{ fontSize: '0.72rem', fontWeight: 800, borderRadius: 8, padding: '0.25rem 0.4rem', textAlign: 'center', background: tone.bg, color: tone.fg, lineHeight: 1.4 }}>
@@ -1230,10 +1235,14 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             );
           })()}
           {soldOut ? (
-            <button disabled style={{ marginTop: 'auto', background: '#f1f5f9', color: '#94a3b8', border: 'none', borderRadius: '11px', padding: '0.6rem 0.4rem', fontWeight: '800', fontSize: '0.84rem', width: '100%', fontFamily: 'inherit' }}>
-              {qi && qi.C > 0
-                ? (lang === 'th' ? 'ใช้สิทธิ์ครบแล้ว' : 'All rights used')
-                : (lang === 'th' ? 'ใช้สิทธิ์ครบแล้ววันนี้' : 'Used up today')}
+            /* ใช้สิทธิ์ครบ (ในตะกร้าแล้ว / สั่งครบวันนี้) → ปุ่มใส่ตะกร้าสีเทา กดไม่ได้ · เหตุผลอยู่ในกรอบสิทธิ์ด้านบน */
+            <button disabled aria-disabled="true"
+              style={{
+                marginTop: 'auto', background: '#e5e7eb', color: '#9ca3af', border: 'none', borderRadius: '11px',
+                padding: '0.6rem 0.5rem', fontWeight: '800', fontSize: '0.88rem', cursor: 'not-allowed',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', width: '100%', fontFamily: 'inherit'
+              }}>
+              <Plus size={16} /> {lang === 'th' ? 'ใส่ตะกร้า' : 'Add to cart'}
             </button>
           ) : locked ? (
             <button
