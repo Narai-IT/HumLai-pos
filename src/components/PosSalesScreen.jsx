@@ -225,16 +225,23 @@ const PosSalesScreen = ({
 
   // ส่วนลดที่พนักงานเลือกไว้ก่อนถึงหน้าชำระเงิน
   const [selectedDiscount, setSelectedDiscount] = useState(null);
-  const [showDiscounts, setShowDiscounts] = useState(false);
-  // ── สมาชิก: ส่วนลดทุกแบบต้องสแกน QR บัตรสมาชิก (หรือ QR คูปอง) ก่อน · จำสมาชิกไว้ส่งต่อให้หน้าชำระเงิน ──
-  // สาขาที่ยังไม่เชื่อมระบบสมาชิก (crmOn = false) เลือกส่วนลดได้ตามเดิม
+  const [showDiscounts, setShowDiscounts] = useState(false);   // หน้าต่างสมาชิก / คูปองสมาชิก
+  // ── ส่วนลดของร้าน (ปุ่ม "ส่วนลด") — ไม่ต้องสแกนสมาชิก ──
+  //   ส่วนลดที่ตั้งไว้ในหลังบ้าน > โปรโมชั่น/ส่วนลด ใช้ได้ทุกคน · ใส่ส่วนลดเอง (บาท/%) ได้เฉพาะแคชเชียร์/แอดมิน
+  //   ใช้ได้ทีละอย่าง: เลือกส่วนลดร้าน = เอาคูปองสมาชิกออก (เหมือนเดิม)
+  const [showStoreDisc, setShowStoreDisc] = useState(false);
+  const [customType, setCustomType] = useState('baht');
+  const [customValue, setCustomValue] = useState('');
+  const [customReason, setCustomReason] = useState('');
+  const [customErr, setCustomErr] = useState('');
+  const canCustomDiscount = !!(isAdmin || isCashier);
+  // ── สมาชิก: คูปองสมาชิกต้องสแกน QR บัตรสมาชิก (หรือ QR คูปอง) ก่อน · จำสมาชิกไว้ส่งต่อให้หน้าชำระเงิน ──
   const [crmOn, setCrmOn] = useState(false);
   useEffect(() => { let alive = true; crmEnabled().then(on => { if (alive) setCrmOn(on); }); return () => { alive = false; }; }, []);
   const [member, setMember] = useState(null);
   const [memberBusy, setMemberBusy] = useState(false);
   const [memberErr, setMemberErr] = useState('');
   const [scanOpen, setScanOpen] = useState(false);
-  const needMember = crmOn && !member;
 
   // ── คูปองสมาชิก: ยิง QR คูปองแล้วจองไว้กับบิลนี้ทันที ระบบสมาชิกคิดส่วนลดจากรายการในบิล → พนักงานเห็นยอดลดและยอดสุทธิเลย ──
   // ส่ง couponRef ต่อให้หน้าชำระเงินใช้การจองชุดเดียวกัน (ไม่ต้องยิงซ้ำ)
@@ -377,6 +384,8 @@ const PosSalesScreen = ({
   ];
   const discountFor = (d) => Math.min(calcDiscount(d, discountLines, categoriesOf), subtotal);
   const discountAmount = discountFor(selectedDiscount);
+  const couponActive = !!(selectedDiscount && selectedDiscount.crmCoupons);
+  const storeDiscActive = !!(selectedDiscount && !selectedDiscount.crmCoupons);
   const afterDiscount = subtotal - discountAmount;
 
   const scRate  = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
@@ -429,7 +438,34 @@ const PosSalesScreen = ({
       alert(t('โต๊ะนี้ยังไม่มีรายการอาหารที่ต้องชำระ', 'This table has nothing to pay for yet.'));
       return;
     }
-    onCheckout(sentItems, sentTotal, needMember ? null : selectedDiscount, member ? { member, couponRef: couponRef.current } : null);
+    onCheckout(sentItems, sentTotal, selectedDiscount, member ? { member, couponRef: couponRef.current } : null);
+  };
+
+  // สรุปยอดหลังหักส่วนลด (ใช้ทั้งหน้าต่างสมาชิกและหน้าต่างส่วนลด)
+  const summaryBox = (
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.6rem 0.75rem', marginBottom: '0.75rem', background: '#f8fafc', fontSize: '0.86rem', textAlign: 'left' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('ยอดอาหาร', 'Subtotal')}</span><b>฿{subtotal.toLocaleString()}</b></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: discountAmount > 0 ? '#15803d' : '#94a3b8' }}>
+                  <span>{t('ส่วนลด', 'Discount')}{selectedDiscount ? ` · ${selectedDiscount.name}` : ` (${t('ยังไม่ได้ใช้', 'none')})`}</span><b>-฿{discountAmount.toLocaleString()}</b>
+                </div>
+                {serviceCharge > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Service {settings.serviceCharge.rate}%</span><b>฿{serviceCharge.toLocaleString()}</b></div>}
+                {vat > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>VAT {settings.vat.rate}%</span><b>฿{vat.toLocaleString()}</b></div>}
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', marginTop: '4px', paddingTop: '4px', fontSize: '1rem' }}>
+                  <b>{t('สุทธิ', 'Net')}</b><b style={{ color: '#ea580c' }}>฿{grandTotal.toLocaleString()}</b>
+                </div>
+              </div>
+  );
+
+  // ใส่ส่วนลดเอง (แคชเชียร์/แอดมิน): บาท หรือ % ของยอดอาหาร · เหตุผลติดไปกับชื่อส่วนลดในใบเสร็จ/รายงาน
+  const applyCustomDiscount = () => {
+    const v = Math.round((Number(customValue) || 0) * 100) / 100;
+    if (!(v > 0)) { setCustomErr(t('ใส่จำนวนส่วนลด', 'Enter an amount')); return; }
+    if (customType === 'percent' && v > 100) { setCustomErr(t('เปอร์เซ็นต์ต้องไม่เกิน 100', 'Max 100%')); return; }
+    if (customType === 'baht' && v > subtotal) { setCustomErr(t(`ส่วนลดต้องไม่เกินยอดอาหาร ฿${subtotal.toLocaleString()}`, 'More than the bill')); return; }
+    const reason = customReason.trim().slice(0, 60);
+    const label = customType === 'percent' ? `${v}%` : `${v.toLocaleString()} บาท`;
+    setSelectedDiscount({ id: 'custom', name: `ส่วนลดพิเศษ ${label}${reason ? ` (${reason})` : ''}`, type: customType, value: v, categories: [], custom: true, by: currentUser?.username || '' });
+    setCustomValue(''); setCustomReason(''); setCustomErr(''); setShowStoreDisc(false);
   };
 
   const optionText = (item) => {
@@ -827,20 +863,29 @@ const PosSalesScreen = ({
 
           <div className="pos2-cart-foot">
             <div className="pos2-tool-row">
+              {crmOn && (
+                <button
+                  className="pos2-tool"
+                  onClick={() => { setMemberErr(''); setShowDiscounts(true); }}
+                  title={t('สแกน QR บัตรสมาชิก — สะสมแต้ม / คูปอง / เมนูสมาชิก', 'Scan member card — points / coupons / member menu')}
+                  style={{ minWidth: 0, ...(member ? { borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' } : {}) }}
+                >
+                  <UserRound size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{member
+                    ? `${member.name}${couponActive ? ` · ${t('คูปอง', 'coupon')} -฿${discountAmount.toLocaleString()}` : ''}`
+                    : t('สมาชิก', 'Member')}</span>
+                </button>
+              )}
               <button
                 className="pos2-tool"
-                onClick={() => { setMemberErr(''); setShowDiscounts(true); }}
-                title={crmOn ? t('สแกน QR บัตรสมาชิกก่อน แล้วเลือกส่วนลด', 'Scan member card, then pick a discount') : t('เลือกส่วนลดให้บิลนี้', 'Apply a discount')}
-                style={{ minWidth: 0, ...(member ? { borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' } : {}) }}
+                onClick={() => { setCustomErr(''); setShowStoreDisc(true); }}
+                title={t('ส่วนลดของร้าน — ไม่ต้องสแกนสมาชิก', 'Store discount — no member needed')}
+                style={{ minWidth: 0, ...(storeDiscActive ? { borderColor: '#16a34a', color: '#166534', background: '#f0fdf4' } : {}) }}
               >
-                {crmOn ? <UserRound size={14} style={{ flexShrink: 0 }} /> : <Tag size={14} style={{ flexShrink: 0 }} />}
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{member
-                  ? `${member.name}${selectedDiscount ? ` · ${selectedDiscount.name} (-฿${discountAmount.toLocaleString()})` : ''}`
-                  : crmOn
-                    ? t('สแกนสมาชิก / ใช้ส่วนลด', 'Scan member / discount')
-                    : selectedDiscount
-                      ? `${selectedDiscount.name} (-฿${discountAmount.toLocaleString()})`
-                      : t('เพิ่มส่วนลด', 'Add discount')}</span>
+                <Tag size={14} style={{ flexShrink: 0 }} />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{storeDiscActive
+                  ? `${selectedDiscount.name} -฿${discountAmount.toLocaleString()}`
+                  : t('ส่วนลด', 'Discount')}</span>
               </button>
               <button
                 className="pos2-tool"
@@ -913,7 +958,7 @@ const PosSalesScreen = ({
       {showDiscounts && (
         <div className="pos2-modal-overlay" onClick={() => setShowDiscounts(false)}>
           <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{crmOn ? t('สมาชิก / ส่วนลด', 'Member / Discount') : t('ส่วนลด', 'Discount')}</h3>
+            <h3>{t('สมาชิก / คูปองสมาชิก', 'Member / coupons')}</h3>
             {crmOn && <QrScanner open={scanOpen} onResult={(code) => { setScanOpen(false); findMember(code); }} onClose={() => setScanOpen(false)} title={t('สแกน QR บัตรสมาชิก / คูปอง', 'Scan member / coupon QR')} />}
             {pendingFood && !member && (
               <div role="alert" style={{ border: '2px solid #f59e0b', background: '#fffbeb', color: '#92400e', borderRadius: '12px', padding: '0.6rem 0.75rem', marginBottom: '0.75rem', fontWeight: 700, fontSize: '0.88rem', textAlign: 'left' }}>
@@ -958,7 +1003,7 @@ const PosSalesScreen = ({
                       </div>
                     ))}
                     <div style={{ fontSize: '0.76rem', color: '#64748b', marginTop: '6px' }}>
-                      {couponBusy ? t('กำลังคิดคูปอง…', 'Checking coupon…') : t('ยิง QR คูปองเพิ่มได้ (กด "ใช้คูปอง" ในบัตร LINE) · เลือกส่วนลดร้านด้านล่าง = เอาคูปองออก', 'Scan more coupon QRs · picking a store discount removes coupons')}
+                      {couponBusy ? t('กำลังคิดคูปอง…', 'Checking coupon…') : t('ยิง QR คูปองเพิ่มได้ (กด "ใช้คูปอง" ในบัตร LINE) · ใช้ส่วนลดร้าน (ปุ่ม "ส่วนลด") = เอาคูปองออก', 'Scan more coupon QRs · a store discount (Discount button) removes coupons')}
                     </div>
                     {walletMsg && <div role="alert" style={{ color: '#b45309', fontSize: '0.8rem', fontWeight: 700, marginTop: '4px' }}>{walletMsg}</div>}
                     {sQuota && sQuota.enabled && (
@@ -972,61 +1017,91 @@ const PosSalesScreen = ({
                 )}
               </div>
             )}
-            {/* คิดยอดให้พนักงานเห็นทันทีหลังใช้คูปอง/ส่วนลด (ลำดับเดียวกับหน้าชำระเงิน) */}
-            {(!crmOn || member) && (
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', padding: '0.6rem 0.75rem', marginBottom: '0.75rem', background: '#f8fafc', fontSize: '0.86rem', textAlign: 'left' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>{t('ยอดอาหาร', 'Subtotal')}</span><b>฿{subtotal.toLocaleString()}</b></div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: discountAmount > 0 ? '#15803d' : '#94a3b8' }}>
-                  <span>{t('ส่วนลด', 'Discount')}{selectedDiscount ? ` · ${selectedDiscount.name}` : ` (${t('ยังไม่ได้ใช้', 'none')})`}</span><b>-฿{discountAmount.toLocaleString()}</b>
-                </div>
-                {serviceCharge > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Service {settings.serviceCharge.rate}%</span><b>฿{serviceCharge.toLocaleString()}</b></div>}
-                {vat > 0 && <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>VAT {settings.vat.rate}%</span><b>฿{vat.toLocaleString()}</b></div>}
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e2e8f0', marginTop: '4px', paddingTop: '4px', fontSize: '1rem' }}>
-                  <b>{t('สุทธิ', 'Net')}</b><b style={{ color: '#ea580c' }}>฿{grandTotal.toLocaleString()}</b>
-                </div>
+            {/* คิดยอดให้พนักงานเห็นทันทีหลังใช้คูปอง (ลำดับเดียวกับหน้าชำระเงิน) */}
+            {member && summaryBox}
+
+            <div className="pos2-modal-actions">
+              <button className="pos2-btn" onClick={() => setShowDiscounts(false)}>{t('ปิด', 'Close')}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ส่วนลดของร้าน: ไม่ต้องสแกนสมาชิก ── */}
+      {showStoreDisc && (
+        <div className="pos2-modal-overlay" onClick={() => setShowStoreDisc(false)}>
+          <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{t('ส่วนลดของร้าน', 'Store discount')}</h3>
+            <p style={{ marginTop: 0 }}>{t(`ไม่ต้องสแกนสมาชิก · ยอดอาหารบิลนี้ ฿${subtotal.toLocaleString()}`, `No member needed · subtotal ฿${subtotal.toLocaleString()}`)}</p>
+            {couponActive && (
+              <div style={{ fontSize: '0.82rem', color: '#92400e', fontWeight: 700, padding: '0.55rem 0.75rem', border: '1px dashed #f59e0b', borderRadius: '10px', background: '#fffbeb', marginBottom: '0.6rem', textAlign: 'left' }}>
+                {t('บิลนี้ใช้คูปองสมาชิกอยู่ · เลือกส่วนลดร้าน = เอาคูปองออก (ใช้ได้ทีละอย่าง)', 'A member coupon is applied · picking a store discount removes it')}
               </div>
             )}
-            <p>{t('ส่วนลดของร้าน', 'Store discounts')}</p>
-
+            {summaryBox}
             <div className="pos2-action-list">
-              {needMember && discounts.length > 0 && (
-                <div style={{ fontSize: '0.82rem', color: '#92400e', fontWeight: 700, padding: '0.6rem 0.75rem', border: '1px dashed #f59e0b', borderRadius: '10px', background: '#fffbeb' }}>
-                  {t('🔒 ใช้ส่วนลดได้เฉพาะสมาชิก · สแกน QR บัตรสมาชิกก่อน', '🔒 Members only · scan the member card first')}
-                </div>
-              )}
               {discounts.length === 0 && (
                 <div style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 700, padding: '0.5rem 0' }}>
-                  {t('ยังไม่ได้ตั้งส่วนลดไว้ — ตั้งได้ที่ จัดการหลังบ้าน > ตั้งค่า', 'No discounts configured yet.')}
+                  {t('ยังไม่ได้ตั้งส่วนลดไว้ — ตั้งได้ที่ จัดการหลังบ้าน > โปรโมชั่น/ส่วนลด', 'No discounts configured yet.')}
                 </div>
               )}
               {discounts.map((d, i) => {
                 const amount = discountFor(d);
-                const active = selectedDiscount && selectedDiscount.name === d.name && selectedDiscount.value === d.value;
+                const active = storeDiscActive && selectedDiscount.name === d.name && selectedDiscount.value === d.value;
+                const catName = (slug) => { const c = categories.find(x => x && String(x.slug) === String(slug)); return c ? (lang === 'th' ? c.name : (c.nameEn || c.name)) : slug; };
+                const cats = Array.isArray(d.categories) ? d.categories.filter(Boolean).map(catName) : [];
+                const pct = d.type === 'percent' && !String(d.name || '').includes('%') ? ` (${d.value}%)` : '';
                 return (
-                  <button
-                    key={`${d.name}-${i}`}
-                    className={`pos2-action ${active ? 'active' : ''}`}
-                    disabled={needMember}
-                    style={needMember ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
-                    onClick={() => { if (needMember) return; setSelectedDiscount(d); setShowDiscounts(false); }}
-                  >
+                  <button key={`${d.name}-${i}`} className={`pos2-action ${active ? 'active' : ''}`}
+                    onClick={() => { setSelectedDiscount(d); setShowStoreDisc(false); }}>
                     <Tag size={16} />
-                    <span style={{ flex: 1 }}>
-                      {d.name} {d.type === 'percent' ? `(${d.value}%)` : ''}
+                    <span style={{ flex: 1, textAlign: 'left' }}>
+                      {d.name}{pct}
+                      <span style={{ display: 'block', fontSize: '0.74rem', color: '#64748b', fontWeight: 400 }}>
+                        {cats.length ? t(`เฉพาะหมวด ${cats.join(', ')}`, `Only ${cats.join(', ')}`) : t('ทั้งบิล', 'Whole bill')}
+                      </span>
                     </span>
                     <b style={{ color: '#15803d' }}>-฿{amount.toLocaleString()}</b>
                   </button>
                 );
               })}
-              {selectedDiscount && (
-                <button className="pos2-action danger" onClick={() => { setSelectedDiscount(null); setShowDiscounts(false); }}>
-                  <X size={16} /> {t('ไม่ใช้ส่วนลด', 'Remove discount')}
-                </button>
+            </div>
+            <div style={{ border: '1.5px dashed #cbd5e1', borderRadius: '12px', padding: '0.65rem 0.75rem', marginTop: '0.6rem', textAlign: 'left' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: '0.45rem' }}>✏️ {t('ใส่ส่วนลดเอง', 'Custom discount')}</div>
+              {canCustomDiscount ? (
+                <>
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.45rem' }}>
+                    {[['baht', t('บาท', 'Baht')], ['percent', '%']].map(([k, label]) => (
+                      <button key={k} type="button" className="pos2-btn" onClick={() => setCustomType(k)}
+                        style={{ flex: 1, ...(customType === k ? { background: '#0f172a', color: '#fff', borderColor: '#0f172a' } : {}) }}>{label}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <input type="number" inputMode="decimal" min="0" step="any" value={customValue} onChange={(e) => { setCustomValue(e.target.value); setCustomErr(''); }}
+                      placeholder={customType === 'percent' ? t('เช่น 10', 'e.g. 10') : t('เช่น 20', 'e.g. 20')} aria-label={t('จำนวนส่วนลด', 'Amount')}
+                      style={{ width: '6.5rem', padding: '0.5rem 0.6rem', border: '1.5px solid #cbd5e1', borderRadius: '9px', fontSize: '0.95rem' }} />
+                    <input type="text" value={customReason} onChange={(e) => setCustomReason(e.target.value)} maxLength={60}
+                      placeholder={t('เหตุผล (เช่น อาหารช้า)', 'Reason (optional)')} aria-label={t('เหตุผล', 'Reason')}
+                      style={{ flex: 1, minWidth: 0, padding: '0.5rem 0.6rem', border: '1.5px solid #cbd5e1', borderRadius: '9px', fontSize: '0.9rem' }} />
+                  </div>
+                  {customErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.8rem', fontWeight: 700, marginTop: '0.35rem' }}>{customErr}</div>}
+                  <button type="button" className="pos2-btn primary" style={{ width: '100%', marginTop: '0.5rem' }} onClick={applyCustomDiscount}>
+                    {t('ใช้ส่วนลดนี้', 'Apply')}
+                  </button>
+                </>
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>{t('🔒 ใส่ส่วนลดเองได้เฉพาะแคชเชียร์/แอดมิน', '🔒 Cashier/admin only')}</div>
               )}
             </div>
-
+            {storeDiscActive && (
+              <div className="pos2-action-list" style={{ marginTop: '0.6rem' }}>
+                <button className="pos2-action danger" onClick={() => { setSelectedDiscount(null); setShowStoreDisc(false); }}>
+                  <X size={16} /> {t('ไม่ใช้ส่วนลด', 'Remove discount')}
+                </button>
+              </div>
+            )}
             <div className="pos2-modal-actions">
-              <button className="pos2-btn" onClick={() => setShowDiscounts(false)}>{t('ปิด', 'Close')}</button>
+              <button className="pos2-btn" onClick={() => setShowStoreDisc(false)}>{t('ปิด', 'Close')}</button>
             </div>
           </div>
         </div>

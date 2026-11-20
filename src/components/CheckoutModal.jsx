@@ -136,11 +136,7 @@ const CheckoutModal = ({
   useEffect(() => () => {
     if (!completedRef.current && !initialCouponRef) heldCoupons.current.forEach(id => crmCall('crmReleaseCoupon', { couponId: id, ref: couponRef.current, branchId }));
   }, [branchId, initialCouponRef]);
-  // ส่วนลดทุกแบบต้องสแกนสมาชิกก่อน (สาขาที่เชื่อมระบบสมาชิก) · ไม่มีสมาชิก = เอาส่วนลดร้านออก
-  const needMember = crmOn && !member;
-  useEffect(() => {
-    if (needMember && selectedDiscount && !selectedDiscount.crmCoupons) setSelectedDiscount(null);
-  }, [needMember, selectedDiscount]);
+  // ส่วนลดของร้านใช้ได้โดยไม่ต้องมีสมาชิก (ปุ่ม "ส่วนลด" ที่หน้าขาย) · คูปองสมาชิกต้องมีสมาชิก (ถอดสมาชิก = เอาคูปองออก)
   const removeMember = () => {
     if (selectedDiscount && selectedDiscount.crmCoupons) setSelectedDiscount(null);
     setMember(null); setWallet(null); setWalletMsg('');
