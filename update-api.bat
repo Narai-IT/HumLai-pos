@@ -40,7 +40,7 @@ if not exist "%~dp0.git" (
 rem จำรุ่นก่อนอัปเดต ไว้เช็กว่าต้องลงส่วนประกอบใหม่ไหม
 for /f %%i in ('git rev-parse HEAD') do set "OLDREV=%%i"
 
-echo [1/4] ดึงโค้ดล่าสุดจาก GitHub...
+echo [1/5] ดึงโค้ดล่าสุดจาก GitHub...
 git pull --ff-only origin main
 if errorlevel 1 (
   echo.
@@ -54,9 +54,10 @@ if errorlevel 1 (
 for /f %%i in ('git rev-parse HEAD') do set "NEWREV=%%i"
 echo.
 
-echo [2/4] ตรวจส่วนประกอบ (node_modules)...
+echo [2/5] ตรวจส่วนประกอบ (node_modules)...
 set "NEEDINSTALL="
 if not exist "%~dp0node_modules\mssql" set "NEEDINSTALL=1"
+if not exist "%~dp0node_modules\vite" set "NEEDINSTALL=1"
 git diff --quiet %OLDREV% %NEWREV% -- package.json package-lock.json
 if errorlevel 1 set "NEEDINSTALL=1"
 if defined NEEDINSTALL (
@@ -74,7 +75,7 @@ if defined NEEDINSTALL (
 )
 echo.
 
-echo [3/4] อัปเดตโครงสร้างฐานข้อมูล (รันซ้ำได้ ไม่มีข้อมูลหาย)...
+echo [3/5] อัปเดตโครงสร้างฐานข้อมูล (รันซ้ำได้ ไม่มีข้อมูลหาย)...
 call npm run sql:init
 if errorlevel 1 (
   echo.
@@ -85,7 +86,14 @@ if errorlevel 1 (
 )
 echo.
 
-echo [4/4] รีสตาร์ต API Server...
+echo [4/5] สร้างหน้าเว็บ POS (เปิดจากเครื่องนี้แทน Vercel)...
+call npm run web:build
+if errorlevel 1 (
+  echo    [คำเตือน] สร้างหน้าเว็บไม่สำเร็จ — หน้าเว็บรุ่นเดิมยังเปิดได้ตามปกติ API ยังอัปเดตต่อ
+)
+echo.
+
+echo [5/5] รีสตาร์ต API Server...
 schtasks /End /TN "HumLai API Server" >nul 2>&1
 rem schtasks /End หยุดแค่ตัวเฝ้า ^(wscript^) แต่ node ที่มันเปิดไว้ยังค้างอยู่ — ต้องปิดเอง
 rem ปิดเฉพาะตัวที่รัน API Server — Print Server ในเครื่องเดียวกันต้องทำงานต่อได้

@@ -30,11 +30,12 @@ const CATEGORY_FOLDERS = {
   "โชจู": "โชจู"
 };
 
-// รูปที่อัปโหลดไว้บน ImgBB เป็นไฟล์ขนาดเต็ม — ขอฉบับย่อ (WebP) ผ่านตัวย่อรูปของ Vercel
+// รูปที่อัปโหลดไว้บน ImgBB เป็นไฟล์ขนาดเต็ม — ขอฉบับย่อผ่านตัวย่อรูปของ Vercel หรือของเซิร์ฟเวอร์ร้าน (api/_lib/imageProxy.js)
 // ขนาดที่ขอได้ต้องตรงกับ images.sizes ใน vercel.json
 // lh3.googleusercontent.com = รูปจาก Google Drive (ต้องมีใน remotePatterns ของ vercel.json ด้วย)
 const OPTIMIZABLE_HOSTS = ['i.ibb.co', 'lh3.googleusercontent.com'];
 export const IMAGE_WIDTHS = [256, 640, 1080];
+const SELF_HOSTED = import.meta.env.VITE_SELF_HOSTED === '1';
 
 const optimizedUrl = (url, width) => {
   try {
@@ -44,6 +45,8 @@ const optimizedUrl = (url, width) => {
     return null;
   }
   const w = IMAGE_WIDTHS.find(x => x >= width) || IMAGE_WIDTHS[IMAGE_WIDTHS.length - 1];
+  // เปิดจากเซิร์ฟเวอร์ร้านเอง (npm run web:build) → ตัวย่อรูปของ API (/api/img) · บน Vercel ใช้ตัวย่อของ Vercel
+  if (SELF_HOSTED) return `/api/img?url=${encodeURIComponent(url)}&w=${w}`;
   return `/_vercel/image?url=${encodeURIComponent(url)}&w=${w}&q=75`;
 };
 
