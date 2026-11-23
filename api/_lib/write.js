@@ -228,6 +228,13 @@ export async function addTableOrder(data) {
   const timestamp   = data.timestamp   || thaiTimeISO();
   const recordedBy  = data.recordedBy  || '';
   const branchId    = await branchForWrite(data);
+  // หน้าเว็บส่งซ้ำด้วย sessionId เดิม (รอบแรกบันทึกแล้วแต่คำตอบหายกลางทาง) → ไม่บันทึกรายการซ้ำ
+  if (data.sessionId) {
+    const dup = await query(
+      `SELECT TOP (1) 1 AS x FROM dbo.TableOrders WHERE SessionId = @s AND ISNULL(TableNumber, '') = @t${branchFilter(branchId)}`,
+      { s: String(sessionId), t: String(tableNumber), branchId });
+    if (dup.recordset.length) return { success: true, sessionId, duplicate: true };
+  }
   const rows = items.map(item => [
     tableNumber, sessionId, (item.food && item.food.name) || '', (item.food && item.food.nameEn) || '',
     Number(item.food && item.food.price) || 0, Number(item.quantity) || 1,
@@ -251,6 +258,21 @@ export async function clearTableOrders(data) {
   const includePaid = data.includePaid === true;
   // โต๊ะ 1 ของแต่ละสาขาคือคนละโต๊ะ — ต้องล้างเฉพาะของสาขาที่ขอ
   const branchId = requestedBranch(data);
+  // ปิดบิล: หน้าเว็บส่ง sessionIds ของรายการที่อยู่ในบิลมา → ลบเฉพาะรายการพวกนั้น
+  // รายการที่เครื่องอื่นสั่งเพิ่มเข้ามาระหว่างแคชเชียร์เปิดหน้าชำระเงิน (ยังไม่ได้คิดเงิน) ยังค้างอยู่ในโต๊ะ ไม่หายไปเฉย ๆ
+  // (ส่งพร้อมกันทั้งรอบ = sessionId เดียวกัน รายการของรอบหนึ่งจึงอยู่ในบิลครบทั้งรอบเสมอ)
+  if (Array.isArray(data.sessionIds)) {
+    const ids = [...new Set(data.sessionIds.map(s => String(s ?? '')))].slice(0, 1500);
+    const params = { t: tableNumber, branchId };
+    const names = ids.map((s, i) => { params[`s${i}`] = s; return `@s${i}`; });
+    const billed = names.length ? `(ISNULL(SessionId, '') IN (${names.join(', ')}) AND ISNULL([Status], '') <> 'paid')` : '1 = 0';
+    const res = await query(
+      `DELETE FROM dbo.TableOrders WHERE TableNumber = @t${branchFilter(branchId)}
+         AND (${billed}${includePaid ? ` OR ISNULL([Status], '') = 'paid'` : ''})`,
+      params
+    );
+    return { success: true, cleared: res.rowsAffected[0] };
+  }
   await query(
     `DELETE FROM dbo.TableOrders WHERE TableNumber = @t${branchFilter(branchId)}
        ${includePaid ? '' : `AND ISNULL([Status], '') <> 'paid'`}`,

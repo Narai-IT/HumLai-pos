@@ -151,8 +151,7 @@ async function handleExtraGet(action, params = {}) {
     case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };
     case 'getStock':          return await getStockLevels(String(params.branch || '').trim());
     case 'getIngredients':    return await getIngredientsList();
-    case 'resetAllSheetData': return await admin.resetAllSheetData();
-    case 'clearSalesData':    return await admin.clearSalesData();
+    // resetAllSheetData / clearSalesData ไม่รับทาง GET แล้ว — ลิงก์เดียว (หรือตัวพรีวิวลิงก์ใน LINE) ไม่ควรลบข้อมูลได้ · ใช้ POST + แอดมินสำนักงานใหญ่
     // ของเดิมมี initSheets ไว้สร้างชีทที่ขาด — ตอนนี้โครงตารางสร้างด้วย db/schema.sql
     case 'initSheets':        return { success: true, message: 'โครงสร้างตารางสร้างด้วย db/schema.sql (npm run sql:init)' };
     default: return null;
