@@ -218,7 +218,8 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
     });
 
     return Object.values(billMap)
-      .filter(b => ['completed','Completed'].includes(b.status))
+      // ขายแล้ว = ครัวกดเสร็จ หรือมียอดชำระ (บิล QR ที่ลูกค้าจ่ายเองยังเป็น Pending จนครัวกดเสร็จ แต่รับเงินแล้ว)
+      .filter(b => String(b.status || '').toLowerCase() === 'completed' || !!payMap[b.orderNumber])
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
   }, [data, payMap, branchFilter]);
 

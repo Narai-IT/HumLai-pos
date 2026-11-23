@@ -118,6 +118,30 @@ async function postOrderPayload(payload) {
   throw new Error(firstLine.length > 120 ? firstLine.slice(0, 120) + '…' : firstLine);
 }
 
+// คำสั่งเขียนอื่น ๆ ของหน้าขาย (ลงรายการโต๊ะ ลบ/ย้ายรายการ ล้างโต๊ะ เปลี่ยนสถานะครัว)
+// เดิมยิงแบบ no-cors ซึ่งอ่านคำตอบไม่ได้เลย — บันทึกพังก็ไม่มีใครรู้ (ครัวทำอาหารแล้วแต่รายการหายจากโต๊ะ ไม่ถูกคิดเงิน)
+// คืน JSON ที่เซิร์ฟเวอร์ตอบ (success:false แบบไม่มี error = ไม่พบรายการ เช่นเครื่องอื่นลบไปแล้ว ให้ผู้เรียกตัดสินเอง)
+// โยน Error เมื่อส่งไม่ถึง/เซิร์ฟเวอร์ตอบ error · err.retry = ลองซ้ำได้ (เน็ตหลุด / เซิร์ฟเวอร์ล่ม)
+async function postApi(body) {
+  let res;
+  try {
+    res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
+  } catch {
+    const err = new Error('ส่งไม่ถึงเซิร์ฟเวอร์ — เน็ตหลุด หรือ API ไม่ทำงาน');
+    err.retry = true;
+    throw err;
+  }
+  const json = await res.json().catch(() => null);
+  if (json && (json.success === true || !json.error)) return json;
+  const raw = String((json && json.error) || `เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (HTTP ${res.status})`);
+  const firstLine = /ต่อ SQL Server|Failed to connect|ETIMEOUT|ESOCKET|ECONNREFUSED/i.test(raw) ? 'เซิร์ฟเวอร์ต่อฐานข้อมูล SQL Server ไม่ได้' : raw.split('\n')[0];
+  const err = new Error(firstLine.length > 120 ? firstLine.slice(0, 120) + '…' : firstLine);
+  err.retry = !json || res.status >= 500 || /SQL Server|ระบบกำลังบันทึกรายการอื่นอยู่/.test(firstLine);
+  throw err;
+}
+
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 // ส่งบิลค้างซ้ำเองทุก ๆ เท่านี้ — กรณีเน็ตเครื่องปกติแต่ API/ฐานข้อมูลล่ม จะไม่มี event 'online' มาปลุก
 const PENDING_RETRY_MS = 90 * 1000;
 
@@ -891,10 +915,21 @@ function App() {
   // =============================================
   // NEW: Send cart items to TableOrders sheet
   // =============================================
-  const handleSendOrderToTable = async () => {
-    if (cart.length === 0) return;
+  // กำลังส่งรายการเข้าโต๊ะอยู่ (กันกดซ้ำ และกันเปิดหน้าชำระเงินก่อนรายการบันทึกเสร็จ)
+  const sendingTableRef = React.useRef(false);
+  // รอบที่ส่งไม่สำเร็จล่าสุด { sig, sessionId } — กดส่งตะกร้าเดิมอีกครั้งใช้ sessionId เดิม
+  // ถ้ารอบแรกบันทึกได้จริงแต่คำตอบหายกลางทาง เซิร์ฟเวอร์จะเห็น sessionId ซ้ำแล้วไม่บันทึกรายการซ้ำ
+  const failedSendRef = React.useRef(null);
 
-    const sessionId = String(Date.now());
+  const handleSendOrderToTable = async () => {
+    if (cart.length === 0 || sendingTableRef.current) return;
+
+    const sentCart = cart;
+    const sentTable = tableNumber;
+    const sig = JSON.stringify([String(sentTable), branchKey, cart.map(i => [i.food && i.food.id, i.food && i.food.name, i.food && i.food.price, i.quantity, i.note || '', (i.allPopups || []).map(p => p.name), i.spice && i.spice.name, i.promo && i.promo.id])]);
+    const sessionId = failedSendRef.current && failedSendRef.current.sig === sig
+      ? failedSendRef.current.sessionId
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const timestamp = getThaiTimeISO();
 
     // Optimistic update: add to local tableOrders immediately
@@ -960,11 +995,49 @@ function App() {
     setTableOrders(prev => [...prev, ...newLocalItems]);
     setCart([]);
 
-    // ── พิมพ์ใบครัวทันทีที่กดส่ง ──
+    // ── บันทึกลงระบบก่อน แล้วค่อยพิมพ์ใบครัว ──
+    // เดิมพิมพ์ใบครัวทันทีแล้วยิงบันทึกแบบ no-cors (ไม่รู้ผล): บันทึกพัง = ครัวทำอาหารไปแล้ว แต่รายการหายจากโต๊ะตอนดึงข้อมูลรอบถัดไป ไม่ถูกคิดเงิน
+    // ตอนนี้รอผลบันทึก (ลองซ้ำเองสูงสุด 3 ครั้ง) · ไม่สำเร็จ = ไม่พิมพ์ใบครัว คืนรายการเข้าตะกร้าให้กดส่งใหม่
+    sendingTableRef.current = true;   // ตั้งก่อน await แรก (โค้ดด้านบนไม่มี await จึงกดซ้ำแทรกไม่ได้)
+    let saveError = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const json = await postApi({
+          action: 'addTableOrder',
+          branchId: branchKey,
+          tableNumber: String(sentTable),
+          sessionId,
+          items: cartForServer,
+          timestamp,
+          recordedBy: branch
+        });
+        if (json.success !== true) throw new Error(json.error || 'เซิร์ฟเวอร์ไม่ตอบ success');
+        saveError = null;
+        break;
+      } catch (err) {
+        saveError = err;
+        if (!err.retry) break;
+        if (attempt < 2) await sleep(800 * (attempt + 1));
+      }
+    }
+    sendingTableRef.current = false;
+
+    if (saveError) {
+      console.error('Error saving table order:', saveError);
+      failedSendRef.current = { sig, sessionId };
+      setTableOrders(prev => prev.filter(o => String(o.SessionId) !== sessionId));
+      setCart(prev => [...sentCart, ...prev]);
+      setSaveAlert({ type: 'error', msg: `⚠️ ส่งรายการโต๊ะ ${sentTable || '-'} เข้าระบบไม่สำเร็จ: ${saveError.message} — ยังไม่ได้พิมพ์ใบครัว รายการกลับไปอยู่ในตะกร้าแล้ว กด "ส่ง" อีกครั้ง (ส่งซ้ำแล้วรายการไม่ซ้ำ)` });
+      setTimeout(() => fetchOrdersFromSheet(), 1500);
+      return;
+    }
+    failedSendRef.current = null;
+    setTimeout(() => fetchOrdersFromSheet(), 2000);
+
+    // ── พิมพ์ใบครัวหลังบันทึกสำเร็จ ──
     // แยกใบไปตามเครื่องพิมพ์ที่ตั้งไว้ในแต่ละเมนู (printerId) ไม่ได้ตั้งก็ตกไปเครื่องประเภทครัว
-    // ไม่ await เพื่อไม่ให้การบันทึกลงชีตต้องรอเครื่องพิมพ์ตอบ
     if (getPrinters().length > 0) {
-      printKitchenOrder(buildKitchenOrder(newLocalItems, tableNumber, sessionId, timestamp, diningForTable(kioskTables, tableNumber)), allMenu)
+      printKitchenOrder(buildKitchenOrder(newLocalItems, sentTable, sessionId, timestamp, diningForTable(kioskTables, sentTable)), allMenu)
         .then(res => {
           // เงียบตอนสำเร็จ แต่ต้องบอกให้รู้ตอนพิมพ์ไม่ออก ไม่งั้นครัวไม่ได้ใบแล้วไม่มีใครรู้
           if (!res.success) {
@@ -974,27 +1047,6 @@ function App() {
         .catch(err => {
           setSaveAlert({ type: 'error', msg: `⚠️ ส่งรายการเข้าบิลแล้ว แต่พิมพ์ใบครัวไม่สำเร็จ: ${err.message || err}` });
         });
-    }
-
-    try {
-      await fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'addTableOrder',
-          branchId: branchKey,
-          tableNumber: String(tableNumber),
-          sessionId,
-          items: cartForServer,
-          timestamp,
-          recordedBy: branch
-        })
-      });
-      // Refresh after saving
-      setTimeout(() => fetchOrdersFromSheet(), 2000);
-    } catch (error) {
-      console.error('Error saving table order:', error);
     }
   };
 
@@ -1049,21 +1101,18 @@ function App() {
     printSettledReceipts(tbl).then(res => {
       if (!res.success) setSaveAlert({ type: 'error', msg: `⚠️ คืนโต๊ะ ${tbl} แล้ว แต่พิมพ์ใบเสร็จไม่สำเร็จ: ${res.error}` });
     });
-    setTableOrders(prev => prev.filter(o => String(o.TableNumber) !== tbl));
+    // ล้างเฉพาะรายการที่จ่ายแล้ว — ถ้ามีเครื่องอื่นสั่งเพิ่มเข้ามา (ยังไม่จ่าย) รายการนั้นต้องค้างในโต๊ะให้เก็บเงิน
+    setTableOrders(prev => prev.filter(o => !(String(o.TableNumber) === tbl && o.Status === 'paid')));
     localStorage.removeItem('customer_count_' + tbl);
     setTableNumber('');
     navigate('/index');
     try {
-      await fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'clearTableOrders', branchId: branchKey, tableNumber: tbl, includePaid: true })
-      });
-      setTimeout(() => fetchOrdersFromSheet(), 1500);
+      await postApi({ action: 'clearTableOrders', branchId: branchKey, tableNumber: tbl, includePaid: true, sessionIds: [] });
     } catch (e) {
       console.error('Error clearing settled table:', e);
+      setSaveAlert({ type: 'error', msg: `⚠️ คืนโต๊ะ ${tbl} ในระบบไม่สำเร็จ: ${e.message} — กดคืนโต๊ะอีกครั้ง` });
     }
+    setTimeout(() => fetchOrdersFromSheet(), 1500);
   };
 
   // พิมพ์ใบครัวซ้ำสำหรับรายการที่ส่งไปแล้ว — ใช้ตอนกระดาษติดหรือใบหาย
@@ -1090,6 +1139,12 @@ function App() {
   // =============================================
   // crm = { member, couponRef } สมาชิกและการจองคูปองที่ทำไว้แล้วที่หน้าขาย → หน้าชำระเงินไม่ต้องสแกนซ้ำ
   const handleOpenCheckoutFromTable = (items, total, discount = null, crm = null) => {
+    // รายการที่เพิ่งกดส่งยังบันทึกไม่เสร็จ — เปิดชำระเงินตอนนี้ รายการอาจบันทึกเข้าโต๊ะหลังปิดบิลไปแล้ว
+    if (sendingTableRef.current) {
+      setSaveAlert({ type: 'warning', msg: '⏳ กำลังส่งรายการเข้าโต๊ะ รอสักครู่แล้วกดชำระเงินอีกครั้ง' });
+      setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'warning' ? null : cur)), 4000);
+      return;
+    }
     setCheckoutItems(items);
     setCheckoutTotal(total);
     setCheckoutDiscount(discount);
@@ -1128,7 +1183,11 @@ function App() {
   // NEW: Complete payment - save to Orders, clear TableOrders
   // =============================================
   const handleCheckoutComplete = async (grandTotal, paymentMethod, paymentDetails, printInfo = {}) => {
-    const finalTotal = grandTotal || checkoutTotal;
+    // ยอด 0 เป็นยอดจริงได้ (ส่วนลด/คูปองครอบคลุมทั้งบิล) — เดิม `grandTotal || checkoutTotal` ทำให้บิล 0 บาทถูกบันทึกเป็นยอดก่อนหักส่วนลด
+    // ใช้ยอดก่อนหักเฉพาะตอนหน้าชำระเงินไม่ได้ส่งยอดมาเลย
+    const finalTotal = typeof grandTotal === 'number' && Number.isFinite(grandTotal)
+      ? Math.round(grandTotal * 100) / 100
+      : checkoutTotal;
 
     const nextNum = (branchMaxMap[branch] || 0) + 1;
     setBranchMaxMap(prev => ({ ...prev, [branch]: nextNum }));
@@ -1170,8 +1229,11 @@ function App() {
       timestamp
     };
 
-    // Optimistic clear table orders
-    setTableOrders(prev => prev.filter(o => String(o.TableNumber) !== String(tableNumber)));
+    // รอบการสั่ง (sessionId) ที่อยู่ในบิลนี้ — ล้างเฉพาะพวกนี้ + รายการที่ลูกค้าจ่ายเองแล้ว
+    // รายการที่เครื่องอื่นสั่งเพิ่มเข้ามาระหว่างเปิดหน้าชำระเงินยังไม่ถูกคิดเงิน ต้องค้างอยู่ในโต๊ะ
+    const billedSessions = [...new Set(checkoutItems.map(i => String(i.SessionId ?? '')))];
+    const billedSet = new Set(billedSessions);
+    setTableOrders(prev => prev.filter(o => !(String(o.TableNumber) === String(tableNumber) && (o.Status === 'paid' || billedSet.has(String(o.SessionId ?? ''))))));
     setOrders(prev => [...prev, newOrder]);
     setCheckoutItems([]);
     setIsCheckoutOpen(false);
@@ -1264,7 +1326,7 @@ function App() {
     } catch (e) { console.error('Receipt print failed:', e); }
 
     // ล้างโต๊ะกับตัดสต็อกไม่ขึ้นต่อกัน ยิงพร้อมกันได้ ไม่ต้องรอทีละรอบ
-    // (ยังต้องยิงหลังบันทึกบิลสำเร็จ ไม่งั้นบิลพังแล้วรายการในโต๊ะหายไปด้วย)
+    // ล้างโต๊ะแม้บันทึกบิลไม่สำเร็จ — บิลถูกสำรองไว้ใน pending_orders และส่งซ้ำเองแล้ว ถ้าปล่อยรายการค้างในโต๊ะ พนักงานจะเก็บเงินซ้ำ
     const deductItems = checkoutItems
       .map(item => {
         const menuItem = allMenu.find(m => m.name === item.ItemName || m.nameEn === item.ItemNameEn);
@@ -1272,15 +1334,24 @@ function App() {
       })
       .filter(Boolean);
 
-    const backgroundJobs = [
-      // ปิดบิลแล้ว = โต๊ะจบ ล้างรวมรายการที่ลูกค้าจ่ายเองมาก่อนหน้าด้วย
-      fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'clearTableOrders', branchId: branchKey, tableNumber: String(tableNumber), includePaid: true })
-      }).catch(error => console.error('Error clearing table orders:', error))
-    ];
+    const paidTable = String(tableNumber);
+    const clearBilledRows = async () => {
+      // ปิดบิลแล้ว: ล้างเฉพาะรอบการสั่งที่อยู่ในบิลนี้ + รายการที่ลูกค้าจ่ายเองมาก่อนหน้า (sessionIds)
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          await postApi({ action: 'clearTableOrders', branchId: branchKey, tableNumber: paidTable, includePaid: true, sessionIds: billedSessions });
+          return;
+        } catch (err) {
+          if (!err.retry || attempt === 2) {
+            console.error('Error clearing table orders:', err);
+            setSaveAlert({ type: 'error', msg: `⚠️ ปิดบิลโต๊ะ ${paidTable || '-'} แล้ว แต่ล้างรายการออกจากโต๊ะไม่สำเร็จ: ${err.message} — รายการจะยังโชว์ในโต๊ะ ห้ามเก็บเงินซ้ำ (ลบรายการออกเองหรือกดคืนโต๊ะ)` });
+            return;
+          }
+          await sleep(800 * (attempt + 1));
+        }
+      }
+    };
+    const backgroundJobs = [clearBilledRows().finally(() => setTimeout(() => fetchOrdersFromSheet(), 1500))];
 
     if (deductItems.length > 0) {
       // Deduct stock based on BOM
@@ -1355,16 +1426,16 @@ function App() {
               price: Number(it.ItemPrice) || 0
             }))
           };
-      await fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(body)
-      });
-      setTimeout(() => fetchOrdersFromSheet(), 2000);
+      const json = await postApi(body);
+      if (json.success !== true) {
+        setSaveAlert({ type: 'error', msg: `⚠️ ย้ายรายการจากโต๊ะ ${fromTable} ไม่สำเร็จ — ไม่พบรายการในระบบ (อาจถูกย้าย/ลบจากเครื่องอื่นแล้ว) ตรวจโต๊ะอีกครั้ง` });
+      }
     } catch (e) {
       console.error('Error moving table:', e);
+      setSaveAlert({ type: 'error', msg: `⚠️ ย้ายโต๊ะ ${fromTable} → ${toTable} ในระบบไม่สำเร็จ: ${e.message} — ลองย้ายอีกครั้ง` });
     }
+    // ดึงข้อมูลจริงกลับมาทับเสมอ ไม่ให้จอโชว์ผลที่ระบบไม่ได้บันทึก
+    setTimeout(() => fetchOrdersFromSheet(), 1500);
   };
 
   // =============================================
@@ -1385,39 +1456,34 @@ function App() {
     });
 
     try {
-      await fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'deleteTableOrderItem',
-          branchId: branchKey,
-          tableNumber: String(item.TableNumber),
-          sessionId: String(item.SessionId),
-          itemName: String(item.ItemName)
-        })
+      // success:false = ไม่พบรายการ (เครื่องอื่นลบไปแล้ว) — ดึงข้อมูลใหม่ก็ตรงกันเอง
+      await postApi({
+        action: 'deleteTableOrderItem',
+        branchId: branchKey,
+        tableNumber: String(item.TableNumber),
+        sessionId: String(item.SessionId),
+        itemName: String(item.ItemName)
       });
     } catch (e) {
       console.error('Error deleting table item:', e);
+      setSaveAlert({ type: 'error', msg: `⚠️ ลบ "${item.ItemName}" ออกจากโต๊ะ ${item.TableNumber} ในระบบไม่สำเร็จ: ${e.message} — รายการยังอยู่ในบิล ลบอีกครั้ง` });
+      setTimeout(() => fetchOrdersFromSheet(), 500);
     }
   };
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
-    setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
     try {
-      await fetch(API_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-          action: 'updateStatus',
-          orderId,
-          status: newStatus,
-          completionTime: newStatus.toLowerCase() === 'completed' ? getThaiTimeISO() : ''
-        })
+      await postApi({
+        action: 'updateStatus',
+        orderId,
+        status: newStatus,
+        completionTime: newStatus.toLowerCase() === 'completed' ? getThaiTimeISO() : ''
       });
     } catch (e) {
       console.error('Failed to update status:', e);
+      setSaveAlert({ type: 'error', msg: `⚠️ เปลี่ยนสถานะบิล ${orderId} เป็น "${newStatus}" ในระบบไม่สำเร็จ: ${e.message} — กดอีกครั้ง` });
+      setTimeout(() => fetchOrdersFromSheet(), 500);
     }
   };
 

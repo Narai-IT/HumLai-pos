@@ -152,6 +152,18 @@ const ADMIN = new Set(['getPrintAgentKey', 'crmSyncMenu', 'cancelTaxInvoice', 'd
 // แคชเชียร์ขึ้นไป — หน้าหลังบ้านที่แคชเชียร์เข้าได้
 const BACKOFFICE = new Set(['getDiscountReport', 'getTaxInvoices', 'issueTaxInvoice', 'reissueTaxInvoice', 'getTaxCustomers', 'saveTaxCustomer', 'saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);
 
+// ของอันตราย — ต้องเป็นแอดมินสำนักงานใหญ่เสมอ แม้ร้านยังไม่ได้เปิด "บังคับล็อกอินทุกเครื่อง"
+// (API เปิดออกอินเทอร์เน็ตผ่าน Tunnel: เดิมเรียก ?action=clearSalesData ลอย ๆ ก็ลบยอดขายทั้งร้าน / ?action=getUsers ก็ได้รหัสพนักงานทุกคน)
+const ALWAYS_HQ = new Set(['clearSalesData', 'resetAllSheetData', 'getUsers', 'saveUsers']);
+// ติดตั้งใหม่ที่ยังไม่มีพนักงานคนไหนตั้งรหัส (หน้าล็อกอินมีปุ่มเข้าตั้งค่าครั้งแรก ไม่มี token) — ต้องเปิดหน้าพนักงานแล้วสร้างคนแรกได้
+const SETUP_OK = new Set(['getUsers', 'saveUsers']);
+async function noPinYet() {
+  try {
+    const res = await query(`SELECT TOP (1) 1 AS x FROM dbo.Users WHERE ISNULL(CAST(pin AS NVARCHAR(100)), '') <> ''`);
+    return res.recordset.length === 0;
+  } catch { return false; }
+}
+
 const RANK = { staff: 1, cashier: 2, admin: 3 };
 const need = (action) => {
   if (HQ_ONLY.has(action)) return 'hq';
@@ -178,6 +190,9 @@ export async function authorize(action, token, data, params) {
     }
   }
 
+  if (ALWAYS_HQ.has(action) && !hq && !(SETUP_OK.has(action) && await noPinYet())) {
+    return user ? deny('forbidden', 'คำสั่งนี้ใช้ได้เฉพาะแอดมินสำนักงานใหญ่') : deny('required', 'ต้องล็อกอินแอดมินสำนักงานใหญ่ก่อน');
+  }
   if (ALWAYS_LOGIN.has(action) && !user) return deny('required', 'ต้องล็อกอินพนักงานก่อนใช้ระบบสมาชิก');
   if (PUBLIC.has(action) || !(await loginEnforced())) return { ok: true, user };
   if (!user) return deny('required', 'ต้องล็อกอินก่อน (หรือหมดเวลาใช้งาน กรุณาล็อกอินใหม่)');

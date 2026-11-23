@@ -174,7 +174,9 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
       };
     }
   });
-  const completedOrders = Object.values(orderMap).filter(o => ['completed','Completed'].includes(o.status))
+  // บิลที่ขายแล้ว = ครัวกดเสร็จแล้ว หรือมียอดชำระบันทึกไว้
+  // บิลที่ลูกค้าสแกน QR จ่ายเอง สถานะเป็น Pending จนกว่าครัวกด "สำเร็จแล้ว" แต่รับเงินแล้ว — ต้องอยู่ในยอดขาย/รายงานภาษีขายตั้งแต่จ่าย
+  const completedOrders = Object.values(orderMap).filter(o => String(o.status || '').toLowerCase() === 'completed' || !!payMap[o.orderNumber])
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
   // ใบกำกับของแต่ละบิล: ใบที่ยังใช้อยู่ก่อน ไม่มีค่อยใช้ใบล่าสุดที่ยกเลิกแล้ว (รายการจากเซิร์ฟเวอร์เรียงใหม่ → เก่า)
