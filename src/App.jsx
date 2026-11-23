@@ -16,7 +16,6 @@ const TaxInvoicePage = lazy(() => import('./components/TaxInvoicePage'));
 const KioskPaymentAlerts = lazy(() => import('./components/KioskPaymentAlerts'));
 const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
 // โหลดแบบ lazy: หน้าหลังบ้าน/ครัว/เหล้า/บิลค้าง ไม่ต้องโหลดตอนเปิดหน้าร้าน → เริ่มแอปไวขึ้น
-const KitchenMonitor = lazy(() => import('./components/KitchenMonitor'));
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'));
 const Dashboard = lazy(() => import('./components/admin/Dashboard'));
 const ManageMenu = lazy(() => import('./components/admin/ManageMenu'));
@@ -304,7 +303,8 @@ function App() {
     };
   }, [flushPendingOrders]);
 
-  const [orders, setOrders] = useState([]);
+  // รายการบิลล่าสุด — เดิมใช้แสดงหน้าจอครัว (ตัดออกแล้ว) ยังอัปเดตไว้เผื่อหน้าอื่นใช้ภายหลัง
+  const [, setOrders] = useState([]);
   // เลขบิลล่าสุดแยกตามสาขา (RecordedBy) — { [สาขา]: เลขสูงสุด } เพื่อให้แต่ละสาขานับต่อของตัวเอง
   const [branchMaxMap, setBranchMaxMap] = useState({});
   // ข้อมูลสาขาจากหลังบ้าน (ตาราง Branches) — อ่านจาก cache ก่อน เพื่อให้เลขบิลใช้ตัวนำหน้าที่ถูกตั้งแต่เปิดแอป
@@ -1471,22 +1471,6 @@ function App() {
     }
   };
 
-  const handleUpdateOrderStatus = async (orderId, newStatus) => {
-    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
-    try {
-      await postApi({
-        action: 'updateStatus',
-        orderId,
-        status: newStatus,
-        completionTime: newStatus.toLowerCase() === 'completed' ? getThaiTimeISO() : ''
-      });
-    } catch (e) {
-      console.error('Failed to update status:', e);
-      setSaveAlert({ type: 'error', msg: `⚠️ เปลี่ยนสถานะบิล ${orderId} เป็น "${newStatus}" ในระบบไม่สำเร็จ: ${e.message} — กดอีกครั้ง` });
-      setTimeout(() => fetchOrdersFromSheet(), 500);
-    }
-  };
-
   const getCartTotal = () => {
     return cart.reduce((sum, item) => {
       let itemTotal = Number(item.food.price);
@@ -1788,15 +1772,6 @@ function App() {
               onOpenSummary={(mode) => { setSalesSummaryMode(mode); setShowSalesSummaryModal(true); }}
               onOpenTaxInvoice={() => setShowTaxInvoicePage(true)}
             onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
-          />
-        } />
-
-        <Route path="/kitchen" element={
-          <KitchenMonitor
-            orders={orders.filter(o => o.status && o.status.toLowerCase() === 'pending')}
-            onUpdateOrderStatus={handleUpdateOrderStatus}
-            onNewOrder={() => navigate('/index')}
-            allMenu={allMenu.length > 0 ? allMenu : liveMenu}
           />
         } />
 

@@ -96,7 +96,6 @@ const AdminLayout = ({ lang, setLang, isCashier = false, onLogout }) => {
               ))}
             </div>
           ))}
-          {/* หน้าจอห้องครัว (/kitchen) ซ่อนลิงก์ไว้ก่อน — ร้านยังไม่มีจอสำหรับครัว (ใช้ใบครัวจาก Print Server) · หน้ายังเปิดได้ที่ /kitchen ถ้าต้องการใช้ภายหลัง */}
           {!isCashier && (
             <div className="admin-nav-group">
               <div className="admin-nav-heading">{th ? 'อื่น ๆ' : 'Other'}</div>
