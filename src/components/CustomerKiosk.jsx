@@ -375,16 +375,23 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     if (!res.success && res.verify) { setNeedVerify(true); setVerifyToken(''); saveSession(VERIFY_KEY, null); writeLogin(null); }
     return res;
   };
-  const checkMember = async () => {
-    const q = memberInput.trim();
+  // q ส่งมาตอนตรวจอัตโนมัติ (ใส่เบอร์ครบ 10 หลัก) · กดปุ่ม/Enter ใช้ค่าในช่อง
+  const checkMember = async (q0) => {
+    const q = (typeof q0 === 'string' ? q0 : memberInput).trim();
     if (!q || memberBusy) return;
     setMemberBusy(true); setMemberErr('');
     const res = await lookupMember(q, branchId, { kiosk: true });
     setMemberBusy(false);
     if (res.success) { keepMember(res.member); setMemberInput(''); }
     else setMemberErr(res.notFound
-      ? (lang === 'th' ? 'ไม่พบสมาชิก ตรวจเลขอีกครั้ง หรือกดสมัครผ่าน LINE ด้านล่าง' : 'Member not found')
+      ? (lang === 'th' ? 'ไม่พบเบอร์นี้ในระบบสมาชิก ตรวจเบอร์อีกครั้ง หรือกดสมัครผ่าน LINE ด้านล่าง' : 'Phone number not found')
       : (res.error || (lang === 'th' ? 'ตรวจสอบไม่สำเร็จ ลองอีกครั้ง' : 'Please try again')));
+  };
+  // ช่องสมาชิกรับเฉพาะเบอร์โทร (ตัวเลข) · ครบ 10 หลักขึ้นต้นด้วย 0 → ตรวจให้เองไม่ต้องกดปุ่ม
+  const onMemberInput = (v) => {
+    const digits = String(v || '').replace(/\D/g, '').slice(0, 10);
+    setMemberInput(digits); setMemberErr('');
+    if (/^0\d{9}$/.test(digits)) checkMember(digits);
   };
   // ห่อกลับบ้านโดยไม่มีเลขโต๊ะ → ลงโต๊ะโซน Takehome ตัวแรกของร้าน (ไม่มีก็ใช้ชื่อ Takehome)
   const takeawayTable = (() => {
@@ -1426,13 +1433,13 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
               <>
                 <label htmlFor="kiosk-member" style={{ display: 'block', fontWeight: 800, marginBottom: '0.15rem' }}>{lang === 'th' ? 'เป็นสมาชิกหำไหลไหม? สะสมแต้มได้เลย' : 'Member? Earn points'}</label>
                 <span style={{ display: 'block', fontSize: '0.82rem', color: '#9a3412', marginBottom: '0.6rem' }}>
-                  {lang === 'th' ? 'ใส่เลขที่สมาชิก (ดูในบัตรสมาชิกใน LINE) หรือเบอร์โทรที่สมัครไว้ · ไม่มีข้ามได้' : 'Member no. (in your LINE member card) or phone · optional'}
+                  {lang === 'th' ? 'ใส่เบอร์โทรที่สมัครไว้ ครบ 10 หลักระบบตรวจให้เอง · ไม่มีข้ามได้' : 'Enter the phone number you registered with · checked automatically · optional'}
                 </span>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input id="kiosk-member" value={memberInput} inputMode="text" autoComplete="off"
-                    onChange={e => { setMemberInput(e.target.value); setMemberErr(''); }}
+                  <input id="kiosk-member" value={memberInput} type="tel" inputMode="numeric" autoComplete="tel" maxLength={12}
+                    onChange={e => onMemberInput(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); checkMember(); } }}
-                    placeholder={lang === 'th' ? 'เช่น MB-0000123 หรือ 0812345678' : 'e.g. MB-0000123 or 0812345678'}
+                    placeholder={lang === 'th' ? 'เบอร์โทร 10 หลัก เช่น 0812345678' : 'Phone, e.g. 0812345678'}
                     style={{ flex: 1, minWidth: 0, border: '1px solid #fdba74', borderRadius: 12, padding: '0.75rem', fontSize: '1rem', fontFamily: 'inherit', background: '#fff' }} />
                   <button onClick={checkMember} disabled={memberBusy || !memberInput.trim()}
                     style={{ border: 'none', borderRadius: 12, padding: '0 1rem', background: '#ea580c', color: '#fff', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', opacity: memberBusy || !memberInput.trim() ? 0.5 : 1 }}>
@@ -1448,7 +1455,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                     </a>
                     <span style={{ display: 'block', fontSize: '0.8rem', color: joinOpened ? '#166534' : '#9a3412', marginTop: '0.4rem', textAlign: 'center', fontWeight: joinOpened ? 700 : 400 }}>
                       {joinOpened
-                        ? (lang === 'th' ? 'สมัครเสร็จแล้วกลับมาหน้านี้ ใส่เบอร์โทรที่สมัครในช่องด้านบน แล้วกดตรวจสอบ' : 'After joining, come back and enter your phone above')
+                        ? (lang === 'th' ? 'สมัครเสร็จแล้วกลับมาหน้านี้ ใส่เบอร์โทรที่สมัครในช่องด้านบน ระบบตรวจให้เอง' : 'After joining, come back and enter your phone above')
                         : (lang === 'th' ? 'กรอกชื่อ เบอร์โทร ใน LINE ไม่ถึง 1 นาที รับแต้มและคูปองสมาชิกใหม่ แล้วสะสมแต้มบิลนี้ได้เลย' : 'Takes under a minute · get welcome points & coupon')}
                     </span>
                   </div>
@@ -2221,15 +2228,16 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
                 <p style={{ color: '#b91c1c', fontWeight: 700 }}>{th ? 'ตอนนี้ระบบสมาชิกยังไม่พร้อม สั่งเมนูนี้ไม่ได้ชั่วคราว' : 'Membership is unavailable right now.'}</p>
               ) : !member ? (
                 <>
-                  <label htmlFor="gate-member" style={{ display: 'block', fontWeight: 800, marginBottom: '0.4rem' }}>{th ? 'ขั้นที่ 1/2: ใส่เลขที่สมาชิก หรือเบอร์โทรที่สมัครไว้' : 'Step 1/2: member no. or phone'}</label>
+                  <label htmlFor="gate-member" style={{ display: 'block', fontWeight: 800, marginBottom: '0.4rem' }}>{th ? 'ขั้นที่ 1/2: ใส่เบอร์โทรที่สมัครไว้' : 'Step 1/2: your registered phone number'}</label>
                   <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input id="gate-member" value={memberInput} autoComplete="off" autoFocus
-                      onChange={e => { setMemberInput(e.target.value); setMemberErr(''); }}
+                    <input id="gate-member" value={memberInput} type="tel" inputMode="numeric" autoComplete="tel" maxLength={12} autoFocus
+                      placeholder={th ? 'เบอร์โทร 10 หลัก' : 'Phone number'}
+                      onChange={e => onMemberInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') checkMember(); }} style={field} />
                     <button onClick={checkMember} disabled={memberBusy || !memberInput.trim()} style={goBtn(!memberBusy && memberInput.trim())}>{memberBusy ? '…' : (th ? 'ถัดไป' : 'Next')}</button>
                   </div>
                   {memberErr && <div role="alert" style={{ color: '#b91c1c', fontSize: '0.85rem', marginTop: '0.4rem', fontWeight: 600 }}>{memberErr}</div>}
-                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.4rem' }}>{th ? 'ดูเลขที่สมาชิกได้ในบัตรสมาชิก LINE' : 'Your member no. is in your LINE member card'}</div>
+                  <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.4rem' }}>{th ? 'ครบ 10 หลักระบบตรวจให้เอง' : 'Checked automatically once complete'}</div>
                   {joinUrl && (
                     <>
                       <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem', margin: '0.9rem 0 0' }}>{th ? 'ยังไม่เป็นสมาชิก?' : 'Not a member yet?'}</div>
