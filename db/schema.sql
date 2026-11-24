@@ -446,6 +446,10 @@ GO
 IF COL_LENGTH('dbo.PaymentSummary', 'DiscountKind') IS NULL
   ALTER TABLE dbo.PaymentSummary ADD DiscountKind NVARCHAR(10) NULL;
 GO
+-- ยอดแยกทีละคูปอง (บิลหนึ่งใช้คูปองได้หลายใบ): JSON [{ "id", "code", "title", "amount" }] — ผลรวม = DiscountAmount
+IF COL_LENGTH('dbo.PaymentSummary', 'DiscountDetail') IS NULL
+  ALTER TABLE dbo.PaymentSummary ADD DiscountDetail NVARCHAR(MAX) NULL;
+GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_TableOrders_Branch' AND object_id = OBJECT_ID('dbo.TableOrders'))
   CREATE INDEX IX_TableOrders_Branch ON dbo.TableOrders (BranchId, TableNumber);
 GO

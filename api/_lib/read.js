@@ -219,20 +219,37 @@ export async function handleGet(action, params) {
       if (!from || !to) return { success: false, error: 'ระบุช่วงวันที่ (from, to)' };
       const next = new Date(`${to}T00:00:00Z`); next.setUTCDate(next.getUTCDate() + 1);
       const branchId = requestedBranch(params);
+      const discountQuery = (withDetail) => query(
+        `SELECT p.[timestamp], p.orderNumber, p.tableNo, p.paymentMethod, p.grandTotal, p.staff, p.BranchId,
+                p.DiscountName, p.DiscountAmount, p.DiscountKind${withDetail ? ', p.DiscountDetail' : ''},
+                CASE WHEN EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.OrderNumber = p.orderNumber AND LOWER(o.[Status]) = 'cancelled') THEN 1 ELSE 0 END AS cancelled
+           FROM dbo.PaymentSummary p
+          WHERE p.DiscountAmount > 0 AND p.[timestamp] >= @from AND p.[timestamp] < @to${branchFilter(branchId, 'p.BranchId')}
+          ORDER BY p.[timestamp] ASC`,
+        { from: `${from}T00:00:00`, to: next.toISOString().slice(0, 10) + 'T00:00:00', branchId });
+      // ยอดแยกทีละคูปอง [{ id, code, title, amount }] — บิลก่อนอัปเดต/ส่วนลดร้าน = []
+      const couponsOf = (v) => {
+        if (!v) return [];
+        try {
+          const list = JSON.parse(v);
+          return Array.isArray(list) ? list.map(c => ({ id: String(c.id || ''), code: String(c.code || ''), title: String(c.title || 'คูปอง'), amount: Number(c.amount) || 0 })) : [];
+        } catch { return []; }
+      };
       try {
-        const res = await query(
-          `SELECT p.[timestamp], p.orderNumber, p.tableNo, p.paymentMethod, p.grandTotal, p.staff, p.BranchId,
-                  p.DiscountName, p.DiscountAmount, p.DiscountKind,
-                  CASE WHEN EXISTS (SELECT 1 FROM dbo.Orders o WHERE o.OrderNumber = p.orderNumber AND LOWER(o.[Status]) = 'cancelled') THEN 1 ELSE 0 END AS cancelled
-             FROM dbo.PaymentSummary p
-            WHERE p.DiscountAmount > 0 AND p.[timestamp] >= @from AND p.[timestamp] < @to${branchFilter(branchId, 'p.BranchId')}
-            ORDER BY p.[timestamp] ASC`,
-          { from: `${from}T00:00:00`, to: next.toISOString().slice(0, 10) + 'T00:00:00', branchId });
-        return { success: true, rows: res.recordset.map(r => ({
+        let res;
+        let detailReady = true;
+        try { res = await discountQuery(true); }
+        catch (err) {
+          // ยังไม่ได้รัน sql:init หลังเพิ่มคอลัมน์ DiscountDetail → อ่านแบบเดิม (ไม่มียอดแยกทีละคูปอง)
+          if (!/Invalid column name 'DiscountDetail'/i.test(String(err && err.message))) throw err;
+          detailReady = false;
+          res = await discountQuery(false);
+        }
+        return { success: true, detailReady, rows: res.recordset.map(r => ({
           timestamp: String(r.timestamp || ''), orderNumber: String(r.orderNumber || ''), tableNo: String(r.tableNo || ''),
           paymentMethod: String(r.paymentMethod || ''), grandTotal: Number(r.grandTotal) || 0, staff: String(r.staff || ''),
           branchId: String(r.BranchId || ''), name: String(r.DiscountName || ''), amount: Number(r.DiscountAmount) || 0,
-          kind: String(r.DiscountKind || 'store'), cancelled: r.cancelled === 1
+          kind: String(r.DiscountKind || 'store'), cancelled: r.cancelled === 1, coupons: couponsOf(r.DiscountDetail)
         })) };
       } catch (err) {
         // ยังไม่ได้รัน sql:init (ยังไม่มีคอลัมน์ส่วนลด)

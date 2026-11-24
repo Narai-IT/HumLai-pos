@@ -91,6 +91,7 @@ const exportXLSX = (sheets, filenameBase) => {
 };
 
 // ─── Styles ─────────────────────────────────────────────────
+const filterInput = { background: '#fff', border: '1px solid rgba(0,0,0,0.15)', borderRadius: 8, padding: '0.45rem 0.75rem', fontFamily: 'inherit', fontSize: '0.85rem', color: 'var(--text-main)', outline: 'none' };
 const card   = { background: 'var(--bg-card)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 12, padding: '1rem 1.25rem' };
 const th_    = { padding: '0.65rem 0.9rem', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.78rem', borderBottom: '1px solid rgba(0,0,0,0.08)', whiteSpace: 'nowrap' };
 const td_    = { padding: '0.65rem 0.9rem', fontSize: '0.875rem', borderBottom: '1px solid rgba(0,0,0,0.04)' };
@@ -149,11 +150,25 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
   // ── รายงานส่วนลด: บิลที่ใช้ส่วนลด (ชื่อ ยอด ประเภท พนักงาน) — บันทึกตอนปิดบิลตั้งแต่อัปเดตระบบ ──
   const [discRows, setDiscRows] = useState([]);
   const [discNotReady, setDiscNotReady] = useState(false);
+  // ฐานข้อมูลมีช่องเก็บยอดแยกทีละคูปองแล้วหรือยัง (ยังไม่ได้รัน update-api.bat หลังอัปเดต = ยังไม่มี)
+  const [discDetailReady, setDiscDetailReady] = useState(true);
+  // ตัวกรองของแท็บส่วนลด
+  const [discQ, setDiscQ] = useState('');             // ค้นหา: เลขบิล / โต๊ะ / ชื่อส่วนลด-คูปอง / รหัสคูปอง / พนักงาน
+  const [discKind, setDiscKind] = useState('');       // '' | 'store' | 'coupon'
+  const [discName, setDiscName] = useState('');       // ชื่อส่วนลด / คูปอง
+  const [discStaff, setDiscStaff] = useState('');     // พนักงานที่ปิดบิล
+  const [discChannel, setDiscChannel] = useState(''); // '' | 'pos' (หน้าขาย) | 'kiosk' (ลูกค้าสั่งเอง)
+  const clearDiscFilters = () => { setDiscQ(''); setDiscKind(''); setDiscName(''); setDiscStaff(''); setDiscChannel(''); };
   React.useEffect(() => {
     let alive = true;
     fetch(`${API_URL}?action=getDiscountReport&from=${from}&to=${to}&branch=${encodeURIComponent(branchFilter || '')}`)
       .then(r => r.json())
-      .then(json => { if (!alive) return; setDiscRows(json && json.success && Array.isArray(json.rows) ? json.rows : []); setDiscNotReady(!!(json && json.notReady)); })
+      .then(json => {
+        if (!alive) return;
+        setDiscRows(json && json.success && Array.isArray(json.rows) ? json.rows : []);
+        setDiscNotReady(!!(json && json.notReady));
+        setDiscDetailReady(!(json && json.detailReady === false));
+      })
       .catch(() => { if (alive) setDiscRows([]); });
     return () => { alive = false; };
   }, [from, to, branchFilter]);
@@ -406,23 +421,56 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
     ], `รายงานทั้งหมด_${from}_${to}`);
   };
 
-  // ส่วนลด: นับเฉพาะบิลที่ไม่ถูกยกเลิก
-  const discValid = discRows.filter(r => !r.cancelled);
-  const discTotal = Math.round(discValid.reduce((s, r) => s + r.amount, 0) * 100) / 100;
-  const groupBy = (keyOf) => {
+  // ── ส่วนลด ──
+  // แตกบิลเป็น "รายการส่วนลด": บิลที่ใช้คูปองหลายใบ = ทีละใบพร้อมยอดของใบนั้น
+  // ส่วนลดร้าน / บิลก่อนอัปเดตที่ยังไม่มียอดแยก = 1 รายการต่อบิล (ชื่อและยอดรวมของบิล)
+  const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+  const isKioskBill = (r) => r.staff === 'Self-Order';
+  const discLines = [];
+  discRows.forEach(r => {
+    const coupons = Array.isArray(r.coupons) ? r.coupons.filter(c => Number(c.amount) > 0) : [];
+    if (coupons.length) coupons.forEach(c => discLines.push({ bill: r, name: c.title || 'คูปอง', code: c.code || '', amount: round2(c.amount), kind: 'coupon' }));
+    else discLines.push({ bill: r, name: r.name || 'ส่วนลด', code: '', amount: round2(r.amount), kind: r.kind === 'coupon' ? 'coupon' : 'store' });
+  });
+  const discQText = discQ.trim().toLowerCase();
+  const discFiltered = !!(discQText || discKind || discName || discStaff || discChannel);
+  const lineMatch = (l) =>
+    (!discKind || l.kind === discKind) &&
+    (!discName || l.name === discName) &&
+    (!discStaff || (l.bill.staff || '—') === discStaff) &&
+    (!discChannel || (discChannel === 'kiosk') === isKioskBill(l.bill)) &&
+    (!discQText || [l.name, l.code, l.bill.orderNumber, l.bill.tableNo, l.bill.name, l.bill.staff]
+      .some(v => String(v || '').toLowerCase().includes(discQText)));
+  const discShown = discLines.filter(lineMatch);                       // รวมบิลที่ยกเลิก (แสดงขีดฆ่า)
+  const discValidLines = discShown.filter(l => !l.bill.cancelled);     // ยอดรวมนับเฉพาะบิลที่ไม่ถูกยกเลิก
+  const discBillsShown = [...new Set(discShown.map(l => l.bill))];
+  const discMatched = new Set(discShown);
+  const discBillCount = new Set(discValidLines.map(l => l.bill)).size;
+  const discTotal = round2(discValidLines.reduce((s, l) => s + l.amount, 0));
+  const groupLines = (keyOf) => {
     const m = new Map();
-    discValid.forEach(r => { const k = keyOf(r); const g = m.get(k) || { key: k, kind: r.kind, bills: 0, amount: 0 }; g.bills++; g.amount = Math.round((g.amount + r.amount) * 100) / 100; m.set(k, g); });
-    return [...m.values()].sort((a, b) => b.amount - a.amount);
+    discValidLines.forEach(l => {
+      const k = keyOf(l);
+      const g = m.get(k) || { key: k, kind: l.kind, uses: 0, bills: new Set(), amount: 0 };
+      g.uses++; g.bills.add(l.bill); g.amount = round2(g.amount + l.amount); m.set(k, g);
+    });
+    return [...m.values()].map(g => ({ ...g, bills: g.bills.size })).sort((a, b) => b.amount - a.amount);
   };
-  const discByName  = groupBy(r => r.name || 'ส่วนลด');
-  const discByStaff = groupBy(r => r.staff || '—');
+  const discByName  = groupLines(l => l.name);
+  const discByStaff = groupLines(l => l.bill.staff || '—');
+  // ตัวเลือกในตัวกรอง — จากข้อมูลช่วงวันที่ที่โหลดมา (ชื่อส่วนลดกรองตามประเภทที่เลือกอยู่)
+  const discNameOptions  = [...new Set(discLines.filter(l => !discKind || l.kind === discKind).map(l => l.name))].sort((a, b) => a.localeCompare(b, 'th'));
+  const discStaffOptions = [...new Set(discLines.map(l => l.bill.staff || '—'))].sort((a, b) => a.localeCompare(b, 'th'));
   const kindLabel = (k) => (k === 'coupon' ? 'คูปองสมาชิก' : 'ส่วนลดร้าน');
   const exportDiscount = () => exportXLSX([
-    { name: 'ตามประเภทส่วนลด', headers: ['ส่วนลด', 'ประเภท', 'จำนวนบิล', 'ยอดลดรวม', 'เฉลี่ยต่อบิล'], rows: discByName.map(g => [g.key, kindLabel(g.kind), g.bills, g.amount, Math.round(g.amount / g.bills * 100) / 100]) },
+    { name: 'ตามส่วนลด-คูปอง', headers: ['ส่วนลด / คูปอง', 'ประเภท', 'ใช้ไป (ครั้ง)', 'จำนวนบิล', 'ยอดลดรวม', 'เฉลี่ยต่อครั้ง'],
+      rows: discByName.map(g => [g.key, kindLabel(g.kind), g.uses, g.bills, g.amount, round2(g.amount / g.uses)]) },
     { name: 'ตามพนักงาน', headers: ['พนักงาน', 'จำนวนบิล', 'ยอดลดรวม'], rows: discByStaff.map(g => [g.key, g.bills, g.amount]) },
-    { name: 'รายบิล', headers: ['วันเวลา', 'เลขบิล', 'โต๊ะ', 'สาขา', 'ส่วนลด', 'ประเภท', 'ยอดลด', 'ยอดบิล (หลังลด)', 'พนักงาน', 'สถานะ'],
-      rows: discRows.map(r => [fmtD(r.timestamp), r.orderNumber, r.tableNo, r.branchId, r.name, kindLabel(r.kind), r.amount, r.grandTotal, r.staff, r.cancelled ? 'ยกเลิก' : '']) },
-  ], `รายงานส่วนลด_${from}_${to}`);
+    { name: 'รายการส่วนลด', headers: ['วันเวลา', 'เลขบิล', 'โต๊ะ', 'สาขา', 'ส่วนลด / คูปอง', 'รหัสคูปอง', 'ประเภท', 'ยอดลด', 'ยอดบิล (หลังลด)', 'พนักงาน', 'สถานะ'],
+      rows: discShown.map(l => [fmtD(l.bill.timestamp), l.bill.orderNumber, l.bill.tableNo, l.bill.branchId, l.name, l.code, kindLabel(l.kind), l.amount, l.bill.grandTotal, l.bill.staff, l.bill.cancelled ? 'ยกเลิก' : '']) },
+    { name: 'รายบิล', headers: ['วันเวลา', 'เลขบิล', 'โต๊ะ', 'สาขา', 'ส่วนลดของบิล', 'ประเภท', 'ยอดลดรวมของบิล', 'ยอดบิล (หลังลด)', 'พนักงาน', 'สถานะ'],
+      rows: discBillsShown.map(r => [fmtD(r.timestamp), r.orderNumber, r.tableNo, r.branchId, r.name, kindLabel(r.kind), r.amount, r.grandTotal, r.staff, r.cancelled ? 'ยกเลิก' : '']) },
+  ], `รายงานส่วนลด_${from}_${to}${discFiltered ? '_กรองแล้ว' : ''}`);
 
   const TAB_EXPORT = { discount: exportDiscount, daily: exportAll, income: exportIncome, menu: exportMenu, history: exportHistory, vat: exportVat, detail: exportDetail, cancel: exportCancel, shift: exportShift };
 
@@ -744,12 +792,44 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
           {/* ── Tab: ส่วนลด ── */}
           {tab === 'discount' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {/* ── ตัวกรอง ── */}
+              <div style={{ ...card, display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
+                <input value={discQ} onChange={e => setDiscQ(e.target.value)} placeholder="ค้นหา เลขบิล / โต๊ะ / ชื่อคูปอง / รหัสคูปอง / พนักงาน"
+                  style={{ ...filterInput, flex: '1 1 260px', minWidth: 220 }} />
+                <select value={discKind} onChange={e => { setDiscKind(e.target.value); setDiscName(''); }} style={filterInput}>
+                  <option value="">ทุกประเภท</option>
+                  <option value="store">ส่วนลดร้าน</option>
+                  <option value="coupon">คูปองสมาชิก</option>
+                </select>
+                <select value={discName} onChange={e => setDiscName(e.target.value)} style={{ ...filterInput, maxWidth: 260 }}>
+                  <option value="">ทุกส่วนลด / คูปอง</option>
+                  {discNameOptions.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <select value={discStaff} onChange={e => setDiscStaff(e.target.value)} style={filterInput}>
+                  <option value="">ทุกพนักงาน</option>
+                  {discStaffOptions.map(n => <option key={n} value={n}>{n === 'Self-Order' ? 'ลูกค้าสั่งเอง (Self-Order)' : n}</option>)}
+                </select>
+                <select value={discChannel} onChange={e => setDiscChannel(e.target.value)} style={filterInput}>
+                  <option value="">ทุกช่องทาง</option>
+                  <option value="pos">หน้าขาย (พนักงาน)</option>
+                  <option value="kiosk">ลูกค้าสั่งเอง (QR)</option>
+                </select>
+                {discFiltered && (
+                  <button onClick={clearDiscFilters} style={{ ...filterInput, cursor: 'pointer', color: '#dc2626', borderColor: 'rgba(220,38,38,0.35)', fontWeight: 600 }}>✕ ล้างตัวกรอง</button>
+                )}
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flexBasis: '100%' }}>
+                  {discFiltered ? `แสดง ${fmt(discShown.length)} จาก ${fmt(discLines.length)} รายการส่วนลด · ` : `${fmt(discLines.length)} รายการส่วนลด · `}
+                  ตัวเลขทุกส่วนด้านล่างคิดตามตัวกรอง · กดชื่อในตาราง "ตามส่วนลด / คูปอง" เพื่อกรองเฉพาะรายการนั้น
+                </span>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: '0.75rem' }}>
                 {[
-                  { label: 'บิลที่ใช้ส่วนลด', value: `${fmt(discValid.length)} บิล` },
+                  { label: 'บิลที่ใช้ส่วนลด', value: `${fmt(discBillCount)} บิล` },
+                  { label: 'ใช้ส่วนลด / คูปอง', value: `${fmt(discValidLines.length)} ครั้ง` },
                   { label: 'ส่วนลดรวม', value: `฿${fmt(discTotal)}`, color: '#16a34a' },
                   { label: 'คิดเป็นของยอดขาย', value: totalSales > 0 ? `${(discTotal / (totalSales + discTotal) * 100).toFixed(1)}%` : '—' },
-                  { label: 'เฉลี่ยต่อบิล', value: discValid.length ? `฿${fmt(Math.round(discTotal / discValid.length * 100) / 100)}` : '—' },
+                  { label: 'เฉลี่ยต่อบิล', value: discBillCount ? `฿${fmt(round2(discTotal / discBillCount))}` : '—' },
                 ].map(c => (
                   <div key={c.label} style={card}>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{c.label}</div>
@@ -760,16 +840,20 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
               {discNotReady && (
                 <div style={{ ...card, color: '#b45309', fontSize: '0.85rem' }}>ฐานข้อมูลยังไม่มีช่องเก็บส่วนลด — รัน update-api.bat ที่เครื่อง API หนึ่งครั้ง</div>
               )}
+              {!discNotReady && !discDetailReady && (
+                <div style={{ ...card, color: '#b45309', fontSize: '0.85rem' }}>ฐานข้อมูลยังไม่มีช่องเก็บยอดแยกทีละคูปอง — รัน update-api.bat ที่เครื่อง API หนึ่งครั้ง (ตอนนี้บิลที่ใช้หลายคูปองยังเห็นเป็นยอดรวม)</div>
+              )}
               <div>
-                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>ตามประเภทส่วนลด</div>
-                <TableWrap empty={discByName.length === 0} emptyMsg="ไม่มีบิลที่ใช้ส่วนลดในช่วงเวลานี้" headers={['ส่วนลด', 'ประเภท', 'จำนวนบิล', 'ยอดลดรวม', 'เฉลี่ยต่อบิล']}>
+                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>ตามส่วนลด / คูปอง</div>
+                <TableWrap empty={discByName.length === 0} emptyMsg={discFiltered ? 'ไม่พบรายการที่ตรงกับตัวกรอง' : 'ไม่มีบิลที่ใช้ส่วนลดในช่วงเวลานี้'} headers={['ส่วนลด / คูปอง', 'ประเภท', 'ใช้ไป', 'จำนวนบิล', 'ยอดลดรวม', 'เฉลี่ยต่อครั้ง']}>
                   {discByName.map(g => (
-                    <tr key={g.key}>
+                    <tr key={g.key} onClick={() => setDiscName(discName === g.key ? '' : g.key)} style={{ cursor: 'pointer', background: discName === g.key ? 'rgba(234,179,8,0.12)' : undefined }} title="กดเพื่อกรองเฉพาะรายการนี้">
                       <Td bold>{g.key}</Td>
                       <Td muted>{kindLabel(g.kind)}</Td>
+                      <Td>{fmt(g.uses)} ครั้ง</Td>
                       <Td>{fmt(g.bills)}</Td>
                       <Td bold color="#16a34a">฿{fmt(g.amount)}</Td>
-                      <Td muted>฿{fmt(Math.round(g.amount / g.bills * 100) / 100)}</Td>
+                      <Td muted>฿{fmt(round2(g.amount / g.uses))}</Td>
                     </tr>
                   ))}
                 </TableWrap>
@@ -778,28 +862,38 @@ export default function Reports({ allMenu = [], isAdmin = false, branch = '', us
                 <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>ตามพนักงานที่ปิดบิล</div>
                 <TableWrap empty={discByStaff.length === 0} emptyMsg="—" headers={['พนักงาน', 'จำนวนบิล', 'ยอดลดรวม']}>
                   {discByStaff.map(g => (
-                    <tr key={g.key}><Td bold>{g.key}</Td><Td>{fmt(g.bills)}</Td><Td bold color="#16a34a">฿{fmt(g.amount)}</Td></tr>
+                    <tr key={g.key}><Td bold>{g.key === 'Self-Order' ? 'ลูกค้าสั่งเอง (Self-Order)' : g.key}</Td><Td>{fmt(g.bills)}</Td><Td bold color="#16a34a">฿{fmt(g.amount)}</Td></tr>
                   ))}
                 </TableWrap>
               </div>
               <div>
-                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>รายบิล ({fmt(discRows.length)})</div>
-                <TableWrap empty={discRows.length === 0} emptyMsg="—" headers={['วันเวลา', 'เลขบิล', 'โต๊ะ', 'ส่วนลด', 'ยอดลด', 'ยอดบิล', 'พนักงาน']}>
-                  {discRows.map((r, i) => (
-                    <tr key={i} style={r.cancelled ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
-                      <Td muted nowrap>{fmtD(r.timestamp)}</Td>
-                      <Td bold>{r.orderNumber}{r.cancelled ? ' (ยกเลิก)' : ''}</Td>
-                      <Td>{r.tableNo || '—'}</Td>
-                      <Td>{r.name}</Td>
-                      <Td bold color="#16a34a">-฿{fmt(r.amount)}</Td>
-                      <Td>฿{fmt(r.grandTotal)}</Td>
-                      <Td muted>{r.staff || '—'}</Td>
-                    </tr>
-                  ))}
+                <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>รายบิล ({fmt(discBillsShown.length)})</div>
+                <TableWrap empty={discBillsShown.length === 0} emptyMsg="—" headers={['วันเวลา', 'เลขบิล', 'โต๊ะ', 'ส่วนลด / คูปอง', 'ยอดลดของบิล', 'ยอดบิล', 'พนักงาน']}>
+                  {discBillsShown.map((r, i) => {
+                    const lines = discLines.filter(l => l.bill === r);
+                    return (
+                      <tr key={i} style={r.cancelled ? { opacity: 0.5, textDecoration: 'line-through' } : undefined}>
+                        <Td muted nowrap>{fmtD(r.timestamp)}</Td>
+                        <Td bold>{r.orderNumber}{r.cancelled ? ' (ยกเลิก)' : ''}</Td>
+                        <Td>{r.tableNo || '—'}</Td>
+                        <Td>
+                          {lines.map((l, j) => (
+                            <div key={j} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', opacity: discFiltered && !discMatched.has(l) ? 0.45 : 1, fontWeight: discFiltered && discMatched.has(l) ? 700 : 400 }}>
+                              <span>{l.name}{l.code ? <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}> · {l.code}</span> : null}</span>
+                              {lines.length > 1 && <span style={{ color: '#16a34a', whiteSpace: 'nowrap' }}>-฿{fmt(l.amount)}</span>}
+                            </div>
+                          ))}
+                        </Td>
+                        <Td bold color="#16a34a">-฿{fmt(r.amount)}</Td>
+                        <Td>฿{fmt(r.grandTotal)}</Td>
+                        <Td muted>{r.staff === 'Self-Order' ? 'ลูกค้าสั่งเอง' : (r.staff || '—')}</Td>
+                      </tr>
+                    );
+                  })}
                 </TableWrap>
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
-                บันทึกชื่อส่วนลดตั้งแต่อัปเดตระบบ (บิลก่อนหน้านั้นไม่มีชื่อส่วนลด) · บิลที่ยกเลิกแสดงขีดฆ่าและไม่นับในยอดรวม · คิดเป็น % ของยอดขายก่อนหักส่วนลด
+                บันทึกชื่อส่วนลดตั้งแต่อัปเดตระบบ (บิลก่อนหน้านั้นไม่มีชื่อส่วนลด) · ยอดแยกทีละคูปองเริ่มเก็บตั้งแต่อัปเดตนี้ (บิลก่อนหน้าที่ใช้หลายคูปองเห็นเป็นยอดรวมแถวเดียว) · บิลที่ยกเลิกแสดงขีดฆ่าและไม่นับในยอดรวม · คิดเป็น % ของยอดขายก่อนหักส่วนลด
               </p>
             </div>
           )}
