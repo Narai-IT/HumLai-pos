@@ -137,7 +137,7 @@ const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskP
 
 // ข้อมูลสมาชิก (ชื่อ เบอร์ แต้ม) ต้องล็อกอินพนักงานเสมอ แม้ร้านไม่ได้เปิด "บังคับล็อกอิน" — กันคนนอกไล่ค้นข้อมูลลูกค้าจากเบอร์
 // kioskPaidOrder = ออกบิลทันทีไม่ผ่านพนักงาน (หน้าลูกค้ารุ่นปัจจุบันไม่ใช้แล้ว ใช้ kioskPaymentRequest) — ห้ามคนนอกยิงตรงแม้ไม่ได้เปิดบังคับล็อกอิน
-const ALWAYS_LOGIN = new Set(['voidBill', 'getVoidableBills', 'kioskPaidOrder', 'staffMemberQuota', 'getMemberMenuToday', 'crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
+const ALWAYS_LOGIN = new Set(['voidBill', 'editBill', 'getVoidableBills', 'kioskPaidOrder', 'staffMemberQuota', 'getMemberMenuToday', 'crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
 
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([
@@ -148,7 +148,7 @@ const HQ_ONLY = new Set([
 ]);
 
 // แอดมิน (รวมผู้จัดการสาขา) — ตั้งค่าของสาขาตัวเอง
-const ADMIN = new Set(['voidBill', 'getVoidableBills', 'getPrintAgentKey', 'crmSyncMenu', 'cancelTaxInvoice', 'deleteTaxCustomer', 'savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
+const ADMIN = new Set(['voidBill', 'editBill', 'getVoidableBills', 'getPrintAgentKey', 'crmSyncMenu', 'cancelTaxInvoice', 'deleteTaxCustomer', 'savePrinters', 'saveMenuBranch', 'getMenuBranch', 'getBOM', 'nextId', 'getSalesReport', 'initSheets']);
 
 // แคชเชียร์ขึ้นไป — หน้าหลังบ้านที่แคชเชียร์เข้าได้
 const BACKOFFICE = new Set(['getDiscountReport', 'getTaxInvoices', 'issueTaxInvoice', 'reissueTaxInvoice', 'getTaxCustomers', 'saveTaxCustomer', 'saveBranchTables', 'stockIn', 'getStock', 'getIngredients']);

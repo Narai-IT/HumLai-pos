@@ -38,6 +38,34 @@ BEGIN
   );
   CREATE UNIQUE INDEX UX_BillVoids_Order ON dbo.BillVoids (OrderNumber);
   CREATE INDEX IX_BillVoids_Crm ON dbo.BillVoids (CrmStatus, CrmNextAttempt);
+END;
+IF OBJECT_ID('dbo.BillEdits', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.BillEdits (
+    RowId          INT IDENTITY(1,1) PRIMARY KEY,
+    OrderNumber    NVARCHAR(60)  NOT NULL,
+    EditNo         INT           NOT NULL,
+    BranchId       NVARCHAR(60)  NULL,
+    OldTotal       DECIMAL(18,2) NULL,
+    NewTotal       DECIMAL(18,2) NULL,
+    DiscountName   NVARCHAR(200) NULL,
+    DiscountAmount DECIMAL(18,2) NULL,
+    BeforeJson     NVARCHAR(MAX) NULL,
+    AfterJson      NVARCHAR(MAX) NULL,
+    Reason         NVARCHAR(300) NOT NULL,
+    EditedBy       NVARCHAR(120) NULL,
+    EditedByUid    NVARCHAR(60)  NULL,
+    EditedAt       NVARCHAR(40)  NOT NULL,
+    CrmStatus      NVARCHAR(20)  NOT NULL DEFAULT 'none',
+    CrmAmount      DECIMAL(18,2) NULL,
+    CrmAttempts    INT           NOT NULL DEFAULT 0,
+    CrmNextAttempt DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+    CrmError       NVARCHAR(500) NULL,
+    PointsReversed INT           NULL,
+    CreatedAt      DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+  CREATE UNIQUE INDEX UX_BillEdits_Order ON dbo.BillEdits (OrderNumber, EditNo);
+  CREATE INDEX IX_BillEdits_Crm ON dbo.BillEdits (CrmStatus, CrmNextAttempt);
 END;`;
 
 let ensured = null;
@@ -51,11 +79,11 @@ export const ensureVoidTable = () => {
   return ensured;
 };
 
-const todayYmd = () => thaiTimeISO().slice(0, 10);
-const text = (v, max) => String(v ?? '').trim().slice(0, max);
-const num = (v) => Number(v) || 0;
-const isCancelled = (s) => String(s || '').toLowerCase() === 'cancelled';
-const crmLabel = {
+export const todayYmd = () => thaiTimeISO().slice(0, 10);
+export const text = (v, max) => String(v ?? '').trim().slice(0, max);
+export const num = (v) => Number(v) || 0;
+export const isCancelled = (s) => String(s || '').toLowerCase() === 'cancelled';
+export const crmLabel = {
   none: 'ไม่มีแต้มที่ต้องหักคืน',
   pending: 'รอส่งหักแต้มคืนให้ระบบสมาชิก',
   sent: 'หักแต้มคืนแล้ว',
@@ -63,11 +91,22 @@ const crmLabel = {
 };
 
 // ชื่อพนักงานจาก token (token เก็บแค่ uid/role/branch)
-async function staffName(user) {
+export async function staffName(user) {
   try {
     const res = await query(`SELECT TOP (1) username FROM dbo.Users WHERE CAST(id AS NVARCHAR(60)) = @id`, { id: String(user.uid) });
     return text(res.recordset[0] && res.recordset[0].username, 120) || String(user.uid);
   } catch { return String(user.uid); }
+}
+
+// บิลที่จ่ายด้วยคูปอง/Voucher ของระบบสมาชิก แก้ไขรายการไม่ได้ (คูปองผูกกับยอดบิลเดิม) → ใช้ยกเลิกบิลแทน
+export function editBlockReason(p) {
+  if (!p) return '';
+  if (String(p.DiscountKind || '') === 'coupon') return 'บิลนี้ใช้คูปองสมาชิก แก้ไขไม่ได้ ใช้ยกเลิกบิลแทน';
+  try {
+    const d = p.splitDetail ? JSON.parse(p.splitDetail) : null;
+    if ((d && Number(d.voucher) > 0) || /voucher/i.test(String(p.paymentMethod || ''))) return 'บิลนี้จ่ายด้วย Voucher แก้ไขไม่ได้ ใช้ยกเลิกบิลแทน';
+  } catch { /* splitDetail ไม่ใช่ JSON */ }
+  return '';
 }
 
 // ── บิลของวันนี้ (เวลาไทย) ทั้งที่ยกเลิกได้และที่ยกเลิกไปแล้ว ──
@@ -79,17 +118,23 @@ export async function getVoidableBills(params = {}) {
   if (branchId) bounds.branchId = branchId;
   const where = `o.OrderNumber IS NOT NULL AND o.TsLocal >= @from AND o.TsLocal <= @to${branchId ? ' AND o.BranchId = @branchId' : ''}`;
 
-  const [orders, pays, invoices, voids, crm] = await Promise.all([
-    query(`SELECT o.OrderNumber, o.[Timestamp], o.CustomerName, o.ItemDetail, o.Price, o.Quantity, o.TotalAmount, o.[Status], o.BranchId
+  const [orders, pays, invoices, voids, crm, edits] = await Promise.all([
+    query(`SELECT o.RowId, o.OrderNumber, o.[Timestamp], o.CustomerName, o.ItemDetail, o.Price, o.Quantity, o.TotalAmount, o.[Status], o.BranchId
              FROM dbo.Orders o WHERE ${where} ORDER BY o.RowId ASC`, bounds),
-    query(`SELECT p.orderNumber, p.paymentMethod, p.tableNo, p.staff, p.grandTotal FROM dbo.PaymentSummary p
-             WHERE p.orderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds),
+    query(`SELECT p.orderNumber, p.paymentMethod, p.tableNo, p.staff, p.grandTotal, p.splitDetail, p.DiscountName, p.DiscountAmount, p.DiscountKind FROM dbo.PaymentSummary p
+             WHERE p.orderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds)
+      .catch(() => query(`SELECT p.orderNumber, p.paymentMethod, p.tableNo, p.staff, p.grandTotal, p.splitDetail FROM dbo.PaymentSummary p
+             WHERE p.orderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds)),
     query(`SELECT orderNumber, invoiceNo FROM dbo.TaxInvoices WHERE ISNULL(cancelled, 0) = 0
              AND orderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds).catch(() => ({ recordset: [] })),
     query(`SELECT * FROM dbo.BillVoids WHERE OrderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds),
     query(`SELECT OrderNumber, MemberId, Points, [Status] FROM dbo.CrmBills
-             WHERE OrderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds).catch(() => ({ recordset: [] }))
+             WHERE OrderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where})`, bounds).catch(() => ({ recordset: [] })),
+    query(`SELECT OrderNumber, EditNo, Reason, EditedBy, EditedAt, OldTotal, NewTotal, DiscountName, CrmStatus FROM dbo.BillEdits
+             WHERE OrderNumber IN (SELECT DISTINCT o.OrderNumber FROM dbo.Orders o WHERE ${where}) ORDER BY EditNo`, bounds)
   ]);
+  const ed = new Map();
+  for (const e of edits.recordset) { if (!ed.has(e.OrderNumber)) ed.set(e.OrderNumber, []); ed.get(e.OrderNumber).push(e); }
 
   const pay = new Map(pays.recordset.map(p => [p.orderNumber, p]));
   const inv = new Map(invoices.recordset.map(i => [i.orderNumber, i.invoiceNo]));
@@ -103,13 +148,16 @@ export async function getVoidableBills(params = {}) {
       const p = pay.get(no);
       b = { orderNumber: no, timestamp: r.Timestamp, customerName: r.CustomerName || '', tableNo: p ? p.tableNo || '' : '',
         total: num(p && p.grandTotal != null ? p.grandTotal : r.TotalAmount), paymentMethod: p ? p.paymentMethod || '' : '',
-        staff: p ? p.staff || '' : '', status: r.Status || '', paid: !!p, cancelled: true, items: [] };
+        staff: p ? p.staff || '' : '', status: r.Status || '', paid: !!p, cancelled: true, items: [],
+        discount: p && num(p.DiscountAmount) > 0 ? { name: p.DiscountName || 'ส่วนลด', amount: num(p.DiscountAmount), kind: p.DiscountKind || 'store' } : null,
+        editBlocked: editBlockReason(p) };
       bills.set(no, b);
     }
     if (!isCancelled(r.Status)) b.cancelled = false;
     if (String(r.Status || '').toLowerCase() === 'completed') b.paid = true;
     const name = String(r.ItemDetail || '');
-    if (name && !name.startsWith('↳')) b.items.push({ name, qty: num(r.Quantity) || 1, price: num(r.Price) });
+    if (name && !name.startsWith('↳')) b.items.push({ line: b.items.length, name, qty: num(r.Quantity) || 1, price: num(r.Price), options: [] });
+    else if (name && b.items.length) b.items[b.items.length - 1].options.push(name.replace(/^↳\s*/, ''));
   }
 
   const out = [];
@@ -123,6 +171,8 @@ export async function getVoidableBills(params = {}) {
       memberId: c && c.MemberId ? c.MemberId : '',
       points: c && c.Points != null ? c.Points : null,
       taxInvoiceNo: inv.get(b.orderNumber) || '',
+      edits: (ed.get(b.orderNumber) || []).map(e => ({ no: e.EditNo, reason: e.Reason, by: e.EditedBy || '', at: e.EditedAt, oldTotal: num(e.OldTotal), newTotal: num(e.NewTotal),
+        discountName: e.DiscountName || '', crmStatus: e.CrmStatus, crmLabel: crmLabel[e.CrmStatus] || e.CrmStatus })),
       void: v ? { reason: v.Reason, by: v.VoidedBy || '', at: v.VoidedAt, crmStatus: v.CrmStatus, crmLabel: crmLabel[v.CrmStatus] || v.CrmStatus,
         crmError: v.CrmError || '', pointsReversed: v.PointsReversed } : null
     });

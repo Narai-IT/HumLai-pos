@@ -298,15 +298,10 @@ async function sendRow(row, timeoutMs) {
   if (r.ok) {
     const d = r.data;
     const upd = await query(`UPDATE dbo.CrmBills SET [Status] = 'sent', SentAt = SYSUTCDATETIME(), Attempts = Attempts + 1, Points = @pts, Balance = @bal, LastError = @note
-                               WHERE RowId = @id AND [Status] = 'pending'`,
-      { id: row.RowId, pts: d.points ?? null, bal: d.balance ?? null, note: r.note || null });
-    // บิลถูกยกเลิกระหว่างกำลังส่ง (CrmBills เป็น cancelled ไปแล้ว) แต่ CRM รับบิลไปแล้ว → ต้องส่งคืนเงินตามไป
-    if (!upd.rowsAffected[0]) {
-      await query(`UPDATE dbo.CrmBills SET [Status] = 'sent', SentAt = SYSUTCDATETIME(), Points = @pts, Balance = @bal WHERE RowId = @id`,
-        { id: row.RowId, pts: d.points ?? null, bal: d.balance ?? null });
-      await query(`UPDATE dbo.BillVoids SET CrmStatus = 'pending', CrmNextAttempt = DATEADD(SECOND, -1, SYSUTCDATETIME()) WHERE OrderNumber = @o AND CrmStatus = 'none'`,
-        { o: row.OrderNumber }).catch(() => {});
-    }
+                               WHERE RowId = @id AND [Status] = 'pending' AND PayloadJson = @pj`,
+      { id: row.RowId, pts: d.points ?? null, bal: d.balance ?? null, note: r.note || null, pj: row.PayloadJson });
+    // บิลถูกยกเลิก/แก้ไขระหว่างกำลังส่ง แต่ CRM รับบิลแบบเดิมไปแล้ว → ต้องส่งคืนเงินตามไป
+    if (!upd.rowsAffected[0]) await afterStaleSend(row, d);
     return { sent: true, points: d.points ?? 0, balance: d.balance ?? null, duplicate: !!d.duplicate };
   }
   const attempts = row.Attempts + 1;
@@ -365,57 +360,90 @@ export async function crmStatus() {
   return { ...out, queue: Object.fromEntries(res.recordset.map((r) => [r.s, r.n])), notSent: failed.recordset };
 }
 
-// ── ยกเลิกบิลที่ถึง CRM แล้ว: ขอคืนเงินทั้งบิล (หักแต้มคืน คืนคูปอง/Voucher) ──
-// คิวอยู่ในตาราง BillVoids (api/_lib/billVoid.js) · CrmStatus: none / pending / sent / failed
-// CRM กันซ้ำด้วยเลขคืนเงิน VOID-<เลขบิล> จึงส่งซ้ำได้ไม่หักแต้มซ้ำ
-async function sendVoidRow(v, timeoutMs) {
+// CRM รับบิลแบบเดิม ขณะที่ในเครื่องบิลถูกยกเลิก/แก้ไขไปแล้ว → ปิดแถวคิวเป็น sent แล้วตั้งคืนเงินตามไป
+async function afterStaleSend(row, d) {
+  const cur = (await query(`SELECT [Status], PayloadJson FROM dbo.CrmBills WHERE RowId = @id`, { id: row.RowId })).recordset[0];
+  await query(`UPDATE dbo.CrmBills SET [Status] = 'sent', SentAt = SYSUTCDATETIME(), Points = @pts, Balance = @bal WHERE RowId = @id`,
+    { id: row.RowId, pts: d.points ?? null, bal: d.balance ?? null });
+  if (!cur) return;
+  if (cur.Status === 'cancelled') {
+    await query(`UPDATE dbo.BillVoids SET CrmStatus = 'pending', CrmNextAttempt = DATEADD(SECOND, -1, SYSUTCDATETIME()) WHERE OrderNumber = @o AND CrmStatus = 'none'`,
+      { o: row.OrderNumber }).catch(() => {});
+    return;
+  }
+  // แก้ไขบิลระหว่างส่ง: CRM ได้ยอดเดิม ในเครื่องเป็นยอดใหม่ → คืนส่วนต่างผ่านการแก้ไขครั้งล่าสุด
+  let sentTotal = 0; let nowTotal = 0;
+  try { sentTotal = Number(JSON.parse(row.PayloadJson).paidTotal) || 0; nowTotal = Number(JSON.parse(cur.PayloadJson).paidTotal) || 0; } catch { return; }
+  const diff = Math.round((sentTotal - nowTotal) * 100) / 100;
+  if (diff > 0.005) {
+    await query(`UPDATE dbo.BillEdits SET CrmStatus = 'pending', CrmAmount = @a, CrmNextAttempt = DATEADD(SECOND, -1, SYSUTCDATETIME())
+                 WHERE RowId = (SELECT MAX(RowId) FROM dbo.BillEdits WHERE OrderNumber = @o) AND CrmStatus = 'none'`, { o: row.OrderNumber, a: diff }).catch(() => {});
+  }
+}
+
+// ── ยกเลิก/แก้ไขบิลที่ถึง CRM แล้ว: ขอคืนเงิน (หักแต้มคืน · ยกเลิกทั้งบิลคืนคูปอง/Voucher ด้วย) ──
+// คิวอยู่ในตาราง BillVoids (ทั้งบิล) และ BillEdits (คืนส่วนต่าง) · CrmStatus: none / pending / sent / failed
+// CRM กันซ้ำด้วยเลขคืนเงิน VOID-<เลขบิล> / EDIT-<เลขบิล>-<ครั้งที่> จึงส่งซ้ำได้ไม่หักแต้มซ้ำ
+const ADJUST = {
+  BillVoids: (v) => ({ posRefundId: 'VOID-' + v.OrderNumber, by: v.VoidedBy }),
+  BillEdits: (v) => ({ posRefundId: 'EDIT-' + v.OrderNumber + '-' + v.EditNo, amount: Number(v.CrmAmount) || 0, by: v.EditedBy })
+};
+async function sendAdjustRow(table, v, timeoutMs) {
   const bill = (await query(`SELECT TOP (1) BranchId FROM dbo.CrmBills WHERE OrderNumber = @o`, { o: v.OrderNumber })).recordset[0];
   const branchId = (bill && bill.BranchId) || v.BranchId;
-  const r = await call('/api/pos/refunds', { posBillId: v.OrderNumber, posRefundId: 'VOID-' + v.OrderNumber, reason: v.Reason, staffId: v.VoidedBy || undefined }, branchId, timeoutMs);
+  const a = ADJUST[table](v);
+  const body = { posBillId: v.OrderNumber, posRefundId: a.posRefundId, reason: v.Reason, staffId: a.by || undefined };
+  if (a.amount !== undefined) body.amount = a.amount;
+  const r = await call('/api/pos/refunds', body, branchId, timeoutMs);
   // ไม่มีบิลใน CRM / CRM คืนเงินบิลนี้ไปแล้ว = ไม่มีอะไรต้องทำต่อ
   const nothingLeft = !r.ok && (r.code === 'not_found' || r.code === 'already_refunded');
   if (r.ok || nothingLeft) {
     const pts = r.ok ? (r.data.pointsReversed ?? 0) : 0;
-    await query(`UPDATE dbo.BillVoids SET CrmStatus = 'sent', CrmAttempts = CrmAttempts + 1, PointsReversed = @p, CrmError = @e WHERE RowId = @id`,
+    await query(`UPDATE dbo.${table} SET CrmStatus = 'sent', CrmAttempts = CrmAttempts + 1, PointsReversed = @p, CrmError = @e WHERE RowId = @id`,
       { id: v.RowId, p: pts, e: nothingLeft ? String(r.error || '').slice(0, 500) : null });
     return { status: 'sent', pointsReversed: pts };
   }
   const attempts = v.CrmAttempts + 1;
   const giveUp = !r.retry || attempts >= MAX_ATTEMPTS;
-  await query(`UPDATE dbo.BillVoids SET CrmStatus = @st, CrmAttempts = @a, CrmError = @e, CrmNextAttempt = DATEADD(SECOND, @wait, SYSUTCDATETIME()) WHERE RowId = @id`,
+  await query(`UPDATE dbo.${table} SET CrmStatus = @st, CrmAttempts = @a, CrmError = @e, CrmNextAttempt = DATEADD(SECOND, @wait, SYSUTCDATETIME()) WHERE RowId = @id`,
     { id: v.RowId, st: giveUp ? 'failed' : 'pending', a: attempts, e: String(r.error || '').slice(0, 500), wait: backoffSeconds(attempts) });
   return { status: giveUp ? 'failed' : 'pending', error: r.error };
 }
 
-let voidTableReady = false;
-async function hasVoidTable() {
-  if (voidTableReady) return true;
-  try { voidTableReady = !!(await query(`SELECT OBJECT_ID('dbo.BillVoids', 'U') AS id`)).recordset[0].id; } catch { /* ยังไม่มี */ }
-  return voidTableReady;
+const adjustReady = {};
+async function hasAdjustTable(table) {
+  if (adjustReady[table]) return true;
+  try { adjustReady[table] = !!(await query(`SELECT OBJECT_ID('dbo.${table}', 'U') AS id`)).recordset[0].id; } catch { /* ยังไม่มี */ }
+  return !!adjustReady[table];
 }
 
-// ส่งทันทีตอนกดยกเลิก (รอไม่เกิน 3.5 วินาที) · ไม่สำเร็จ = อยู่ในคิวส่งซ้ำ
-export async function sendVoidNow(orderNumber) {
+// ส่งทันทีตอนกดยกเลิก/แก้ไข (รอไม่เกิน 3.5 วินาที) · ไม่สำเร็จ = อยู่ในคิวส่งซ้ำ
+async function sendAdjustNow(table, where, params) {
   try {
     if (!base()) return null;
-    const v = (await query(`SELECT * FROM dbo.BillVoids WHERE OrderNumber = @o AND CrmStatus = 'pending'`, { o: orderNumber })).recordset[0];
+    const v = (await query(`SELECT * FROM dbo.${table} WHERE ${where} AND CrmStatus = 'pending'`, params)).recordset[0];
     if (!v) return null;
     if (Date.now() < downUntil) return { status: 'pending', error: 'ระบบสมาชิกไม่ตอบ จะส่งหักแต้มคืนให้อัตโนมัติภายหลัง' };
-    return await sendVoidRow(v, 3500);
+    return await sendAdjustRow(table, v, 3500);
   } catch (err) {
-    console.error('[crm] sendVoidNow', err);
+    console.error('[crm] sendAdjustNow', err);
     return { status: 'pending', error: String(err.message || err) };
   }
 }
+export const sendVoidNow = (orderNumber) => sendAdjustNow('BillVoids', 'OrderNumber = @o', { o: orderNumber });
+export const sendEditNow = (orderNumber, editNo) => sendAdjustNow('BillEdits', 'OrderNumber = @o AND EditNo = @e', { o: orderNumber, e: Number(editNo) });
 
 async function flushVoids(limit) {
-  if (!(await hasVoidTable())) return 0;
   let n = 0;
-  const res = await query(`SELECT TOP (${Math.max(1, Math.min(100, limit))}) * FROM dbo.BillVoids WHERE CrmStatus = 'pending' AND CrmNextAttempt <= SYSUTCDATETIME() ORDER BY RowId`);
-  for (const v of res.recordset) {
-    const r = await sendVoidRow(v);
-    if (r.status === 'sent') n++;
-    else if (/ต่อระบบสมาชิกไม่ได้|ไม่ตอบ/.test(r.error || '')) break;
+  // ยกเลิกทั้งบิลก่อน แล้วค่อยคืนส่วนต่างจากการแก้ไข (ถ้าบิลถูกยกเลิกไปแล้ว CRM ตอบ already_refunded = จบ)
+  for (const table of ['BillVoids', 'BillEdits']) {
+    if (!(await hasAdjustTable(table))) continue;
+    const res = await query(`SELECT TOP (${Math.max(1, Math.min(100, limit))}) * FROM dbo.${table} WHERE CrmStatus = 'pending' AND CrmNextAttempt <= SYSUTCDATETIME() ORDER BY RowId`);
+    for (const v of res.recordset) {
+      const r = await sendAdjustRow(table, v);
+      if (r.status === 'sent') n++;
+      else if (/ต่อระบบสมาชิกไม่ได้|ไม่ตอบ/.test(r.error || '')) return n;
+    }
   }
   return n;
 }

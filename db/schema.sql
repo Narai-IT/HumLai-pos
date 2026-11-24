@@ -776,3 +776,40 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_BillVoids_Crm' AND object_id = OBJECT_ID('dbo.BillVoids'))
   CREATE INDEX IX_BillVoids_Crm ON dbo.BillVoids (CrmStatus, CrmNextAttempt);
 GO
+
+-- ─────────────────────────────────────────
+-- แก้ไขบิล (เลขบิลเดิม · หน้าขาย > เพิ่มเติม > ยกเลิก/แก้ไขบิล · api/_lib/billEdit.js)
+-- ลบ/ลดจำนวนรายการ + ส่วนลดจากหลังบ้าน → ยอดใหม่ · แก้ได้หลายครั้ง (EditNo) · Before/AfterJson = รายการก่อน/หลังแก้
+-- CrmStatus: none / pending (รอส่งคืนส่วนต่าง CrmAmount ให้ CRM) / sent / failed
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.BillEdits', 'U') IS NULL
+CREATE TABLE dbo.BillEdits (
+  RowId          INT IDENTITY(1,1) PRIMARY KEY,
+  OrderNumber    NVARCHAR(60)  NOT NULL,
+  EditNo         INT           NOT NULL,
+  BranchId       NVARCHAR(60)  NULL,
+  OldTotal       DECIMAL(18,2) NULL,
+  NewTotal       DECIMAL(18,2) NULL,
+  DiscountName   NVARCHAR(200) NULL,
+  DiscountAmount DECIMAL(18,2) NULL,
+  BeforeJson     NVARCHAR(MAX) NULL,
+  AfterJson      NVARCHAR(MAX) NULL,
+  Reason         NVARCHAR(300) NOT NULL,
+  EditedBy       NVARCHAR(120) NULL,
+  EditedByUid    NVARCHAR(60)  NULL,
+  EditedAt       NVARCHAR(40)  NOT NULL,
+  CrmStatus      NVARCHAR(20)  NOT NULL DEFAULT 'none',
+  CrmAmount      DECIMAL(18,2) NULL,
+  CrmAttempts    INT           NOT NULL DEFAULT 0,
+  CrmNextAttempt DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  CrmError       NVARCHAR(500) NULL,
+  PointsReversed INT           NULL,
+  CreatedAt      DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_BillEdits_Order' AND object_id = OBJECT_ID('dbo.BillEdits'))
+  CREATE UNIQUE INDEX UX_BillEdits_Order ON dbo.BillEdits (OrderNumber, EditNo);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_BillEdits_Crm' AND object_id = OBJECT_ID('dbo.BillEdits'))
+  CREATE INDEX IX_BillEdits_Crm ON dbo.BillEdits (CrmStatus, CrmNextAttempt);
+GO

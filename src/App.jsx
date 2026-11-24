@@ -1174,13 +1174,14 @@ function App() {
       if (qrProblem) {
         setSaveAlert({ type: 'warning', msg: `🧾 พิมพ์ใบแจ้งยอดแล้ว แต่ไม่มี QR สแกนจ่าย — ${qrProblem}` });
         setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'warning' ? null : cur)), 12000);
-        return;
+        return { printed: true, qrProblem };
       }
       setSaveAlert({ type: 'success', msg: '🧾 พิมพ์ใบแจ้งยอดให้ลูกค้าแล้ว' });
       setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
-    } else {
-      setSaveAlert({ type: 'error', msg: `⚠️ พิมพ์ใบแจ้งยอดไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
+      return { printed: true };
     }
+    setSaveAlert({ type: 'error', msg: `⚠️ พิมพ์ใบแจ้งยอดไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
+    return { printed: false, error: res.error || 'ไม่ทราบสาเหตุ' };
   };
 
   // =============================================
@@ -1891,7 +1892,7 @@ function App() {
 
       {showVoidBillPage && (
         <Suspense fallback={null}>
-          <VoidBillPage branchId={branchKey} onClose={() => setShowVoidBillPage(false)} />
+          <VoidBillPage branchId={branchKey} discounts={posDiscounts} settings={checkoutSettings} menu={allMenu} onPrintPreBill={handlePrintPreBill} onClose={() => setShowVoidBillPage(false)} />
         </Suspense>
       )}
 

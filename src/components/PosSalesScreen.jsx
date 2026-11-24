@@ -518,7 +518,7 @@ const PosSalesScreen = ({
                   <button onClick={() => { setMoreOpen(false); onOpenTaxInvoice(); }}>🧾 {t('ใบกำกับภาษี', 'Tax invoice')}</button>
                 )}
                 {isAdmin && onOpenVoidBill && (
-                  <button onClick={() => { setMoreOpen(false); onOpenVoidBill(); }}>🚫 {t('ยกเลิกบิล (วันนี้)', 'Void bill (today)')}</button>
+                  <button onClick={() => { setMoreOpen(false); onOpenVoidBill(); }}>🚫 {t('ยกเลิก/แก้ไขบิล (วันนี้)', 'Void / edit bill (today)')}</button>
                 )}
                 <button onClick={() => { setMoreOpen(false); onOpenWaste(); }}>🗑️ {t('บันทึกการทิ้ง', 'Waste')}</button>
                 {onOpenPrep && <button onClick={() => { setMoreOpen(false); onOpenPrep(); }}>🧑‍🍳 {t('บันทึกการเตรียม', 'Prep')}</button>}

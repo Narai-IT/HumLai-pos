@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, RefreshCw, Search, Ban, AlertTriangle } from 'lucide-react';
+import { X, RefreshCw, Search, Ban, AlertTriangle, Pencil, Trash2, Minus, Plus, RotateCcw, Printer } from 'lucide-react';
 import { API_URL } from '../utils/api';
+import { menuCategoryLookup, discountAmount as calcDiscount } from '../utils/discount';
 
 // ── หน้ายกเลิกบิลที่ชำระแล้ว (หน้าขาย > เพิ่มเติม > ยกเลิกบิล) ──
 // เฉพาะบิลของวันนี้ · ต้องใส่หมายเหตุ · ใช้ได้เฉพาะผู้จัดการ/แอดมิน (เซิร์ฟเวอร์ตรวจซ้ำ)
@@ -8,6 +9,7 @@ import { API_URL } from '../utils/api';
 // เงินลูกค้า: พนักงานคืนเองที่ร้าน (โอนคืน/เงินสด)
 
 const QUICK_REASONS = ['ลูกค้ายกเลิก', 'คิดเงินผิด', 'สั่งผิดรายการ', 'ปิดบิลผิดโต๊ะ', 'ทดสอบระบบ'];
+const EDIT_REASONS = ['ลูกค้าขอยกเลิกบางรายการ', 'คีย์รายการผิด', 'ของหมด', 'ให้ส่วนลดเพิ่ม'];
 
 const baht = (n) => (Number(n) || 0).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const timeOf = (ts) => {
@@ -26,7 +28,7 @@ const card = { border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem 
 const badge = (c, bg) => ({ padding: '0.12rem 0.5rem', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, color: c, background: bg, whiteSpace: 'nowrap' });
 const btn = (bg, c = '#fff', border = bg) => ({ padding: '0.55rem 0.95rem', borderRadius: 10, border: `1.5px solid ${border}`, background: bg, color: c, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.88rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' });
 
-export default function VoidBillPage({ onClose, branchId = '' }) {
+export default function VoidBillPage({ onClose, branchId = '', discounts = [], settings = {}, menu = [], onPrintPreBill }) {
   const [tab, setTab] = useState('open');
   const [day, setDay] = useState('');
   const [bills, setBills] = useState([]);
@@ -38,6 +40,7 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
   const [done, setDone] = useState(null);          // ผลการยกเลิกล่าสุด
+  const [editing, setEditing] = useState(null);    // บิลที่กำลังแก้ไข (หน้าตัวอย่าง)
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -56,6 +59,27 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
   const open = bills.filter(b => !b.cancelled && match(b));
   const voided = bills.filter(b => b.cancelled && match(b));
   const shown = tab === 'open' ? open : voided;
+
+  // พิมพ์ใบแจ้งยอด (ยอดปัจจุบันของบิล + QR) ซ้ำ — ใช้หลังแก้ไขบิลแล้วพิมพ์ไม่ออก หรือลูกค้าทำใบหาย
+  const [printing, setPrinting] = useState('');
+  const printStatement = async (b) => {
+    if (!onPrintPreBill) return;
+    setPrinting(b.orderNumber);
+    const summary = [];
+    if (b.edits && b.edits.length) summary.push({ label: 'แก้ไขบิล', value: `ครั้งที่ ${b.edits.length} (แทนใบแจ้งยอดเดิม)` });
+    if (b.discount) {
+      summary.push({ label: 'ยอดอาหาร', value: money2(b.items.reduce((t, i) => t + (Number(i.price) || 0), 0)) });
+      summary.push({ label: `ส่วนลด ${b.discount.name}`, value: `-${money2(b.discount.amount)}` });
+    }
+    try {
+      await onPrintPreBill({
+        orderNumber: b.orderNumber,
+        customerDetails: { name: b.tableNo ? `โต๊ะ ${b.tableNo}` : '' },
+        items: b.items.map(i => ({ isFlattened: true, name: i.qty > 1 ? `${i.name} (x${i.qty})` : i.name, amount: Number(i.price) || 0, subItems: i.options || [] })),
+        summary, total: money2(b.total), totalAmount: Number(b.total) || 0
+      });
+    } finally { setPrinting(''); }
+  };
 
   const startVoid = (b) => { setTarget(b); setReason(''); setFormError(''); setDone(null); };
   const confirmVoid = async () => {
@@ -79,7 +103,7 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <Ban size={22} color="#dc2626" />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '1.15rem', fontWeight: 800 }}>ยกเลิกบิลที่ชำระแล้ว</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800 }}>ยกเลิก / แก้ไขบิลที่ชำระแล้ว</div>
             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>เฉพาะบิลของวันนี้{day ? ` · ${thaiDay(day)}` : ''}</div>
           </div>
           <button onClick={load} title="โหลดใหม่" style={{ ...btn('#fff', '#334155', '#cbd5e1'), padding: '0.45rem 0.6rem' }}><RefreshCw size={16} className={loading ? 'spin' : ''} /></button>
@@ -88,9 +112,14 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
 
         {done && (
           <div style={{ marginTop: '0.8rem', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#166534', borderRadius: 10, padding: '0.65rem 0.8rem', fontSize: '0.86rem', lineHeight: 1.55 }}>
-            <b>ยกเลิกบิล {done.orderNumber} แล้ว</b> · {done.crmLabel}{done.pointsReversed ? ` (${done.pointsReversed} แต้ม)` : ''}
+            {done.edited ? <>
+              <b>แก้ไขบิล {done.orderNumber} ครั้งที่ {done.editNo} แล้ว</b> · ยอดใหม่ ฿{baht(done.newTotal)}{done.crmLabel ? ` · ${done.crmLabel}` : ''}{done.pointsReversed ? ` (${done.pointsReversed} แต้ม)` : ''}
+              <div style={{ color: done.printed ? undefined : '#b91c1c', fontWeight: done.printed ? 400 : 700 }}>{done.printed ? 'พิมพ์ใบแจ้งยอดใหม่พร้อม QR ยอดใหม่แล้ว' : `พิมพ์ใบแจ้งยอดใหม่ไม่สำเร็จ${done.printError ? ` (${done.printError})` : ''} — บิลแก้ไขแล้ว พิมพ์ใหม่ได้ด้วยปุ่มเครื่องพิมพ์ข้างบิล`}</div>
+            </> : <>
+              <b>ยกเลิกบิล {done.orderNumber} แล้ว</b> · {done.crmLabel}{done.pointsReversed ? ` (${done.pointsReversed} แต้ม)` : ''}
+              <div>อย่าลืมคืนเงิน ฿{baht(done.total)} ให้ลูกค้า (โอนคืน/เงินสด)</div>
+            </>}
             {done.crmError ? <div style={{ color: '#b45309' }}>{done.crmError}</div> : null}
-            <div>อย่าลืมคืนเงิน ฿{baht(done.total)} ให้ลูกค้า (โอนคืน/เงินสด)</div>
           </div>
         )}
 
@@ -124,6 +153,11 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
                 <div style={{ color: '#475569', fontSize: '0.82rem', marginTop: '0.2rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {b.items.map(i => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ''}`).join(', ') || '—'}
                 </div>
+                {b.edits && b.edits.length > 0 && (
+                  <div style={{ fontSize: '0.78rem', marginTop: '0.25rem', color: '#0369a1' }}>
+                    {b.edits.map(e => <div key={e.no}>แก้ไขครั้งที่ {e.no} · {timeOf(e.at)} โดย {e.by || '—'} · ฿{baht(e.oldTotal)} → ฿{baht(e.newTotal)} · {e.reason}</div>)}
+                  </div>
+                )}
                 {b.cancelled && (
                   <div style={{ fontSize: '0.8rem', marginTop: '0.3rem', color: '#991b1b' }}>
                     {b.void ? <>ยกเลิก {timeOf(b.void.at)} โดย {b.void.by || '—'} · หมายเหตุ: <b>{b.void.reason}</b>
@@ -133,6 +167,19 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
                 )}
               </div>
               <div style={{ fontSize: '1.1rem', fontWeight: 900, color: b.cancelled ? '#94a3b8' : '#0f172a', minWidth: 90, textAlign: 'right' }}>฿{baht(b.total)}</div>
+              {!b.cancelled && onPrintPreBill && (
+                <button onClick={() => printStatement(b)} disabled={printing === b.orderNumber} title="พิมพ์ใบแจ้งยอด (QR ยอดปัจจุบัน)"
+                  style={{ ...btn('#fff', '#334155', '#cbd5e1'), padding: '0.55rem 0.65rem', opacity: printing === b.orderNumber ? 0.5 : 1 }}>
+                  <Printer size={15} />
+                </button>
+              )}
+              {!b.cancelled && (
+                <button onClick={() => setEditing(b)} disabled={!!b.taxInvoiceNo}
+                  title={b.taxInvoiceNo ? 'ยกเลิกใบกำกับภาษีก่อน' : (b.editBlocked || '')}
+                  style={{ ...btn('#fff', b.taxInvoiceNo || b.editBlocked ? '#94a3b8' : '#0369a1', b.taxInvoiceNo || b.editBlocked ? '#cbd5e1' : '#0369a1'), cursor: b.taxInvoiceNo ? 'not-allowed' : 'pointer' }}>
+                  <Pencil size={15} /> แก้ไข
+                </button>
+              )}
               {!b.cancelled && (
                 <button onClick={() => startVoid(b)} disabled={!!b.taxInvoiceNo}
                   title={b.taxInvoiceNo ? 'ยกเลิกใบกำกับภาษีก่อน' : ''}
@@ -144,6 +191,9 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
           ))}
         </div>
       </div>
+
+      {editing && <EditBillModal bill={editing} discounts={discounts} settings={settings} menu={menu} branchId={branchId} onPrintPreBill={onPrintPreBill}
+        onClose={() => setEditing(null)} onDone={(r) => { setEditing(null); setDone({ ...r, edited: true, total: r.newTotal }); load(); }} />}
 
       {target && (
         <div style={{ ...overlay, zIndex: 950, alignItems: 'center' }} onClick={(e) => { e.stopPropagation(); if (!busy) setTarget(null); }}>
@@ -189,6 +239,174 @@ export default function VoidBillPage({ onClose, branchId = '' }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── แก้ไขบิล: ใช้เลขบิลเดิม · ลบ/ลดจำนวนรายการ · ใส่ส่วนลด (ที่ตั้งในหลังบ้าน) · พิมพ์ใบแจ้งยอดใหม่พร้อม QR ยอดใหม่ ──
+// คิดเงินแบบเดียวกับหน้าชำระเงิน: ส่วนลด (เฉพาะหมวดได้) → เซอร์วิสชาร์จ → VAT
+const calcCharges = (subtotal, settings = {}, discountIn = 0) => {
+  const discountAmount = Math.min(Math.max(0, Number(discountIn) || 0), subtotal);
+  const afterDiscount = subtotal - discountAmount;
+  const scRate = settings?.serviceCharge?.enabled ? (settings.serviceCharge.rate || 0) : 0;
+  const vatRate = settings?.vat?.enabled ? (settings.vat.rate || 0) : 0;
+  const sc = Math.round(afterDiscount * scRate) / 100;
+  const vat = Math.round((afterDiscount + sc) * vatRate) / 100;
+  return { discountAmount, sc, vat, grand: Math.round((afterDiscount + sc + vat) * 100) / 100 };
+};
+const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function EditBillModal({ bill, discounts = [], settings = {}, menu = [], branchId = '', onPrintPreBill, onClose, onDone }) {
+  const [rows, setRows] = useState(() => bill.items.map(i => ({ line: i.line, name: i.name, options: i.options || [], unit: (Number(i.price) || 0) / (Number(i.qty) || 1), orig: Number(i.qty) || 1, qty: Number(i.qty) || 1 })));
+  const [discountId, setDiscountId] = useState(() => {
+    const cur = bill.discount && bill.discount.kind !== 'coupon' ? discounts.find(d => d.name === bill.discount.name) : null;
+    return cur ? String(cur.id) : '';
+  });
+  const [reason, setReason] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const categoriesOf = React.useMemo(() => menuCategoryLookup(menu), [menu]);
+  const setQty = (line, q) => setRows(rs => rs.map(r => (r.line === line ? { ...r, qty: Math.max(0, Math.min(r.orig, q)) } : r)));
+  const subtotal = Math.round(rows.reduce((s, r) => s + r.unit * r.qty, 0) * 100) / 100;
+  const disc = discounts.find(d => String(d.id) === String(discountId)) || null;
+  const lines = rows.filter(r => r.qty > 0).map(r => ({ name: r.name, amount: r.unit * r.qty }));
+  const { discountAmount: off, sc, vat, grand: newTotal } = calcCharges(subtotal, settings, calcDiscount(disc, lines, categoriesOf));
+  const itemsChanged = rows.some(r => r.qty !== r.orig);
+  const changed = itemsChanged || Math.abs(newTotal - Number(bill.total)) > 0.005 || (disc ? disc.name : null) !== (bill.discount ? bill.discount.name : null);
+  const allGone = rows.every(r => r.qty === 0);
+  const diff = Number(bill.total) - newTotal;
+  const blocked = bill.editBlocked || '';
+
+  const submit = async () => {
+    if (!changed) { setErr('ยังไม่ได้แก้ไขรายการหรือส่วนลด'); return; }
+    if (allGone) { setErr('ลบทุกรายการไม่ได้ ใช้ปุ่ม "ยกเลิกบิล" แทน'); return; }
+    if (newTotal > Number(bill.total) + 0.005) { setErr('แก้ไขบิลได้แค่ลดยอด'); return; }
+    if (reason.trim().length < 3) { setErr('กรุณาใส่หมายเหตุว่าแก้ไขเพราะอะไร'); return; }
+    setBusy(true); setErr('');
+    try {
+      const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({
+        action: 'editBill', orderNumber: bill.orderNumber, branchId, reason: reason.trim(),
+        lines: rows.map(r => ({ line: r.line, qty: r.qty })),
+        discountId: disc ? String(disc.id) : '', discountAmount: off, serviceCharge: sc, vat, newTotal
+      }) });
+      const json = await res.json().catch(() => null);
+      if (!json || json.success !== true) throw new Error((json && json.error) || 'แก้ไขบิลไม่สำเร็จ');
+      // ใบแจ้งยอดใหม่ เลขบิลเดิม + QR ยอดใหม่ (ใช้ตัวพิมพ์ใบแจ้งยอดเดียวกับหน้าขาย)
+      const summary = [{ label: 'แก้ไขบิล', value: `ครั้งที่ ${json.editNo} (แทนใบแจ้งยอดเดิม)` }];
+      if (json.discount || json.serviceCharge > 0 || json.vat > 0) summary.push({ label: 'ยอดอาหาร', value: money2(json.subtotal) });
+      if (json.discount) summary.push({ label: `ส่วนลด ${json.discount.name}`, value: `-${money2(json.discount.amount)}` });
+      if (json.serviceCharge > 0) summary.push({ label: `เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, value: money2(json.serviceCharge) });
+      if (json.vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(json.vat) });
+      let printed = false; let printError = 'ไม่มีเครื่องพิมพ์ใบแจ้งยอด';
+      if (onPrintPreBill) {
+        try {
+          const pr = await onPrintPreBill({
+            orderNumber: bill.orderNumber,
+            customerDetails: { name: bill.tableNo ? `โต๊ะ ${bill.tableNo}` : '' },
+            items: json.items.map(i => ({ isFlattened: true, name: i.qty > 1 ? `${i.name} (x${i.qty})` : i.name, amount: i.price, subItems: i.options || [] })),
+            summary,
+            total: money2(json.newTotal),
+            totalAmount: json.newTotal
+          });
+          printed = !!(pr && pr.printed);
+          printError = (pr && pr.error) || '';
+        } catch (e) { printError = e.message || String(e); }
+      }
+      onDone({ ...json, printed, printError });
+    } catch (e) { setErr(e.message); }
+    setBusy(false);
+  };
+  const chip = (on) => ({ padding: '0.35rem 0.7rem', borderRadius: 999, border: `1.5px solid ${on ? '#0369a1' : '#cbd5e1'}`, background: on ? '#e0f2fe' : '#fff', color: on ? '#0369a1' : '#334155', fontWeight: on ? 800 : 500, fontFamily: 'inherit', fontSize: '0.82rem', cursor: 'pointer' });
+  const line = (k, v, style = {}) => <div style={{ display: 'flex', justifyContent: 'space-between', ...style }}><span>{k}</span><span>{v}</span></div>;
+  return (
+    <div style={{ ...overlay, zIndex: 950, alignItems: 'center' }} onClick={(e) => { e.stopPropagation(); if (!busy) onClose(); }}>
+      <div style={{ ...panel, maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.1rem', fontWeight: 800 }}>
+          <Pencil size={20} color="#0369a1" /> แก้ไขบิล {bill.orderNumber}
+        </div>
+        {blocked ? (
+          <>
+            <div style={{ marginTop: '0.75rem', background: '#fef2f2', border: '1px solid #fecaca', color: '#991b1b', borderRadius: 10, padding: '0.65rem 0.8rem', fontSize: '0.88rem' }}>{blocked}</div>
+            <button onClick={onClose} style={{ ...btn('#fff', '#334155', '#cbd5e1'), width: '100%', justifyContent: 'center', marginTop: '0.9rem' }}>ปิด</button>
+          </>
+        ) : (<>
+        <div style={{ marginTop: '0.6rem', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', borderRadius: 10, padding: '0.55rem 0.75rem', fontSize: '0.82rem', lineHeight: 1.55 }}>
+          ใช้<b>เลขบิลเดิม {bill.orderNumber}</b> · ลบรายการหรือใส่ส่วนลดได้ · กดบันทึกแล้ว<b>พิมพ์ใบแจ้งยอดใหม่พร้อม QR ยอดใหม่</b>
+          {bill.edits && bill.edits.length ? <div>แก้ไขไปแล้ว {bill.edits.length} ครั้ง</div> : null}
+        </div>
+
+        <div style={{ marginTop: '0.75rem', border: '1px solid #e2e8f0', borderRadius: 12, overflow: 'hidden' }}>
+          {rows.map(r => {
+            const gone = r.qty === 0;
+            return (
+              <div key={r.line} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.55rem 0.7rem', borderBottom: '1px solid #f1f5f9', background: gone ? '#fef2f2' : '#fff' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.92rem', textDecoration: gone ? 'line-through' : 'none', color: gone ? '#b91c1c' : '#0f172a' }}>{r.name}</div>
+                  {r.options.length > 0 && <div style={{ fontSize: '0.75rem', color: '#475569' }}>↳ {r.options.join(', ')}</div>}
+                  <div style={{ fontSize: '0.75rem', color: '#64748b' }}>฿{baht(r.unit)} / ชิ้น{r.qty !== r.orig && !gone ? ` · เดิม ${r.orig}` : ''}{gone ? ' · ลบออก' : ''}</div>
+                </div>
+                {gone ? (
+                  <button onClick={() => setQty(r.line, r.orig)} style={{ ...btn('#fff', '#334155', '#cbd5e1'), padding: '0.35rem 0.6rem', fontSize: '0.8rem' }}><RotateCcw size={14} /> คืนรายการ</button>
+                ) : (
+                  <>
+                    {r.orig > 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                        <button onClick={() => setQty(r.line, r.qty - 1)} style={{ ...btn('#fff', '#334155', '#cbd5e1'), padding: '0.3rem' }}><Minus size={14} /></button>
+                        <b style={{ minWidth: 22, textAlign: 'center' }}>{r.qty}</b>
+                        <button onClick={() => setQty(r.line, r.qty + 1)} disabled={r.qty >= r.orig} style={{ ...btn('#fff', r.qty >= r.orig ? '#cbd5e1' : '#334155', '#cbd5e1'), padding: '0.3rem' }}><Plus size={14} /></button>
+                      </div>
+                    )}
+                    <div style={{ minWidth: 70, textAlign: 'right', fontWeight: 700 }}>฿{baht(r.unit * r.qty)}</div>
+                    <button onClick={() => setQty(r.line, 0)} title="ลบรายการ" style={{ ...btn('#fff', '#dc2626', '#fecaca'), padding: '0.35rem' }}><Trash2 size={15} /></button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <label style={{ display: 'block', fontWeight: 700, marginTop: '0.8rem', fontSize: '0.9rem' }}>ส่วนลด <span style={{ fontWeight: 500, color: '#64748b', fontSize: '0.78rem' }}>(ตั้งที่หลังบ้าน &gt; ส่วนลด)</span></label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem' }}>
+          <button style={chip(!discountId)} onClick={() => setDiscountId('')}>ไม่มีส่วนลด</button>
+          {discounts.map(d => (
+            <button key={d.id} style={chip(String(discountId) === String(d.id))} onClick={() => setDiscountId(String(d.id))}>
+              {d.name}{d.type === 'percent' && !String(d.name || '').includes('%') ? ` (${d.value}%)` : ''}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ marginTop: '0.75rem', background: '#f8fafc', borderRadius: 10, padding: '0.6rem 0.8rem', fontSize: '0.88rem', lineHeight: 1.7 }}>
+          {line('ยอดบิลเดิม', <span style={{ textDecoration: changed ? 'line-through' : 'none', color: '#64748b' }}>฿{baht(bill.total)}</span>)}
+          {line('รวมรายการ', `฿${baht(subtotal)}`)}
+          {off > 0 && line(`ส่วนลด ${disc.name}`, <span style={{ color: '#16a34a' }}>-฿{baht(off)}</span>)}
+          {sc > 0 && line(`เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, `+฿${baht(sc)}`)}
+          {vat > 0 && line(`VAT ${settings.vat.rate}%`, `+฿${baht(vat)}`)}
+          {line(<b>ยอดใหม่ (QR ในใบแจ้งยอด)</b>, <b style={{ color: '#0369a1', fontSize: '1.1rem' }}>฿{baht(newTotal)}</b>, { borderTop: '1px dashed #cbd5e1', marginTop: '0.3rem', paddingTop: '0.3rem' })}
+          {diff > 0.005 && line('ส่วนต่างจากยอดเดิม', <span style={{ color: '#dc2626', fontWeight: 700 }}>-฿{baht(diff)}</span>)}
+          {diff < -0.005 && <div style={{ color: '#b91c1c', fontWeight: 700 }}>ยอดใหม่สูงกว่ายอดเดิม — แก้ไขบิลได้แค่ลดยอด</div>}
+          {bill.memberId && <div style={{ fontSize: '0.78rem', color: '#64748b' }}>สมาชิก {bill.memberId}: แต้มคิดใหม่จากยอดใหม่</div>}
+        </div>
+
+        <label style={{ display: 'block', fontWeight: 700, marginTop: '0.8rem', fontSize: '0.9rem' }}>หมายเหตุ (จำเป็น)</label>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', margin: '0.4rem 0' }}>
+          {EDIT_REASONS.map(x => (
+            <button key={x} onClick={() => setReason(reason.trim() ? `${reason.trim()} · ${x}` : x)}
+              style={{ padding: '0.3rem 0.65rem', borderRadius: 999, border: '1px solid #cbd5e1', background: '#fff', fontFamily: 'inherit', fontSize: '0.8rem', cursor: 'pointer' }}>{x}</button>
+          ))}
+        </div>
+        <textarea value={reason} onChange={(e) => setReason(e.target.value.slice(0, 300))} rows={2}
+          placeholder="เช่น ลูกค้ายกเลิกไก่ทอด ให้ส่วนลดสมาชิก"
+          style={{ width: '100%', boxSizing: 'border-box', padding: '0.55rem 0.7rem', borderRadius: 10, border: '1.5px solid #cbd5e1', fontFamily: 'inherit', fontSize: '0.9rem', resize: 'vertical' }} />
+
+        {err && <div style={{ color: '#b91c1c', fontWeight: 600, fontSize: '0.85rem', marginTop: '0.5rem' }}>❌ {err}</div>}
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.9rem' }}>
+          <button onClick={onClose} disabled={busy} style={{ ...btn('#fff', '#334155', '#cbd5e1'), flex: 1, justifyContent: 'center' }}>ไม่แก้ไข</button>
+          <button onClick={submit} disabled={busy} style={{ ...btn('#0369a1'), flex: 1.6, justifyContent: 'center', opacity: busy ? 0.6 : (changed && !allGone ? 1 : 0.5) }}>
+            <Pencil size={16} /> {busy ? 'กำลังบันทึก…' : 'บันทึก + พิมพ์ใบแจ้งยอดใหม่'}
+          </button>
+        </div>
+        </>)}
+      </div>
     </div>
   );
 }
