@@ -341,6 +341,8 @@ function App() {
   const kioskPathRef = React.useRef(isKioskPath);
   kioskPathRef.current = isKioskPath;
   // ผังโต๊ะของสาขาสำหรับหน้าลูกค้า (เข้าจากหน้าแรกโดยไม่มีเลขโต๊ะ → ลูกค้าเลือกโต๊ะเอง)
+  // ชื่อร้านของสาขานี้ (ตั้งที่หลังบ้าน > สาขา ค่าเดียวกับหัวใบเสร็จ) ใช้บนรูป QR ที่ลูกค้าบันทึก
+  const kioskShopName = (() => { const b = branches.find(x => String(x.id) === String(tablesBranch)); return b ? String(b.name || b.id || '') : ''; })();
   const kioskTables = (branchTables && Array.isArray(branchTables[tablesBranch]) && branchTables[tablesBranch]) || readTablesConfig();
   // ตัวดึงข้อมูลถูกเรียกจาก setInterval ที่ผูกไว้ตั้งแต่เปิดแอป — ต้องอ่านสาขาปัจจุบันผ่าน ref
   const branchKeyRef = React.useRef(branchKey);
@@ -1698,8 +1700,8 @@ function App() {
             }}
           />
         } />
-        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} branchId={branchKey} />} />
-        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} branchId={branchKey} />} />
+        <Route path="/kiosk" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} branchId={branchKey} shopName={kioskShopName} />} />
+        <Route path="/self-order" element={<CustomerKiosk liveMenu={liveMenu} categories={categories} settings={checkoutSettings} onSendOrder={handleKioskSendOrder} onRequestPayment={handleKioskPaymentRequest} onCheckPayment={checkKioskPayment} lang={lang} tables={kioskTables} branchId={branchKey} shopName={kioskShopName} />} />
 
         <Route path="/table-orders" element={
           !tableNumber ? <Navigate to="/index" replace /> :

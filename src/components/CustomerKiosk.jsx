@@ -215,7 +215,58 @@ const writeLogin = (v) => {
   } catch { /* ไม่มีที่เก็บ */ }
 };
 
-const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [], branchId = '' }) => {
+// ── รูป QR สำหรับบันทึกลงเครื่อง: ชื่อร้าน · โต๊ะ · วันเวลา · PromptPay · QR · ยอดชำระ ──
+async function composeQrImage(qrSrc, { shopName, tableNo, amount, th }) {
+  const qr = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('load QR image failed'));
+    img.src = qrSrc;
+  });
+  const W = 1080, H = 1520, PAD = 80;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const font = (getComputedStyle(document.body).fontFamily || 'sans-serif');
+  const text = (str, y, size, color, weight = 400) => {
+    ctx.font = `${weight} ${size}px ${font}`;
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    // ชื่อยาวเกินกว้างรูป → ย่อให้พอดีบรรทัด
+    ctx.fillText(String(str), W / 2, y, W - PAD * 2);
+  };
+
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H);
+
+  const now = new Intl.DateTimeFormat(th ? 'th-TH' : 'en-GB', { timeZone: 'Asia/Bangkok', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
+  text(shopName || (th ? 'ข้าวมันไก่หำไหล' : 'HumLai'), 150, 62, '#0f172a', 800);
+  text([tableNo ? (th ? 'โต๊ะ ' : 'Table ') + tableNo : '', now].filter(Boolean).join(' · '), 225, 36, '#64748b');
+
+  // แถบ PromptPay
+  const barY = 285, barH = 84;
+  ctx.fillStyle = '#003d6a';
+  if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(PAD, barY, W - PAD * 2, barH, 18); ctx.fill(); } else ctx.fillRect(PAD, barY, W - PAD * 2, barH);
+  text('PromptPay (พร้อมเพย์)', barY + 56, 38, '#ffffff', 800);
+
+  // QR ไม่เบลอเวลาขยาย
+  const qrSize = 640, qrY = barY + barH + 40;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(qr, (W - qrSize) / 2, qrY, qrSize, qrSize);
+  ctx.imageSmoothingEnabled = true;
+
+  const amtY = qrY + qrSize + 80;
+  text(th ? 'ยอดชำระทั้งสิ้น' : 'Total Amount', amtY, 38, '#64748b');
+  text('฿' + Number(amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }), amtY + 115, 108, '#ea580c', 900);
+
+  ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3; ctx.setLineDash([12, 10]);
+  ctx.beginPath(); ctx.moveTo(PAD, H - 170); ctx.lineTo(W - PAD, H - 170); ctx.stroke(); ctx.setLineDash([]);
+  text(th ? 'เปิดแอปธนาคาร → สแกนจากรูปภาพ' : 'Open your bank app → scan from photos', H - 105, 34, '#64748b');
+  text(th ? 'ตรวจชื่อร้านและยอดก่อนกดโอน' : 'Check the shop name and amount before paying', H - 52, 34, '#64748b');
+
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png'));
+}
+
+const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {}, onRequestPayment, onCheckPayment, lang: initialLang = 'th', tables = [], branchId = '', shopName = '' }) => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   // QR โต๊ะมีเลขโต๊ะในลิงก์ (ส่งไปหลังบ้านให้พนักงานรู้โต๊ะ แต่ไม่แสดงให้ลูกค้าเห็น)
@@ -824,7 +875,10 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const fileName = `promptpay-table${tableNo}-${Math.round(payTotal)}baht.png`;
 
     try {
-      const blob = await (await fetch(src)).blob();
+      // รูปที่เซฟมีชื่อร้าน โต๊ะ วันเวลา และยอดชำระด้วย ลูกค้าเปิดดูในแกลเลอรีแล้วรู้ว่าจ่ายร้านไหนเท่าไร
+      // วาดไม่สำเร็จ (เช่น รูป QR คงที่จากโดเมนอื่น) ค่อยเซฟรูป QR เปล่าแบบเดิม
+      const blob = await composeQrImage(src, { shopName, tableNo, amount: payTotal, th: lang === 'th' })
+        .catch(async (err) => { console.warn('compose qr image failed, saving bare QR:', err); return (await fetch(src)).blob(); });
       const file = new File([blob], fileName, { type: blob.type || 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
