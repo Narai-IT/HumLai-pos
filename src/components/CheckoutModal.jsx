@@ -397,7 +397,9 @@ const CheckoutModal = ({
     const pc = pendingComplete || { method: 'เงินสด' };
     completedRef.current = true;
     const crmCoupon = member && selectedDiscount && selectedDiscount.crmCoupons
-      ? { ids: selectedDiscount.crmCoupons.map(c => c.id), ref: couponRef.current, discount: discountAmount } : null;
+      ? { ids: selectedDiscount.crmCoupons.map(c => c.id), ref: couponRef.current, discount: discountAmount,
+          // ยอดแยกทีละใบ → หลังบ้าน > รายงาน > ส่วนลด
+          list: selectedDiscount.crmCoupons.map(c => ({ id: c.id, code: c.code, title: c.title, discount: c.discount })) } : null;
     const usedVouchers = pc.details && pc.details.voucher > 0 ? { list: voucherAlloc(), ref: voucherRef.current } : null;
     // สแกน Voucher ไว้แต่สุดท้ายจ่ายวิธีอื่น → ปล่อยคืน
     if (!usedVouchers) vouchers.forEach(v => crmCall('crmVoucherRelease', { voucherId: v.id, ref: voucherRef.current, branchId }));

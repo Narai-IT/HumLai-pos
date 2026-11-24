@@ -1260,7 +1260,9 @@ function App() {
       storeDiscount: printInfo.crmCoupon ? 0 : (Number(printInfo.discountAmount) || 0),
       // บันทึกส่วนลดของบิล (ชื่อ/ยอด/ประเภท) → หลังบ้าน > รายงาน > ส่วนลด
       discount: Number(printInfo.discountAmount) > 0
-        ? { name: printInfo.discountName || 'ส่วนลด', amount: Number(printInfo.discountAmount) || 0, kind: printInfo.crmCoupon ? 'coupon' : 'store' }
+        ? { name: printInfo.discountName || 'ส่วนลด', amount: Number(printInfo.discountAmount) || 0, kind: printInfo.crmCoupon ? 'coupon' : 'store',
+            // คูปองหลายใบในบิลเดียว: ยอดแยกทีละใบ
+            detail: printInfo.crmCoupon && Array.isArray(printInfo.crmCoupon.list) ? printInfo.crmCoupon.list : undefined }
         : undefined,
       couponIds: printInfo.crmCoupon ? printInfo.crmCoupon.ids : undefined,
       couponRef: printInfo.crmCoupon ? printInfo.crmCoupon.ref : undefined,
@@ -1504,6 +1506,8 @@ function App() {
       couponIds: coupon ? coupon.ids : undefined,
       couponRef: coupon ? coupon.ref : undefined,
       couponDiscount: coupon ? coupon.discount : undefined,
+      // ชื่อคูปอง + ยอดแยกทีละใบ (รายงานส่วนลด)
+      coupons: coupon && Array.isArray(coupon.list) ? coupon.list : undefined,
       // ล็อกอินสมาชิก (รหัส 6 หลักในบัตร LINE) — เซิร์ฟเวอร์ใช้ตรวจเมนูเฉพาะสมาชิก
       verifyToken: verifyToken || undefined
     };

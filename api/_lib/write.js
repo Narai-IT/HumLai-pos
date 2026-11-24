@@ -107,16 +107,47 @@ async function hasDiscountCols(runner) {
   } catch { /* ถือว่ายังไม่มี */ }
   return discountColsReady;
 }
+// ยอดแยกทีละคูปอง (คอลัมน์ DiscountDetail) — ฐานข้อมูลที่ยังไม่ได้รัน sql:init ไม่มีคอลัมน์ → บันทึกแค่ยอดรวมแบบเดิม
+let discountDetailReady = false;
+async function hasDiscountDetail(runner) {
+  if (discountDetailReady) return true;
+  try {
+    const res = await runner(`SELECT COL_LENGTH('dbo.PaymentSummary', 'DiscountDetail') AS n`);
+    discountDetailReady = !!(res.recordset[0] && res.recordset[0].n);
+  } catch { /* ถือว่ายังไม่มี */ }
+  return discountDetailReady;
+}
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// รายการคูปองของบิล [{ id, code, title, amount }] — ผลรวมต้องเท่ายอดส่วนลดจริงของบิล
+// ยอดแยกมาจากหน้าเว็บ (ระบบสมาชิกคิดให้ทีละใบ) แต่ยอดรวมถูกจำกัดไม่ให้เกินยอดอาหาร → ถ้ารวมแล้วเกิน ปรับลดตามสัดส่วน
+export function couponDetailOf(list, total) {
+  const items = (Array.isArray(list) ? list : []).slice(0, 10).map(c => ({
+    id: toText(c && c.id) ? String(c.id).slice(0, 60) : '',
+    code: toText(c && c.code) ? String(c.code).slice(0, 80) : '',
+    title: (toText(c && c.title) || 'คูปอง').slice(0, 120),
+    amount: Math.max(0, r2(c && (c.amount ?? c.discount)))
+  }));
+  const cap = Math.max(0, r2(total));
+  if (!items.length || !(cap > 0)) return [];
+  const sum = r2(items.reduce((s, c) => s + c.amount, 0));
+  if (sum > cap && sum > 0) {
+    let left = cap;
+    items.forEach((c, i) => { c.amount = i === items.length - 1 ? r2(left) : r2(c.amount * cap / sum); left = r2(left - c.amount); });
+  }
+  return items;
+}
 const cleanDiscount = (d) => {
-  const amount = Math.round((Number(d && d.amount) || 0) * 100) / 100;
+  const amount = r2(d && d.amount);
   if (!(amount > 0)) return null;
-  return { name: toText(d.name).slice(0, 200) || 'ส่วนลด', amount, kind: d.kind === 'coupon' ? 'coupon' : 'store' };
+  const kind = d.kind === 'coupon' ? 'coupon' : 'store';
+  return { name: toText(d.name) ? String(d.name).slice(0, 200) : 'ส่วนลด', amount, kind, detail: kind === 'coupon' ? couponDetailOf(d.detail, amount) : [] };
 };
 async function saveBillDiscount(runner, orderNumber, discount) {
   const d = cleanDiscount(discount);
   if (!d || !orderNumber || !(await hasDiscountCols(runner))) return;
-  await runner(`UPDATE dbo.PaymentSummary SET DiscountName = @name, DiscountAmount = @amount, DiscountKind = @kind WHERE orderNumber = @no`,
-    { ...d, no: orderNumber });
+  const withDetail = d.detail.length > 0 && await hasDiscountDetail(runner);
+  await runner(`UPDATE dbo.PaymentSummary SET DiscountName = @name, DiscountAmount = @amount, DiscountKind = @kind${withDetail ? ', DiscountDetail = @detail' : ''} WHERE orderNumber = @no`,
+    { name: d.name, amount: d.amount, kind: d.kind, no: orderNumber, ...(withDetail ? { detail: JSON.stringify(d.detail) } : {}) });
 }
 
 // id ของกะที่เปิดค้างอยู่ — คีออสไม่รู้จักกะ จึงต้องให้ฝั่งเซิร์ฟเวอร์ผูกให้ตอนบันทึกยอด
@@ -180,7 +211,12 @@ export async function handleKioskPaidOrder(data) {
     const shiftId = await openShiftId(runner);
     await insertRows('PaymentSummary', PAYMENT_COLS, [[time, orderNo, table, method, total, by, shiftId, null, branchId]], runner);
     // ลูกค้าใช้คูปองสมาชิกในหน้าสั่งเอง → บันทึกเป็นส่วนลดของบิล (รายงานส่วนลด)
-    await saveBillDiscount(runner, orderNo, { name: 'คูปองสมาชิก (สั่งเอง)', amount: data.couponDiscount, kind: 'coupon' });
+    // ชื่อคูปองที่ลูกค้าใช้ + ยอดแยกทีละใบ (หน้าลูกค้ารุ่นเก่าไม่ส่งรายละเอียดมา → ชื่อรวมแบบเดิม)
+    const kioskCoupons = couponDetailOf(data.couponDetail, data.couponDiscount);
+    await saveBillDiscount(runner, orderNo, {
+      name: kioskCoupons.length ? `คูปอง ${kioskCoupons.map(c => c.title).join(' + ')} (สั่งเอง)` : 'คูปองสมาชิก (สั่งเอง)',
+      amount: data.couponDiscount, kind: 'coupon', detail: kioskCoupons
+    });
 
     // 3) รายการรายโต๊ะ สถานะ paid — โต๊ะยังโชว์ว่ามีลูกค้า แต่ระบบไม่เก็บเงินซ้ำ
     const tableRows = items.map(item => {

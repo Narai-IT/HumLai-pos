@@ -894,7 +894,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     const dining = orderType === 'takeaway' ? 'ห่อกลับบ้าน' : 'ทานที่ร้าน';
     const res = onRequestPayment
       ? await onRequestPayment(tableNo, cart, payTotal, snap.id, dining, member ? member.id : null,
-          kApplied.length && member ? { ids: kApplied.map(c => String(c.id)), ref: kioskRef.current, discount: couponOff } : null,
+          kApplied.length && member ? { ids: kApplied.map(c => String(c.id)), ref: kioskRef.current, discount: couponOff,
+            list: kApplied.map(c => ({ id: String(c.id), code: c.code || '', title: c.title || '', discount: Number(c.discount) || 0 })) } : null,
           verifyToken || '')
       : { success: false, error: 'ระบบยังไม่พร้อม' };
     setPayBusy(false);

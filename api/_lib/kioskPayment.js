@@ -10,7 +10,7 @@
 import { query } from './db.js';
 import { thaiTimeISO } from './time.js';
 import { branchForWrite } from './branch.js';
-import { handleKioskPaidOrder, itemOptionText } from './write.js';
+import { handleKioskPaidOrder, itemOptionText, couponDetailOf } from './write.js';
 import { memberOnlyProblem } from './memberOnly.js';
 import { holdMemberMenu, markMemberMenuUsed, releaseMemberMenu } from './memberMenu.js';
 import { priceKioskOrder } from './kioskPricing.js';
@@ -81,6 +81,9 @@ export async function kioskPaymentRequest(data) {
     couponIds: Array.isArray(data.couponIds) ? data.couponIds.map(String).slice(0, 5) : [],
     couponRef: text(data.couponRef, 80),
     couponDiscount: priced.couponDiscount,
+    // ชื่อคูปอง + ยอดแยกทีละใบ (รายงานส่วนลด) — เฉพาะใบที่อยู่ใน couponIds · ผลรวมไม่เกินส่วนลดที่เซิร์ฟเวอร์อนุญาต
+    couponDetail: couponDetailOf((Array.isArray(data.coupons) ? data.coupons : [])
+      .filter(c => c && Array.isArray(data.couponIds) && data.couponIds.map(String).includes(String(c.id))), priced.couponDiscount),
     // ราคาที่มือถือส่งมาไม่ตรงเมนู → การ์ดที่หน้าขายขึ้นสีแดง (บิลออกตามราคาเมนูอยู่แล้ว)
     ...(priced.check.problems.length ? { priceCheck: priced.check } : {})
   });
