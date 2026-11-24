@@ -11,6 +11,7 @@ import { nextIds } from './ids.js';
 import { login, authorize, clearEnforceCache } from './auth.js';
 import { kioskPaymentRequest, getKioskPayment, getPendingKioskPayments, respondKioskPayment } from './kioskPayment.js';
 import { memberOnlyProblem } from './memberOnly.js';
+import { priceKioskOrder } from './kioskPricing.js';
 import { memberQuota, memberMenuToday, saveMemberMenuSettings, getMemberMenuSettings } from './memberMenu.js';
 import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher, verifyKioskMember } from './crm.js';
 import { branchForWrite } from './branch.js';
@@ -25,7 +26,15 @@ const MENU_ACTIONS = new Set(['upsertMenu', 'deleteMenu', 'saveMenu', 'upsertCat
 
 const POST_ACTIONS = {
   // ยิงตรงจากภายนอก (หน้าลูกค้าตอนนี้ใช้ kioskPaymentRequest) — เมนูเฉพาะสมาชิกต้องล็อกอินสมาชิกเหมือนกัน
-  kioskPaidOrder:          async (data) => (await memberOnlyProblem(data.items, data, await branchForWrite(data))) || write.handleKioskPaidOrder(data),
+  // ราคาคิดใหม่จากเมนูของสาขาเหมือน kioskPaymentRequest — ทางนี้ออกบิลทันทีไม่มีพนักงานตรวจ ราคาไม่ตรงจึงปฏิเสธเลย
+  kioskPaidOrder:          async (data) => {
+    const branchId = await branchForWrite(data);
+    const priced = await priceKioskOrder(data.items, branchId, { couponIds: data.couponIds, couponDiscount: data.couponDiscount, memberId: data.memberId, claimedTotal: data.total });
+    if (!priced.success) return priced;
+    if (priced.check.problems.length) return { success: false, priceMismatch: true, error: 'ราคาไม่ตรงกับเมนู: ' + priced.check.problems.join(' · ') };
+    const order = { ...data, items: priced.items, total: priced.total, couponDiscount: priced.couponDiscount };
+    return (await memberOnlyProblem(order.items, order, branchId)) || write.handleKioskPaidOrder(order);
+  },
   kioskPaymentRequest,
   respondKioskPayment,
   issueTaxInvoice,

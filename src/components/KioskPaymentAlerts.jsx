@@ -111,6 +111,9 @@ const printKitchen = async (payment, allMenu) => {
   }, allMenu);
 };
 
+// เซิร์ฟเวอร์ตรวจแล้วว่าราคาที่ลูกค้าส่งมาไม่ตรงเมนู (api/_lib/kioskPricing.js)
+const hasPriceProblem = (p) => !!(p && p.priceCheck && Array.isArray(p.priceCheck.problems) && p.priceCheck.problems.length);
+
 export default function KioskPaymentAlerts({ branchId = '', userName = '', allMenu = [], onApproved }) {
   const [payments, setPayments] = useState([]);
   const [busy, setBusy] = useState({});          // id → 'approve' | 'reject'
@@ -165,6 +168,8 @@ export default function KioskPaymentAlerts({ branchId = '', userName = '', allMe
 
   const respond = async (p, approve) => {
     if (busy[p.id]) return;
+    // ราคาที่ลูกค้าส่งมาไม่ตรงเมนู — เซิร์ฟเวอร์คิดตามราคาเมนูแล้ว ต้องได้รับเงินครบตามยอดนั้นจริงก่อนยืนยัน
+    if (approve && hasPriceProblem(p) && !window.confirm(`⚠️ ราคาที่ลูกค้าส่งมาไม่ตรงกับเมนู\n${p.priceCheck.problems.join('\n')}\n\nกดตกลง = ออกบิลตามราคาเมนู ฿${money(p.total)}\nตรวจในแอปธนาคารว่าได้รับเงินครบ ฿${money(p.total)} แล้วจริงหรือไม่?`)) return;
     if (!approve && !window.confirm(`ยืนยันว่ายังไม่ได้รับเงินจาก ${tableLabel(p)} ยอด ฿${money(p.total)}?\nลูกค้าจะเห็นข้อความให้ตรวจสอบการโอน/แจ้งพนักงาน`)) return;
     setBusy(b => ({ ...b, [p.id]: approve ? 'approve' : 'reject' }));
     setNotice('');
@@ -230,13 +235,14 @@ export default function KioskPaymentAlerts({ branchId = '', userName = '', allMe
         {payments.map((p, idx) => {
           const isNew = p.id === newestId && payments.length > 1;
           const full = idx < FULL_CARDS || expanded[p.id];
-          const accent = isNew ? '#ef4444' : '#f59e0b';
+          const flagged = hasPriceProblem(p);
+          const accent = flagged ? '#b91c1c' : isNew ? '#ef4444' : '#f59e0b';
           if (!full) {
             return (
               <button key={p.id} onClick={() => setExpanded(e => ({ ...e, [p.id]: true }))}
                 style={{ background: '#fff', borderRadius: 12, padding: '0.65rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: `2px solid ${accent}`, fontWeight: 800, fontSize: '0.92rem', cursor: 'pointer', fontFamily: 'inherit', color: '#0f172a', textAlign: 'left' }}>
                 <span>{p.dining === 'ห่อกลับบ้าน' ? '🛍️' : '🍽️'} {tableLabel(p)} · {p.dining} <span style={{ color: '#64748b', fontWeight: 600, fontSize: '0.8rem' }}>· {p.items.length} รายการ · {minutesAgo(p.requestedAt)}</span></span>
-                <span style={{ color: '#ea580c' }}>฿{money(p.total)} ▾</span>
+                <span style={{ color: flagged ? '#b91c1c' : '#ea580c' }}>{flagged ? '⚠️ ราคาไม่ตรง · ' : ''}฿{money(p.total)} ▾</span>
               </button>
             );
           }
@@ -261,6 +267,20 @@ export default function KioskPaymentAlerts({ branchId = '', userName = '', allMe
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: '1.1rem', borderTop: '1px dashed #cbd5e1', marginTop: 6, paddingTop: 6 }}>
                   <span>ยอดที่ต้องได้รับ</span><span style={{ color: '#ea580c' }}>฿{money(p.total)}</span>
                 </div>
+                {Number(p.total) === 0 && !flagged && (
+                  <div style={{ color: '#166534', fontSize: '0.8rem', fontWeight: 700 }}>ไม่ต้องโอน — เมนูราคา 0 / ของฟรี / คูปองครอบคลุมทั้งบิล</div>
+                )}
+                {flagged && (
+                  <div style={{ marginTop: 8, background: '#fef2f2', border: '2px solid #dc2626', borderRadius: 10, padding: '0.55rem 0.7rem', color: '#7f1d1d', fontSize: '0.84rem' }}>
+                    <div style={{ fontWeight: 900, fontSize: '0.95rem', color: '#b91c1c' }}>
+                      ⚠️ ราคาที่ลูกค้าส่งมาไม่ตรงเมนู{p.priceCheck.claimedTotal != null ? ` — ลูกค้าแจ้ง ฿${money(p.priceCheck.claimedTotal)} · ราคาตามเมนู ฿${money(p.total)}` : ''}
+                    </div>
+                    <ul style={{ margin: '0.3rem 0 0.3rem 1.1rem', padding: 0 }}>
+                      {p.priceCheck.problems.map((x, i) => <li key={i}>{x}</li>)}
+                    </ul>
+                    <div style={{ fontWeight: 700 }}>ยืนยัน = บิลออกตามราคาเมนู ฿{money(p.total)} · ตรวจยอดเงินเข้าให้ครบก่อน ไม่ครบให้กด "ยังไม่ได้รับเงิน"</div>
+                  </div>
+                )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                   <button disabled={!!b} onClick={() => respond(p, false)}
                     style={{ flex: 1, borderRadius: 10, padding: '0.65rem', fontWeight: 800, fontSize: '0.88rem', border: '1.5px solid #fecaca', background: '#fff', color: '#dc2626', cursor: b ? 'wait' : 'pointer', fontFamily: 'inherit' }}>

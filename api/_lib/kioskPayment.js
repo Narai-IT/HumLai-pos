@@ -13,6 +13,7 @@ import { branchForWrite } from './branch.js';
 import { handleKioskPaidOrder, itemOptionText } from './write.js';
 import { memberOnlyProblem } from './memberOnly.js';
 import { holdMemberMenu, markMemberMenuUsed, releaseMemberMenu } from './memberMenu.js';
+import { priceKioskOrder } from './kioskPricing.js';
 
 const text = (v, max) => String(v ?? '').trim().slice(0, max);
 const COLS = 'id, branchId, tableNo, dining, payloadJson, total, [status], requestedAt, respondedAt, respondedBy, orderNumber';
@@ -39,7 +40,9 @@ const mapRow = (r) => {
     respondedAt: r.respondedAt || '',
     respondedBy: r.respondedBy || '',
     orderNumber: r.orderNumber || '',
-    items: displayItems(payload.items)
+    items: displayItems(payload.items),
+    // { claimedTotal, serverTotal, problems[] } เมื่อราคาที่ลูกค้าส่งมาไม่ตรงเมนู
+    priceCheck: payload.priceCheck || null
   };
 };
 
@@ -51,15 +54,22 @@ async function findById(id) {
 // หน้าลูกค้า: แจ้งว่าโอนแล้ว (กดซ้ำ/แจ้งใหม่หลังถูกปฏิเสธ = อัปเดตแถวเดิม)
 export async function kioskPaymentRequest(data) {
   const id = text(data.sessionId, 60);
-  const items = Array.isArray(data.items) ? data.items : [];
-  const total = Math.round((Number(data.total) || 0) * 100) / 100;
+  const sentItems = Array.isArray(data.items) ? data.items : [];
   if (!id) return { success: false, error: 'ไม่มีรหัสรายการ' };
-  if (items.length === 0) return { success: false, error: 'ไม่มีรายการอาหาร' };
-  // ยอด 0 ได้เฉพาะตอนคูปองสมาชิกครอบคลุมทั้งบิล (เช่นของฟรีอย่างเดียว) — พนักงานยังกดยืนยันออเดอร์เหมือนเดิม
-  const hasCoupon = Array.isArray(data.couponIds) && data.couponIds.length > 0;
-  if (!(total > 0) && !(total === 0 && hasCoupon)) return { success: false, error: 'ยอดชำระไม่ถูกต้อง' };
+  if (sentItems.length === 0) return { success: false, error: 'ไม่มีรายการอาหาร' };
+  const claimedTotal = Number(data.total);
+  if (!Number.isFinite(claimedTotal) || claimedTotal < 0) return { success: false, error: 'ยอดชำระไม่ถูกต้อง' };
 
   const branchId = await branchForWrite(data);
+  // ราคาและยอดรวมคิดใหม่จากเมนูของสาขา ไม่ใช้ตัวเลขจากมือถือ (kioskPricing.js)
+  // ยอด 0 ผ่านได้เมื่อราคาตามเมนูรวมได้ 0 จริง (เมนูราคา 0 / ป๊อปอัพฟรี / ของแถม / คูปองครอบคลุม) — ราคาที่ปลอมมาจะติดธงให้พนักงานเห็น
+  const priced = await priceKioskOrder(sentItems, branchId, {
+    takeaway: String(data.dining || '') === 'ห่อกลับบ้าน',
+    couponIds: data.couponIds, couponDiscount: data.couponDiscount, memberId: data.memberId, claimedTotal
+  });
+  if (!priced.success) return priced;
+  const items = priced.items;
+  const total = priced.total;
   // เมนูเฉพาะสมาชิก: ต้องล็อกอินสมาชิก (ตรวจกับระบบสมาชิกอีกชั้น)
   const mo = await memberOnlyProblem(items, { memberId: data.memberId, verifyToken: data.verifyToken }, branchId);
   if (mo) return mo;
@@ -70,7 +80,9 @@ export async function kioskPaymentRequest(data) {
     // คูปองที่ลูกค้าใช้ในหน้าตะกร้า (จองไว้ในระบบสมาชิกแล้ว) — ตัดคูปองตอนพนักงานยืนยันยอดโอน
     couponIds: Array.isArray(data.couponIds) ? data.couponIds.map(String).slice(0, 5) : [],
     couponRef: text(data.couponRef, 80),
-    couponDiscount: Math.max(0, Number(data.couponDiscount) || 0)
+    couponDiscount: priced.couponDiscount,
+    // ราคาที่มือถือส่งมาไม่ตรงเมนู → การ์ดที่หน้าขายขึ้นสีแดง (บิลออกตามราคาเมนูอยู่แล้ว)
+    ...(priced.check.problems.length ? { priceCheck: priced.check } : {})
   });
   const now = thaiTimeISO();
   const row = {

@@ -136,7 +136,8 @@ const PUBLIC = new Set(['ping', 'login', 'getStatic', 'getKitchenQueue', 'kioskP
   'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem', 'crmKioskCancelRedeem']);
 
 // ข้อมูลสมาชิก (ชื่อ เบอร์ แต้ม) ต้องล็อกอินพนักงานเสมอ แม้ร้านไม่ได้เปิด "บังคับล็อกอิน" — กันคนนอกไล่ค้นข้อมูลลูกค้าจากเบอร์
-const ALWAYS_LOGIN = new Set(['staffMemberQuota', 'getMemberMenuToday', 'crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
+// kioskPaidOrder = ออกบิลทันทีไม่ผ่านพนักงาน (หน้าลูกค้ารุ่นปัจจุบันไม่ใช้แล้ว ใช้ kioskPaymentRequest) — ห้ามคนนอกยิงตรงแม้ไม่ได้เปิดบังคับล็อกอิน
+const ALWAYS_LOGIN = new Set(['kioskPaidOrder', 'staffMemberQuota', 'getMemberMenuToday', 'crmCancelRedeem', 'crmMemberLookup', 'crmRetry', 'crmSyncMenu', 'getCrmStatus', 'crmWallet', 'crmReserveCoupon', 'crmReleaseCoupon', 'crmRedeem']);
 
 // เฉพาะแอดมินสำนักงานใหญ่ — ของที่มีผลกับทุกสาขา
 const HQ_ONLY = new Set([

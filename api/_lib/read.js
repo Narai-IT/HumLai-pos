@@ -77,11 +77,11 @@ export const getBranchTables = async () => {
 
 // เมนูเรียงตามลำดับที่จัดไว้ในหน้าจัดการเมนู — เมนูที่ยังไม่เคยจัด (sortOrder ว่าง) ต่อท้ายตามลำดับที่สร้าง
 // ฐานข้อมูลที่ยังไม่ได้รัน sql:init (ไม่มีคอลัมน์ sortOrder) → เรียงแบบเดิม ไม่ให้หน้าร้านโหลดเมนูไม่ขึ้น
-const getMenuRows = () => allRows('Menu', MENU_COLS, mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq')
+export const getMenuRows = () => allRows('Menu', MENU_COLS, mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq')
   .catch(() => allRows('Menu', cols([...MENU_BASE, 'branches']), mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq'))
   .catch(() => allRows('Menu', cols(MENU_BASE), mapMenu, 'ISNULL(sortOrder, 2147483647) ASC, Seq'))
   .catch(() => allRows('Menu', cols(MENU_BASE), mapMenu));
-const getCategoryRows = () => allRows('Categories', CATEGORY_COLS, mapCategory)
+export const getCategoryRows = () => allRows('Categories', CATEGORY_COLS, mapCategory)
   .catch(() => allRows('Categories', CATEGORY_BASE, mapCategory));
 
 // ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
