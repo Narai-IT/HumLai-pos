@@ -746,3 +746,33 @@ CREATE TABLE dbo.BillCounters (
   UpdatedAt  DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME()
 );
 GO
+
+-- ─────────────────────────────────────────
+-- ยกเลิกบิลที่ชำระแล้ว (หน้าขาย > เพิ่มเติม > ยกเลิกบิล · api/_lib/billVoid.js)
+-- เฉพาะบิลของวันนี้ ต้องใส่หมายเหตุ · Orders ของบิลเป็น cancelled · แถวนี้เก็บว่าใครยกเลิก เมื่อไหร่ เพราะอะไร
+-- CrmStatus: none (ไม่มีแต้มต้องหักคืน) / pending (รอส่งคืนเงินให้ CRM) / sent / failed
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.BillVoids', 'U') IS NULL
+CREATE TABLE dbo.BillVoids (
+  RowId          INT IDENTITY(1,1) PRIMARY KEY,
+  OrderNumber    NVARCHAR(60)  NOT NULL,
+  BranchId       NVARCHAR(60)  NULL,
+  Total          DECIMAL(18,2) NULL,
+  Reason         NVARCHAR(300) NOT NULL,
+  VoidedBy       NVARCHAR(120) NULL,
+  VoidedByUid    NVARCHAR(60)  NULL,
+  VoidedAt       NVARCHAR(40)  NOT NULL,
+  CrmStatus      NVARCHAR(20)  NOT NULL DEFAULT 'none',
+  CrmAttempts    INT           NOT NULL DEFAULT 0,
+  CrmNextAttempt DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+  CrmError       NVARCHAR(500) NULL,
+  PointsReversed INT           NULL,
+  CreatedAt      DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME()
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_BillVoids_Order' AND object_id = OBJECT_ID('dbo.BillVoids'))
+  CREATE UNIQUE INDEX UX_BillVoids_Order ON dbo.BillVoids (OrderNumber);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_BillVoids_Crm' AND object_id = OBJECT_ID('dbo.BillVoids'))
+  CREATE INDEX IX_BillVoids_Crm ON dbo.BillVoids (CrmStatus, CrmNextAttempt);
+GO
