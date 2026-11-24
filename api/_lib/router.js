@@ -16,6 +16,8 @@ import { memberQuota, memberMenuToday, saveMemberMenuSettings, getMemberMenuSett
 import { syncMenuToCrm, lookupMember, crmStatus, flushCrmQueue, memberWallet, reserveCoupon, releaseCoupon, redeemReward, cancelRedeem, sendMemberCode, checkMemberCode, joinLink, checkVoucher, releaseVoucher, verifyKioskMember } from './crm.js';
 import { branchForWrite } from './branch.js';
 import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
+import { getVoidableBills, voidBill } from './billVoid.js';
+import { editBill } from './billEdit.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
 export const BUILD = '2026-11-10-print-queue';
@@ -57,6 +59,9 @@ const POST_ACTIONS = {
   insertOrder:             write.insertOrder,
   updateStatus:            write.updateStatus,
   cancelOrder:             write.cancelOrder,
+  // ยกเลิกบิลที่ชำระแล้ว (เฉพาะวันนี้ + หมายเหตุ) · ผู้จัดการ/แอดมิน · หักแต้มคืนใน CRM (billVoid.js)
+  voidBill,
+  editBill,
   saveOutstandingBills:    write.saveOutstandingBills,
   createPaymentApproval:   write.createPaymentApproval,
   respondPaymentApproval:  write.respondPaymentApproval,
@@ -156,6 +161,7 @@ async function handleExtraGet(action, params = {}) {
     case 'getPendingKioskPayments': return await getPendingKioskPayments(params);
     case 'getPrintQueue':     return await getPrintQueue(params);
     case 'getCrmStatus':      return { success: true, ...(await crmStatus()) };
+    case 'getVoidableBills':  return await getVoidableBills(params);
     case 'getTaxInvoices':    return { success: true, invoices: await listTaxInvoices() };
     case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };
     case 'getStock':          return await getStockLevels(String(params.branch || '').trim());
@@ -219,6 +225,7 @@ export async function route({ method, params = {}, body, ip = '' }) {
     data._ip = String(ip || '').slice(0, 64);
     const auth = await authorize(action, token, data, null);
     if (!auth.ok) return auth.response;
+    if (action === 'voidBill' || action === 'editBill') data._user = auth.user || null;   // ต้องรู้ว่าใครยกเลิก
     const result = await handler(data);
     if (MENU_ACTIONS.has(action) && result && result.success !== false) syncMenuToCrm().catch(() => {});   // CRM ใช้เลือกของฟรี/เงื่อนไขสินค้าในคูปอง
     if (action === 'saveSettings') clearEnforceCache(); // เปิด/ปิดบังคับล็อกอินมีผลทันที

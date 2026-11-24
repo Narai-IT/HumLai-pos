@@ -13,6 +13,7 @@ import { isAllBranches } from './utils/branches';
 // โหลดแบบ lazy: 2 โมดอลนี้ลากไลบรารีหนัก (html2canvas, qrcode) เปิดตอนกดเท่านั้น → bundle หน้าแรกเล็กลง
 const SalesSummaryModal = lazy(() => import('./components/SalesSummaryModal'));
 const TaxInvoicePage = lazy(() => import('./components/TaxInvoicePage'));
+const VoidBillPage = lazy(() => import('./components/VoidBillPage'));
 const KioskPaymentAlerts = lazy(() => import('./components/KioskPaymentAlerts'));
 const CheckoutModal = lazy(() => import('./components/CheckoutModal'));
 // โหลดแบบ lazy: หน้าหลังบ้าน/ครัว/เหล้า/บิลค้าง ไม่ต้องโหลดตอนเปิดหน้าร้าน → เริ่มแอปไวขึ้น
@@ -490,6 +491,7 @@ function App() {
   const [checkoutCrm, setCheckoutCrm] = useState(null);
   const [showSalesSummaryModal, setShowSalesSummaryModal] = useState(false);
   const [showTaxInvoicePage, setShowTaxInvoicePage] = useState(false);
+  const [showVoidBillPage, setShowVoidBillPage] = useState(false);
   const [salesSummaryMode, setSalesSummaryMode] = useState('daily'); // 'daily' | 'range'
 
   // เก็บ JSON ของแต่ละส่วนที่ apply ไปแล้ว → อัปเดต state เฉพาะส่วนที่เปลี่ยนจริง (กัน re-render ทั้งแอปทุก 10 วิ)
@@ -1172,13 +1174,14 @@ function App() {
       if (qrProblem) {
         setSaveAlert({ type: 'warning', msg: `🧾 พิมพ์ใบแจ้งยอดแล้ว แต่ไม่มี QR สแกนจ่าย — ${qrProblem}` });
         setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'warning' ? null : cur)), 12000);
-        return;
+        return { printed: true, qrProblem };
       }
       setSaveAlert({ type: 'success', msg: '🧾 พิมพ์ใบแจ้งยอดให้ลูกค้าแล้ว' });
       setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
-    } else {
-      setSaveAlert({ type: 'error', msg: `⚠️ พิมพ์ใบแจ้งยอดไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
+      return { printed: true };
     }
+    setSaveAlert({ type: 'error', msg: `⚠️ พิมพ์ใบแจ้งยอดไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
+    return { printed: false, error: res.error || 'ไม่ทราบสาเหตุ' };
   };
 
   // =============================================
@@ -1777,6 +1780,7 @@ function App() {
               onOpenStockCount={() => navigate('/stock-count')}
               onOpenSummary={(mode) => { setSalesSummaryMode(mode); setShowSalesSummaryModal(true); }}
               onOpenTaxInvoice={() => setShowTaxInvoicePage(true)}
+              onOpenVoidBill={() => setShowVoidBillPage(true)}
             onOpenKiosk={() => window.open(`/kiosk?table=${tableNumber}`, '_blank')}
           />
         } />
@@ -1883,6 +1887,12 @@ function App() {
             allMenu={allMenu.length > 0 ? allMenu : liveMenu}
             onApproved={() => { refreshTableOrders(); fetchOrdersFromSheet(); }}
           />
+        </Suspense>
+      )}
+
+      {showVoidBillPage && (
+        <Suspense fallback={null}>
+          <VoidBillPage branchId={branchKey} discounts={posDiscounts} settings={checkoutSettings} menu={allMenu} onPrintPreBill={handlePrintPreBill} onClose={() => setShowVoidBillPage(false)} />
         </Suspense>
       )}
 

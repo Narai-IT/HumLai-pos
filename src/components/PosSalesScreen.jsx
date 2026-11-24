@@ -32,7 +32,7 @@ const PosSalesScreen = ({
   settings = {},
   isAdmin, isCashier, branch, branchId = "", currentUser,
   onLogout, onRefresh, isRefreshing,
-  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onOpenTaxInvoice, onOpenPrep, onOpenStockCount, onDecreaseQuantity
+  onOpenBill, onOpenAdmin, onOpenWaste, onOpenSummary, onOpenKiosk, onOpenTaxInvoice, onOpenVoidBill, onOpenPrep, onOpenStockCount, onDecreaseQuantity
 }) => {
   const t = (th, en) => (lang === 'th' ? th : en);
 
@@ -516,6 +516,9 @@ const PosSalesScreen = ({
                 <button onClick={() => { setMoreOpen(false); onOpenSummary('range'); }}>📅 {t('สรุปยอดขายระหว่างวัน', 'Sales by range')}</button>
                 {(isAdmin || isCashier) && onOpenTaxInvoice && (
                   <button onClick={() => { setMoreOpen(false); onOpenTaxInvoice(); }}>🧾 {t('ใบกำกับภาษี', 'Tax invoice')}</button>
+                )}
+                {isAdmin && onOpenVoidBill && (
+                  <button onClick={() => { setMoreOpen(false); onOpenVoidBill(); }}>🚫 {t('ยกเลิก/แก้ไขบิล (วันนี้)', 'Void / edit bill (today)')}</button>
                 )}
                 <button onClick={() => { setMoreOpen(false); onOpenWaste(); }}>🗑️ {t('บันทึกการทิ้ง', 'Waste')}</button>
                 {onOpenPrep && <button onClick={() => { setMoreOpen(false); onOpenPrep(); }}>🧑‍🍳 {t('บันทึกการเตรียม', 'Prep')}</button>}
