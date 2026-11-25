@@ -47,7 +47,7 @@ import { receiptHeaderStyle } from './utils/receiptStyle';
 import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { makePayQr } from './utils/payQr';
-import { API_URL, setAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
+import { API_URL, setAuthToken, hasAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
 
 const MENU_ITEMS = [];
 
@@ -373,6 +373,9 @@ function App() {
   React.useEffect(() => {
     const onAuthRequired = () => {
       if (kioskPathRef.current) return;
+      // ยังไม่ได้ล็อกอิน (หน้าเลือกสาขา/หน้าล็อกอิน) → ตัวดึงข้อมูลโต๊ะทุก 20 วิ โดนปฏิเสธเป็นปกติ ไม่ใช่หมดเวลา
+      // เดิมขึ้นแถบแดง "หมดเวลาใช้งาน" ค้างไว้จนล็อกอินเข้าไปแล้วก็ยังอยู่ · แจ้งเฉพาะตอนที่เคยล็อกอินแล้ว token หมดอายุจริง
+      if (!hasAuthToken()) return;
       setAuthToken('');
       setCurrentUser(null);
       setSaveAlert({ type: 'error', msg: '🔒 หมดเวลาใช้งาน หรือยังไม่ได้ล็อกอิน — กรุณาล็อกอินใหม่' });
