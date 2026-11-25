@@ -52,7 +52,9 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
 
   const header = useMemo(() => {
     const b = branches.find(x => String(x.id) === String(previewBranch)) || {};
-    return { ...(getReceiptHeader() || {}), name: b.name || b.id || 'ชื่อร้าน', address: b.address || '', phone: b.phone || '', taxId: b.taxId || '', posId: b.posId || '', taxBranch: b.taxBranch || '', legalName: b.legalName || '', footer: b.receiptFooter || '' };
+    return { ...(getReceiptHeader() || {}), name: b.name || b.id || 'ชื่อร้าน', address: b.address || '', phone: b.phone || '', taxId: b.taxId || '', posId: b.posId || '', taxBranch: b.taxBranch || '', legalName: b.legalName || '', footer: b.receiptFooter || '',
+      // เลขบิลตัวอย่างตามตัวนำหน้าของสาขา (หลังบ้าน > สาขา)
+      sampleNo: `${String(b.billPrefix || b.id || 'POS').trim().toUpperCase().replace(/[^0-9A-Zก-๙]/g, '') || 'POS'}-#001` };
   }, [branches, previewBranch]);
   const draftHeader = { ...header, logo: preview, logoWidth: Math.min(draft.logoWidth, maxW), paper: draft.paper, showName: draft.showName, showAddress: draft.showAddress, showPhone: draft.showPhone };
 
@@ -102,7 +104,7 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
     <div style={{ maxWidth: 1100 }}>
       <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 900, marginBottom: '0.25rem' }}><Receipt size={24} /> รูปแบบใบเสร็จ</h2>
       <p style={{ color: '#64748b', marginTop: 0, marginBottom: '1rem', fontSize: '0.9rem' }}>
-        โลโก้และรายละเอียดหัวใบเสร็จ ใช้กับทุกสาขา · ชื่อร้าน ที่อยู่ เบอร์โทร เลขผู้เสียภาษี และข้อความท้ายใบ ตั้งแยกแต่ละสาขาที่เมนู "สาขา"
+        โลโก้และรายละเอียดหัวใบเสร็จ ใช้กับทุกสาขา · ชื่อร้าน ที่อยู่ เบอร์โทร เลขผู้เสียภาษี สถานประกอบการ POS ID และข้อความท้ายใบ ตั้งแยกแต่ละสาขาที่เมนู "สาขา"
       </p>
 
       <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -196,7 +198,7 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
               ? <><div style={{ fontWeight: 900, fontSize: 15 }}>ใบกำกับภาษีอย่างย่อ</div><div>TAX INVOICE (ABB)</div></>
               : <div>ใบเสร็จรับเงิน (RECEIPT)</div>}
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>เลขที่ HL-#001</span><span>โต๊ะ 5</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>เลขที่ {header.sampleNo}</span><span>โต๊ะ 5</span></div>
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>1x ข้าวมันไก่</span><span>69.00{isAbb ? ' V' : ''}</span></div>
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
