@@ -427,15 +427,17 @@ const PosSalesScreen = ({
       alert(t('ยังไม่มีรายการในบิล', 'Nothing on the bill yet.'));
       return;
     }
-    const summary = [{ label: 'ยอดอาหาร', value: `B ${subtotal.toLocaleString()}` }];
-    if (discountAmount > 0) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-B ${discountAmount.toLocaleString()}` });
-    if (serviceCharge > 0) summary.push({ label: `Service ${settings.serviceCharge.rate}%`, value: `B ${serviceCharge.toLocaleString()}` });
-    if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: `B ${vat.toLocaleString()}` });
-    // Voucher: ยอดรวมก่อนหัก + Voucher แต่ละใบ → TOTAL และ QR = ยอดที่ลูกค้าต้องจ่ายเพิ่มเท่านั้น
+    const m2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // ยอดอาหาร แสดงเมื่อมีส่วนลด/ค่าบริการ/VAT (ไม่งั้นซ้ำกับยอดรวม)
+    const summary = (discountAmount > 0 || serviceCharge > 0 || vat > 0) ? [{ label: 'ยอดอาหาร', value: m2(subtotal) }] : [];
+    if (discountAmount > 0) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-${m2(discountAmount)}` });
+    if (serviceCharge > 0) summary.push({ label: `Service ${settings.serviceCharge.rate}%`, value: m2(serviceCharge) });
+    if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: m2(vat) });
+    // Voucher: ยอดรวมก่อนหัก + Voucher แต่ละใบ → ยอดที่ต้องชำระและ QR = ยอดที่ลูกค้าต้องจ่ายเพิ่มเท่านั้น
     if (vouchers.length) {
-      summary.push({ label: 'ยอดรวม', value: `B ${grandTotal.toLocaleString()}` });
-      vouchers.forEach(v => summary.push({ label: `Voucher ${v.code}`, value: `-B ${Number(v.value).toLocaleString()}` }));
-      if (amountDue <= 0) summary.push({ label: 'ชำระด้วย Voucher ครบแล้ว', value: 'ไม่ต้องจ่ายเพิ่ม' });
+      summary.push({ label: 'ยอดรวม', value: m2(grandTotal) });
+      vouchers.forEach(v => summary.push({ label: `Voucher ${v.code}`, value: `-${m2(v.value)}` }));
+      if (amountDue <= 0) summary.push({ label: 'ชำระด้วย Voucher ครบแล้ว', value: '' });
     }
 
     const guests = (() => { try { return localStorage.getItem('customer_count_' + tableNumber) || ''; } catch { return ''; } })();

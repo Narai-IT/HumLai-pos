@@ -10,7 +10,7 @@ const inp = {
 };
 const lbl = { display: 'block', color: 'var(--text-muted)', fontSize: '0.78rem', marginBottom: 5 };
 
-const EMPTY_BRANCH = { id: '', name: '', billPrefix: '', phone: '', address: '', taxId: '', receiptFooter: '', posId: '', isActive: true };
+const EMPTY_BRANCH = { id: '', name: '', billPrefix: '', phone: '', address: '', taxId: '', receiptFooter: '', posId: '', taxBranch: '', legalName: '', isActive: true };
 
 // รหัสสาขาใช้ผูกกับผู้ใช้/บิล/ของเสีย — ให้เป็นตัวอักษร ตัวเลข ขีด หรือขีดล่าง ไม่มีช่องว่าง
 const cleanCode = (v) => String(v || '').trim().replace(/\s+/g, '').replace(/[^0-9A-Za-zก-๙_-]/g, '');
@@ -232,8 +232,21 @@ export default function ManageBranches() {
                   <label style={lbl}>เลขรหัสประจำเครื่อง POS (POS ID ที่สรรพากรออกให้)</label>
                   <input style={inp} value={b.posId || ''} onChange={e => update(b.id, 'posId', e.target.value.trim())} placeholder="เช่น E0123456789012" />
                 </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                  <div>
+                    <label style={lbl}>สถานประกอบการ (ตาม ภ.พ.20)</label>
+                    <input style={inp} inputMode="numeric" value={b.taxBranch || ''} onChange={e => update(b.id, 'taxBranch', e.target.value.replace(/\D/g, '').slice(0, 5))} placeholder="ว่าง = สำนักงานใหญ่ · สาขา เช่น 00001" />
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                      พิมพ์บนใบว่า: <b>{/^0*$/.test(String(b.taxBranch || '')) ? 'สำนักงานใหญ่' : `สาขาที่ ${String(b.taxBranch).padStart(5, '0')}`}</b>
+                    </div>
+                  </div>
+                  <div>
+                    <label style={lbl}>ชื่อผู้ประกอบการ (ถ้าต่างจากชื่อร้าน)</label>
+                    <input style={inp} value={b.legalName || ''} onChange={e => update(b.id, 'legalName', e.target.value)} placeholder="เช่น บริษัท หำไหล ฟู้ด จำกัด" />
+                  </div>
+                </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '-0.4rem' }}>
-                  ใส่เลขผู้เสียภาษีแล้ว ใบเสร็จจะพิมพ์เป็น "ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)" พร้อม POS ID และยอดแยก VAT
+                  ใส่เลขผู้เสียภาษีแล้ว ใบเสร็จจะพิมพ์เป็น "ใบกำกับภาษีอย่างย่อ" พร้อมสถานประกอบการ POS ID และยอดแยก VAT · ใบแจ้งยอดไม่พิมพ์ข้อมูลภาษี
                 </div>
                 {String(b.taxId || '').trim() && !String(b.posId || '').trim() && (
                   <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '-0.4rem' }}>

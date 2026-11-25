@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Receipt, Upload, Trash2, Save, Printer, Info } from 'lucide-react';
 import { API_URL } from '../../utils/api';
 import { getReceiptHeader, sendPrintJob } from '../../utils/printServer';
-import { normalizeReceipt, shrinkSource, makePrintLogo, PAPER_DOTS } from '../../utils/receiptStyle';
+import { normalizeReceipt, shrinkSource, makePrintLogo, PAPER_DOTS, taxBranchText } from '../../utils/receiptStyle';
 
 // หลังบ้าน > ใบเสร็จ: โลโก้บนหัวใบเสร็จ (อัปโหลด · ปรับขนาด · ปรับความเข้ม) และเลือกรายละเอียดที่แสดง
 // ใช้กับทุกสาขา · ชื่อร้าน/ที่อยู่/เบอร์/เลขผู้เสียภาษี/ข้อความท้ายใบ ยังตั้งแยกสาขาที่เมนู "สาขา"
@@ -52,7 +52,9 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
 
   const header = useMemo(() => {
     const b = branches.find(x => String(x.id) === String(previewBranch)) || {};
-    return { ...(getReceiptHeader() || {}), name: b.name || b.id || 'ชื่อร้าน', address: b.address || '', phone: b.phone || '', taxId: b.taxId || '', posId: b.posId || '', footer: b.receiptFooter || '' };
+    return { ...(getReceiptHeader() || {}), name: b.name || b.id || 'ชื่อร้าน', address: b.address || '', phone: b.phone || '', taxId: b.taxId || '', posId: b.posId || '', taxBranch: b.taxBranch || '', legalName: b.legalName || '', footer: b.receiptFooter || '',
+      // เลขบิลตัวอย่างตามตัวนำหน้าของสาขา (หลังบ้าน > สาขา)
+      sampleNo: `${String(b.billPrefix || b.id || 'POS').trim().toUpperCase().replace(/[^0-9A-Zก-๙]/g, '') || 'POS'}-#001` };
   }, [branches, previewBranch]);
   const draftHeader = { ...header, logo: preview, logoWidth: Math.min(draft.logoWidth, maxW), paper: draft.paper, showName: draft.showName, showAddress: draft.showAddress, showPhone: draft.showPhone };
 
@@ -78,8 +80,11 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
     if (!p) { setMsg('❌ ยังไม่ได้ตั้งเครื่องพิมพ์ใบเสร็จ (หลังบ้าน > ปริ้นเตอร์)'); return; }
     setMsg('กำลังส่งพิมพ์ทดสอบ…');
     const res = await sendPrintJob({ ip: p.ip, printerType: 'receipt', orderData: {
-      orderNumber: 'TEST', customerDetails: { name: 'ทดสอบใบเสร็จ' }, header: draftHeader,
-      items: [{ isFlattened: true, name: 'ข้าวมันไก่ (ทดสอบ)', amount: 69, subItems: [] }], summary: [], total: '69.00', paid: false
+      // สาขาที่มีเลขผู้เสียภาษี → พิมพ์รูปแบบใบกำกับภาษีอย่างย่อให้ดู (เลขที่ "ทดสอบ" + หมายเหตุว่าไม่ใช่ใบจริง)
+      orderNumber: 'ทดสอบ', customerDetails: { name: 'โต๊ะ 0' }, header: draftHeader,
+      items: [{ isFlattened: true, name: 'ข้าวมันไก่ (ทดสอบ)', amount: 69, subItems: [] }],
+      summary: [{ label: 'ชำระโดย', value: 'เงินสด', group: 'pay' }, { label: '** ใบทดสอบ ไม่ใช้เป็นหลักฐาน **', value: '', group: 'pay' }],
+      total: '69.00', paid: !!header.taxId
     } });
     setMsg(res && res.success ? '✅ ส่งพิมพ์ทดสอบแล้ว' : '❌ พิมพ์ไม่สำเร็จ: ' + ((res && res.error) || ''));
   };
@@ -99,7 +104,7 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
     <div style={{ maxWidth: 1100 }}>
       <h2 style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 900, marginBottom: '0.25rem' }}><Receipt size={24} /> รูปแบบใบเสร็จ</h2>
       <p style={{ color: '#64748b', marginTop: 0, marginBottom: '1rem', fontSize: '0.9rem' }}>
-        โลโก้และรายละเอียดหัวใบเสร็จ ใช้กับทุกสาขา · ชื่อร้าน ที่อยู่ เบอร์โทร เลขผู้เสียภาษี และข้อความท้ายใบ ตั้งแยกแต่ละสาขาที่เมนู "สาขา"
+        โลโก้และรายละเอียดหัวใบเสร็จ ใช้กับทุกสาขา · ชื่อร้าน ที่อยู่ เบอร์โทร เลขผู้เสียภาษี สถานประกอบการ POS ID และข้อความท้ายใบ ตั้งแยกแต่ละสาขาที่เมนู "สาขา"
       </p>
 
       <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -182,16 +187,29 @@ const ManageReceipt = ({ receiptSettings, onSaved, branches = [], branchId = '' 
           <div style={{ width: paperPx, background: '#fff', border: '1px solid #cbd5e1', boxShadow: '0 4px 14px rgba(0,0,0,0.08)', padding: '14px 12px', fontFamily: 'monospace, sans-serif', fontSize: 12, color: '#000', textAlign: 'center' }}>
             {preview && <img src={preview} alt="โลโก้" style={{ width: logoPx, maxWidth: '100%', imageRendering: 'pixelated', display: 'block', margin: '0 auto 6px' }} />}
             {(draft.showName || isAbb) && <div style={{ fontWeight: 900, fontSize: 15 }}>{header.name}</div>}
+            {isAbb && header.legalName && header.legalName !== header.name && <div>{header.legalName}</div>}
             {draft.showAddress && header.address && header.address.split(/\r?\n/).map((l, i) => <div key={i}>{l}</div>)}
             {draft.showPhone && header.phone && <div>โทร {header.phone}</div>}
             {header.taxId && <div>เลขผู้เสียภาษี {header.taxId}</div>}
+            {header.taxId && <div>{taxBranchText(header.taxBranch)}</div>}
             {header.taxId && header.posId && <div>POS ID: {header.posId}</div>}
-            <div>{header.taxId ? 'ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)' : 'ใบเสร็จรับเงิน / RECEIPT'}</div>
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>1x ข้าวมันไก่</span><span>69.00</span></div>
+            {header.taxId
+              ? <><div style={{ fontWeight: 900, fontSize: 15 }}>ใบกำกับภาษีอย่างย่อ</div><div>TAX INVOICE (ABB)</div></>
+              : <div>ใบเสร็จรับเงิน (RECEIPT)</div>}
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 14 }}><span>รวมทั้งสิ้น</span><span>69.00</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>เลขที่ {header.sampleNo}</span><span>โต๊ะ 5</span></div>
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>1x ข้าวมันไก่</span><span>69.00{isAbb ? ' V' : ''}</span></div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 900, fontSize: 14 }}><span>ยอดสุทธิ</span><span>69.00</span></div>
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            {isAbb && <>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>มูลค่าสินค้าเสียภาษี (V)</span><span>64.49</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>ภาษีมูลค่าเพิ่ม 7%</span><span>4.51</span></div>
+              <div>ราคารวมภาษีมูลค่าเพิ่มแล้ว (VAT Included)</div>
+              <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            </>}
             <div>{header.footer || 'ขอบคุณที่ใช้บริการ'}</div>
           </div>
           <div style={{ ...hint, width: paperPx }}>ตัวอย่างโดยประมาณ · ฟอนต์จริงขึ้นกับเครื่องพิมพ์ · กด "พิมพ์ทดสอบ" เพื่อดูของจริง</div>

@@ -170,6 +170,15 @@ export const saveBranches = async (data) => {
     toText(b.phone), toText(b.address), toText(b.taxId), toText(b.receiptFooter),
     b.isActive === false ? 0 : 1
   ]);
+  // สาขาที่ (สรรพากร) = ตัวเลข 5 หลัก · ว่าง/00000 = สำนักงานใหญ่
+  const taxBranchOf = (v) => { const d = String(v || '').replace(/\D/g, ''); return d ? d.padStart(5, '0').slice(-5) : ''; };
+  try {
+    return await replaceAll('Branches', [...base, 'posId', 'taxBranch', 'legalName'],
+      list.map(b => [...baseRow(b), toText(b.posId), toText(taxBranchOf(b.taxBranch)), toText(b.legalName)]));
+  } catch { /* ยังไม่ได้รัน sql:init (ยังไม่มีคอลัมน์สาขาที่/ชื่อผู้ประกอบการ) → ลองแบบเดิม */ }
+  if (list.some(b => taxBranchOf(b.taxBranch) || String(b.legalName || '').trim())) {
+    return { success: false, error: 'ฐานข้อมูลยังไม่มีช่อง "สาขาที่ / ชื่อผู้ประกอบการ" — รัน update-api.bat (หรือ npm run sql:init) ก่อน แล้วบันทึกใหม่' };
+  }
   try {
     return await replaceAll('Branches', [...base, 'posId'], list.map(b => [...baseRow(b), toText(b.posId)]));
   } catch {

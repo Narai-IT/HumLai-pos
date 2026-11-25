@@ -97,6 +97,11 @@ const wrap = (text, width = LINE) => {
   });
   return out;
 };
+// สถานประกอบการตาม ภ.พ.20: ว่าง / 00000 = สำนักงานใหญ่ · อื่น ๆ = สาขาที่ 00001
+const taxBranchText = (v) => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  return !d || /^0+$/.test(d) ? 'สำนักงานใหญ่' : `สาขาที่ ${d.padStart(5, '0').slice(-5)}`;
+};
 const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtTaxId = (id) => {
   const d = String(id || '').replace(/\D/g, '');
@@ -312,10 +317,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     // รายละเอียดที่แสดงตั้งได้ที่ หลังบ้าน > ใบเสร็จ · ใบกำกับภาษีอย่างย่อต้องมีชื่อผู้ขายเสมอ
     const showName = header.showName !== false || isAbb;
     if (isCustomerCopy && showName && clean(header.name)) printer.println(clean(header.name));
+    // ชื่อผู้ประกอบการตาม ภ.พ.20 (เช่น บริษัท ... จำกัด) — เฉพาะใบกำกับภาษีอย่างย่อ และเมื่อต่างจากชื่อร้าน
+    if (isAbb && clean(header.legalName) && clean(header.legalName) !== clean(header.name)) {
+      wrap(clean(header.legalName)).forEach(l => printer.println(l));
+    }
     if (isCustomerCopy) {
       if (header.showAddress !== false) clean(header.address).split(/\r?\n/).map(clean).filter(Boolean).forEach(line => printer.println(line));
       if (header.showPhone !== false && clean(header.phone)) printer.println(`โทร ${clean(header.phone)}`);
-      if (clean(header.taxId)) printer.println(`เลขผู้เสียภาษี ${clean(header.taxId)}`);
+      // เลขผู้เสียภาษี / สถานประกอบการ / POS ID เฉพาะใบเสร็จ — ใบแจ้งยอดยังไม่ใช่ใบกำกับภาษี ไม่พิมพ์ให้ดูคล้าย
+      if (!isPreBill && clean(header.taxId)) printer.println(`เลขผู้เสียภาษี ${clean(header.taxId)}`);
+      if (isAbb) printer.println(taxBranchText(header.taxBranch));
       if (isAbb && clean(header.posId)) printer.println(`POS ID: ${clean(header.posId)}`);
     }
     printer.println("--------------------------------");
@@ -343,22 +354,45 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
       if (tableLine) printer.println(tableLine);
       printer.setTextNormal();
     } else if (isPreBill) {
-      printer.println("ใบแจ้งยอด (CHECK BILL)");
-      printer.println("*** ยังไม่ชำระเงิน ***");
+      printer.setTextDoubleHeight();
+      printer.println("ใบแจ้งยอด");
+      printer.setTextNormal();
+      printer.println("CHECK BILL");
+      printer.invert(true);
+      printer.println(" ไม่ใช่ใบเสร็จ / ใบกำกับภาษี ");
+      printer.invert(false);
     } else if (isAbb) {
+      // ม.86/6: คำว่า "ใบกำกับภาษีอย่างย่อ" ต้องอยู่ในที่เด่นชัด
+      printer.setTextDoubleHeight();
       printer.println("ใบกำกับภาษีอย่างย่อ");
-      printer.println("TAX INV (ABB)");
+      printer.setTextNormal();
+      printer.println("TAX INVOICE (ABB)");
     } else {
       printer.println("ใบเสร็จรับเงิน (RECEIPT)");
     }
 
     printer.println("--------------------------------");
     printer.alignLeft();
-    printer.println(`${isAbb ? 'เลขที่' : 'Order No'}: ${orderData.orderNumber || '-'}`);
-    printer.println(`Date: ${new Date().toLocaleString('th-TH')}`);
-    // ใบครัว: หัวใบบอกโต๊ะแล้ว ไม่พิมพ์ "โต๊ะ ..." ซ้ำ (เดลิเวอรียังพิมพ์ชื่อลูกค้า)
-    if (orderData.customerDetails?.name && !(isKitchen && /^โต๊ะ/.test(String(orderData.customerDetails.name)))) {
-      printer.println(`Customer: ${orderData.customerDetails.name}`);
+    if (isCustomerCopy) {
+      // ใบเสร็จ/ใบแจ้งยอด: ภาษาไทย · เลขที่+โต๊ะ / วันที่+เวลา / พนักงาน
+      const now = new Date();
+      const day = now.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Bangkok' });
+      const time = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }) + ' น.';
+      const table = rawTableOf(orderData);
+      const who = clean(orderData.customerDetails?.name);
+      const place = who || (table ? `โต๊ะ ${table}` : '');
+      const no = clean(orderData.orderNumber);
+      if (no && !/^โต๊ะ/.test(no)) printer.println(printable(leftRight(`เลขที่ ${no}`, place)));
+      else if (place) printer.println(printable(place));
+      printer.println(leftRight(`วันที่ ${day}`, time));
+      if (clean(orderData.staff)) printer.println(printable(leftRight('พนักงาน', clean(orderData.staff))));
+    } else {
+      printer.println(`Order No: ${orderData.orderNumber || '-'}`);
+      printer.println(`Date: ${new Date().toLocaleString('th-TH')}`);
+      // ใบครัว: หัวใบบอกโต๊ะแล้ว ไม่พิมพ์ "โต๊ะ ..." ซ้ำ (เดลิเวอรียังพิมพ์ชื่อลูกค้า)
+      if (orderData.customerDetails?.name && !(isKitchen && /^โต๊ะ/.test(String(orderData.customerDetails.name)))) {
+        printer.println(`Customer: ${orderData.customerDetails.name}`);
+      }
     }
     printer.println("--------------------------------");
 
@@ -417,14 +451,20 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     if (printerType === 'receipt' || isPreBill) {
       // บรรทัดสรุป (ยอดอาหาร / ส่วนลด / เซอร์วิสชาร์จ / VAT) ส่งมาจากหน้าเว็บ
       // ให้ฝั่งนี้พิมพ์ตามที่ส่งมา จะได้ไม่ต้องคำนวณซ้ำสองที่แล้วเลขไม่ตรงกัน
-      if (Array.isArray(orderData.summary) && orderData.summary.length > 0) {
-        printer.alignRight();
-        orderData.summary.forEach(row => {
-          printer.println(`${row.label}: ${row.value}`);
-        });
-      }
-      printer.alignRight();
-      printer.println(`TOTAL: B ${orderData.total || 0}`);
+      // แถวที่ group = 'pay' (วิธีชำระ / สมาชิก / แต้ม) พิมพ์ต่อท้ายหลังส่วนภาษี — หน้าเว็บรุ่นเก่าไม่ส่ง group ก็พิมพ์ตรงนี้เหมือนเดิม
+      const rows = Array.isArray(orderData.summary) ? orderData.summary.filter(r => r && r.label) : [];
+      const sumRows = rows.filter(r => r.group !== 'pay');
+      const payRows = rows.filter(r => r.group === 'pay');
+      const rowLine = (r) => wrap(leftRight(printable(r.label), printable(r.value ?? ''))).forEach(l => printer.println(l));
+      printer.alignLeft();
+      sumRows.forEach(rowLine);
+      if (sumRows.length) printer.println("--------------------------------");
+      // ยอดสุทธิ ตัวสูงสองเท่า · ใบแจ้งยอด = ยอดที่ลูกค้าต้องจ่าย (หัก Voucher แล้ว)
+      const totalNum = Number.isFinite(Number(orderData.totalAmount)) && orderData.totalAmount !== '' && orderData.totalAmount != null
+        ? Number(orderData.totalAmount) : parseMoney(orderData.total);
+      printer.setTextDoubleHeight();
+      printer.println(leftRight(isPreBill ? 'ยอดที่ต้องชำระ' : 'ยอดสุทธิ', money2(totalNum)));
+      printer.setTextNormal();
       printer.println("--------------------------------");
       if (isAbb) {
         const { rate, vatable, vat } = vatBreakdown(parseMoney(orderData.total), header.vatRate);
@@ -434,6 +474,11 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
         printer.alignCenter();
         printer.println('ราคารวมภาษีมูลค่าเพิ่มแล้ว');
         printer.println('(VAT Included)');
+        printer.println("--------------------------------");
+      }
+      if (payRows.length) {
+        printer.alignLeft();
+        payRows.forEach(rowLine);
         printer.println("--------------------------------");
       }
       printer.alignCenter();
@@ -454,7 +499,11 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
           printer.println("โอนแล้วแสดงสลิปให้พนักงาน");
         }
       }
-      if (!qrPrinted) printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "Thank you!"));
+      if (!qrPrinted) printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "ขอบคุณที่ใช้บริการ"));
+      if (isPreBill) {
+        printer.println("--------------------------------");
+        printer.println(clean(header.taxId) ? "ใบกำกับภาษีอย่างย่อออกให้หลังชำระเงิน" : "ใบเสร็จรับเงินออกให้หลังชำระเงิน");
+      }
     } else if (cancel) {
       const hm = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }) : ''; };
       const orderedAt = hm(cancel.orderedAt);

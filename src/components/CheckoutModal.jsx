@@ -7,7 +7,7 @@ import { isQrCode, scannerChar, useScannerWedge } from '../utils/qrScan';
 import { generatePromptPayPayload, generateDynamicQRFromRaw, parseKShopPayload } from '../utils/promptpay';
 import { scopedSlipCss } from '../utils/print80mm';
 import { getReceiptHeader } from '../utils/printServer';
-import { logoHtml } from '../utils/receiptStyle';
+import { logoHtml, taxBranchText } from '../utils/receiptStyle';
 import { menuCategoryLookup, discountAmount as calcDiscount } from '../utils/discount';
 
 // discountAmount คิดมาแล้วจาก utils/discount (ส่วนลดเฉพาะหมวด ลดเฉพาะยอดของหมวดนั้น)
@@ -309,6 +309,24 @@ const CheckoutModal = ({
   const paidMethod = (pendingComplete?.method || '') + (pd && pendingComplete?.method === 'แยกจ่าย'
     ? ' (' + Object.entries(pd).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${PAY_PART[k] || k} ฿${Number(v).toLocaleString()}`).join(' + ') + ')' : '');
   const voucherCodes = pd && pd.voucher > 0 ? vouchers.map(v => v.code).join(', ') : '';
+  // แถววิธีชำระ — กระดาษกว้าง 32 ตัวอักษร แยกจ่ายจึงพิมพ์ทีละบรรทัด (บรรทัดเดียว "แยกจ่าย (Voucher ฿100 + โอน ฿68)" ยาวเกิน)
+  const paymentRows = () => {
+    const out = [];
+    const m2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (pd && pendingComplete?.method === 'แยกจ่าย') {
+      out.push({ label: 'ชำระโดย', value: 'แยกจ่าย', group: 'pay' });
+      (pd.voucher > 0 ? voucherAlloc() : []).forEach(a => {
+        const v = vouchers.find(x => x.id === a.id);
+        out.push({ label: ` Voucher ${v ? v.code : ''}`.trimEnd(), value: m2(a.amount), group: 'pay' });
+      });
+      Object.entries(pd).filter(([k, v]) => k !== 'voucher' && Number(v) > 0)
+        .forEach(([k, v]) => out.push({ label: ` ${PAY_PART[k] || k}`, value: m2(v), group: 'pay' }));
+    } else if (paidMethod) {
+      out.push({ label: 'ชำระโดย', value: paidMethod, group: 'pay' });
+      if (voucherCodes) out.push({ label: 'Voucher', value: voucherCodes, group: 'pay' });
+    }
+    return out;
+  };
   // no = เลขที่บิล (เซิร์ฟเวอร์ออกตอนบันทึก) · abb=false = ใบเสร็จธรรมดา ใช้ตอนยังบันทึกบิลไม่สำเร็จ
   const buildReceiptHtml = (no = orderNumber, abb = true) => {
     const now = new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -334,20 +352,22 @@ const CheckoutModal = ({
       ...(h.showAddress !== false ? esc(h.address).split(/\r?\n/).map(x => x.trim()).filter(Boolean) : []),
       h.phone && h.showPhone !== false ? `โทร ${esc(h.phone)}` : '',
       isAbb ? `เลขผู้เสียภาษี ${esc(h.taxId)}` : '',
+      isAbb ? taxBranchText(h.taxBranch) : '',
       isAbb && esc(h.posId) ? `POS ID: ${esc(h.posId)}` : ''
     ].filter(Boolean).map(x => `<div class="c sm">${x}</div>`).join('');
+    const legal = isAbb && esc(h.legalName) && esc(h.legalName) !== esc(h.name) ? `<div class="c sm">${esc(h.legalName)}</div>` : '';
+    const payHtml = paymentRows().map(r => line(esc(r.label), esc(r.value))).join('')
+      + (member ? line('สมาชิก', esc(member.id)) : '');
     return `
       ${logoHtml(h)}
       ${showName ? `<div class="c xl">${esc(h.name) || 'ข้าวมันไก่หำไหล'}</div>` : ''}
+      ${legal}
       ${headLines}
-      <div class="c sm">${isAbb ? 'ใบกำกับภาษีอย่างย่อ / TAX INV (ABB)' : 'ใบเสร็จรับเงิน / RECEIPT'}</div>
       <div class="hr"></div>
-      ${line(isAbb ? 'เลขที่' : 'บิลเลขที่', esc(no) || '-')}
-      ${tableNo ? line('โต๊ะ', esc(tableNo)) : ''}
+      ${isAbb ? '<div class="c lg">ใบกำกับภาษีอย่างย่อ</div><div class="c sm">TAX INVOICE (ABB)</div>' : '<div class="c sm">ใบเสร็จรับเงิน / RECEIPT</div>'}
+      <div class="hr"></div>
+      ${line('เลขที่ ' + (esc(no) || '-'), tableNo ? 'โต๊ะ ' + esc(tableNo) : '')}
       ${line('วันที่', now)}
-      ${paidMethod ? line('ชำระโดย', esc(paidMethod)) : ''}
-      ${voucherCodes ? line('Voucher', esc(voucherCodes)) : ''}
-      ${member ? line('สมาชิก', esc(member.id)) : ''}
       <div class="hr"></div>
       ${rows}
       <div class="hr"></div>
@@ -356,9 +376,10 @@ const CheckoutModal = ({
       ${sc > 0 ? line(`เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, `+฿${sc.toLocaleString()}`) : ''}
       ${vat > 0 ? line(`VAT ${settings.vat.rate}%`, `+฿${vat.toLocaleString()}`) : ''}
       <div class="hr"></div>
-      <div class="row tot"><span>รวมทั้งสิ้น</span><span>฿${m2(grand)}</span></div>
+      <div class="row tot"><span>ยอดสุทธิ</span><span>฿${m2(grand)}</span></div>
       <div class="hr"></div>
       ${isAbb ? `${line('มูลค่าสินค้าเสียภาษี (V)', m2(vatable))}${line(`ภาษีมูลค่าเพิ่ม ${rate}%`, m2(Math.round((grand - vatable) * 100) / 100))}<div class="c sm">ราคารวมภาษีมูลค่าเพิ่มแล้ว (VAT Included)</div><div class="hr"></div>` : ''}
+      ${payHtml ? payHtml + '<div class="hr"></div>' : ''}
       <div class="c sm">${esc(h.footer) || 'ขอบคุณที่ใช้บริการ'}</div>
     `;
   };
@@ -371,9 +392,9 @@ const CheckoutModal = ({
     if (hasDiscount) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-${money2(discountAmount)}` });
     if (sc > 0) summary.push({ label: `เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, value: money2(sc) });
     if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(vat) });
-    if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
-    if (voucherCodes) summary.push({ label: 'Voucher', value: voucherCodes });
-    if (member) summary.push({ label: 'สมาชิก', value: `${member.id}${member.phone ? ' ' + maskPhone(member.phone) : ''}` });
+    // วิธีชำระ / สมาชิก = group 'pay' → Print Server พิมพ์ต่อท้ายหลังส่วนภาษี (รุ่นเก่าพิมพ์ในสรุปยอดเหมือนเดิม)
+    summary.push(...paymentRows());
+    if (member) summary.push({ label: 'สมาชิก', value: `${member.id}${member.phone ? ' ' + maskPhone(member.phone) : ''}`, group: 'pay' });
     return {
       id: no,
       orderNumber: no || '-',

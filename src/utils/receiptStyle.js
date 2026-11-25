@@ -64,3 +64,9 @@ export const logoHtml = (h) => {
   const pct = Math.min(100, Math.round((Number(h.logoWidth) || 240) / dots * 1000) / 10);
   return `<div class="c" style="margin-bottom:4px"><img src="${h.logo}" alt="" style="width:${pct}%;max-width:100%;image-rendering:pixelated"></div>`;
 };
+
+// สถานประกอบการตาม ภ.พ.20 บนใบกำกับภาษีอย่างย่อ: ว่าง / 00000 = สำนักงานใหญ่ · อื่น ๆ = สาขาที่ 00001
+export const taxBranchText = (v) => {
+  const d = String(v ?? '').replace(/\D/g, '');
+  return !d || /^0+$/.test(d) ? 'สำนักงานใหญ่' : `สาขาที่ ${d.padStart(5, '0').slice(-5)}`;
+};
