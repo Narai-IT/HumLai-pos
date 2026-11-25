@@ -13,6 +13,7 @@ import { query, withTransaction, lockKey } from './db.js';
 import { releaseMemberMenu } from './memberMenu.js';
 import { thaiTimeISO, dayStart, dayEnd } from './time.js';
 import { sendVoidNow } from './crm.js';
+import { logActivity } from './activity.js';
 
 const REASON_MIN = 3;
 const REASON_MAX = 300;
@@ -206,7 +207,7 @@ export async function voidBill(data) {
     const ts = rows.map(r => r.TsLocal).find(Boolean);
     const billDay = ts ? new Date(ts).toISOString().slice(0, 10) : '';
     if (billDay !== day) return { success: false, error: 'ยกเลิกได้เฉพาะบิลของวันนี้' };
-    const pay = (await runner(`SELECT TOP (1) grandTotal FROM dbo.PaymentSummary WHERE orderNumber = @n`, { n: orderNumber })).recordset[0];
+    const pay = (await runner(`SELECT TOP (1) grandTotal, tableNo FROM dbo.PaymentSummary WHERE orderNumber = @n`, { n: orderNumber })).recordset[0];
     const paid = !!pay || rows.some(r => String(r.Status || '').toLowerCase() === 'completed');
     if (!paid) return { success: false, error: 'บิลนี้ยังไม่ได้ชำระ ให้ยกเลิกรายการที่หน้าโต๊ะแทน' };
     let invoice = null;
@@ -232,10 +233,12 @@ export async function voidBill(data) {
     await runner(`INSERT INTO dbo.BillVoids (OrderNumber, BranchId, Total, Reason, VoidedBy, VoidedByUid, VoidedAt, CrmStatus)
                   VALUES (@n, @b, @t, @r, @by, @uid, @at, @crm)`,
       { n: orderNumber, b: billBranch || null, t: num(pay ? pay.grandTotal : rows[0].TotalAmount), r: reason, by, uid: String(user.uid), at: thaiTimeISO(), crm: crmStatus });
-    return { success: true, orderNumber, crmStatus };
+    return { success: true, orderNumber, crmStatus, _log: { branchId: billBranch, tableNo: pay ? pay.tableNo : '', amount: num(pay ? pay.grandTotal : rows[0].TotalAmount) } };
   }, { isolation: 'READ_COMMITTED' });
 
   if (!result.success) return result;
+  const lg = result._log; delete result._log;
+  await logActivity({ kind: 'void_bill', branchId: lg.branchId, tableNo: lg.tableNo, orderNumber, amount: lg.amount, reason, staff: { name: by, uid: String(user.uid) } });
   await releaseMemberMenu(orderNumber);
   if (result.crmStatus === 'pending') {
     const r = await sendVoidNow(orderNumber);

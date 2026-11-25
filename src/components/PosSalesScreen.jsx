@@ -517,8 +517,8 @@ const PosSalesScreen = ({
                 {(isAdmin || isCashier) && onOpenTaxInvoice && (
                   <button onClick={() => { setMoreOpen(false); onOpenTaxInvoice(); }}>🧾 {t('ใบกำกับภาษี', 'Tax invoice')}</button>
                 )}
-                {isAdmin && onOpenVoidBill && (
-                  <button onClick={() => { setMoreOpen(false); onOpenVoidBill(); }}>🚫 {t('ยกเลิก/แก้ไขบิล (วันนี้)', 'Void / edit bill (today)')}</button>
+                {(isAdmin || isCashier) && onOpenVoidBill && (
+                  <button onClick={() => { setMoreOpen(false); onOpenVoidBill(); }}>🚫 {isAdmin ? t('ยกเลิก/แก้ไขบิล (วันนี้)', 'Void / edit bill (today)') : t('แก้ไขบิล (วันนี้)', 'Edit bill (today)')}</button>
                 )}
                 <button onClick={() => { setMoreOpen(false); onOpenWaste(); }}>🗑️ {t('บันทึกการทิ้ง', 'Waste')}</button>
                 {onOpenPrep && <button onClick={() => { setMoreOpen(false); onOpenPrep(); }}>🧑‍🍳 {t('บันทึกการเตรียม', 'Prep')}</button>}
@@ -1088,13 +1088,9 @@ const PosSalesScreen = ({
               <button
                 className="pos2-action danger"
                 onClick={() => {
-                  if (window.confirm(t(
-                    `ยกเลิก "${actionItem.ItemName}" ออกจากบิลโต๊ะ ${tableNumber}?\n(ครัวอาจทำไปแล้ว — ควรแจ้งครัวด้วย)`,
-                    `Cancel "${actionItem.ItemName}" from this bill?`
-                  ))) {
-                    onDeleteTableItem(actionItem);
-                    setActionItem(null);
-                  }
+                  // ถามเหตุผลในหน้าต่างยกเลิกรายการ (App) — ต้องใส่ทุกครั้ง
+                  onDeleteTableItem(actionItem);
+                  setActionItem(null);
                 }}
               >
                 <Trash2 size={17} /> {t('ยกเลิกรายการนี้', 'Cancel this item')}

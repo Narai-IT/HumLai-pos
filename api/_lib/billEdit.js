@@ -11,6 +11,7 @@ import { withTransaction, lockKey } from './db.js';
 import { thaiTimeISO } from './time.js';
 import { ensureVoidTable, todayYmd, text, num, isCancelled, crmLabel, staffName, editBlockReason } from './billVoid.js';
 import { sendEditNow } from './crm.js';
+import { logActivity } from './activity.js';
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const REASON_MAX = 300;
@@ -22,7 +23,9 @@ async function hasCol(runner, table, col) {
 export async function editBill(data) {
   const user = data._user;
   if (!user) return { success: false, error: 'ต้องล็อกอินก่อนแก้ไขบิล' };
-  if (user.role !== 'admin') return { success: false, error: 'แก้ไขบิลได้เฉพาะผู้จัดการ/แอดมิน' };
+  // แคชเชียร์: แก้ไขบิลได้แค่ลบ/ลดรายการ · ส่วนลดเปลี่ยนได้เฉพาะหัวหน้า/แอดมิน
+  if (user.role !== 'admin' && user.role !== 'cashier') return { success: false, error: 'แก้ไขบิลได้เฉพาะแคชเชียร์ หัวหน้า และแอดมิน' };
+  const canDiscount = user.role === 'admin';
   const orderNumber = text(data.orderNumber, 60);
   const reason = text(data.reason, REASON_MAX);
   if (!orderNumber) return { success: false, error: 'ไม่ได้ระบุเลขบิล' };
@@ -43,7 +46,7 @@ export async function editBill(data) {
     const ts = rows.map(r => r.TsLocal).find(Boolean);
     if (!ts || new Date(ts).toISOString().slice(0, 10) !== day) return { success: false, error: 'แก้ไขได้เฉพาะบิลของวันนี้' };
     const discCols = await hasCol(runner, 'PaymentSummary', 'DiscountName');
-    const pay = (await runner(`SELECT TOP (1) RowId, paymentMethod, grandTotal, splitDetail${discCols ? ', DiscountName, DiscountAmount, DiscountKind' : ''} FROM dbo.PaymentSummary WHERE orderNumber = @n`, { n: orderNumber })).recordset[0];
+    const pay = (await runner(`SELECT TOP (1) RowId, paymentMethod, grandTotal, splitDetail, tableNo${discCols ? ', DiscountName, DiscountAmount, DiscountKind' : ''} FROM dbo.PaymentSummary WHERE orderNumber = @n`, { n: orderNumber })).recordset[0];
     if (!pay) return { success: false, error: 'บิลนี้ยังไม่ได้ปิดบิล แก้ที่หน้าโต๊ะแทน' };
     const blocked = editBlockReason(pay);
     if (blocked) return { success: false, error: blocked };
@@ -75,13 +78,16 @@ export async function editBill(data) {
     // ส่วนลด: ต้องเป็นส่วนลดที่ตั้งในหลังบ้าน · ยอดคิดที่หน้าเว็บ (ส่วนลดเฉพาะหมวด) แต่ห้ามเกินยอดรายการ
     let discName = null; let discAmount = 0;
     const discountId = text(data.discountId, 60);
+    const oldDiscName = discCols && pay.DiscountName && String(pay.DiscountKind || 'store') === 'store' ? String(pay.DiscountName) : null;
     if (discountId) {
       const d = (await runner(`SELECT TOP (1) id, name FROM dbo.Discounts WHERE CAST(id AS NVARCHAR(60)) = @id`, { id: discountId })).recordset[0];
       if (!d) return { success: false, error: 'ไม่พบส่วนลดนี้ในหลังบ้าน' };
       discName = text(d.name, 200) || 'ส่วนลด';
+      if (!canDiscount && discName !== oldDiscName) return { success: false, error: 'ส่วนลดใส่/เปลี่ยนได้เฉพาะหัวหน้าและแอดมิน' };
       discAmount = round2(data.discountAmount);
       if (discAmount < 0 || discAmount > subtotal + 0.001) return { success: false, error: 'ยอดส่วนลดไม่ถูกต้อง' };
     }
+    if (!discountId && oldDiscName && !canDiscount) return { success: false, error: 'ส่วนลดเอาออกได้เฉพาะหัวหน้าและแอดมิน' };
     const sc = Math.max(0, round2(data.serviceCharge));
     const vat = Math.max(0, round2(data.vat));
     const newTotal = round2(subtotal - discAmount + sc + vat);
@@ -134,6 +140,7 @@ export async function editBill(data) {
 
     return {
       success: true, orderNumber, editNo, oldTotal, newTotal, subtotal, crmStatus, crmNote,
+      _before: lines.map(l => ({ name: l.name, qty: l.qty, unit: l.qty ? l.price / l.qty : 0 })), _branch: billBranch, _table: pay.tableNo || '',
       discount: discName ? { name: discName, amount: discAmount } : null, serviceCharge: sc, vat,
       paymentMethod: pay.paymentMethod || '',
       items: after.filter(l => l.newQty > 0).map(l => ({ name: l.name, qty: l.newQty, price: l.newPrice, options: l.opts.map(o => String(o.ItemDetail || '').replace(/^↳\s*/, '')) }))
@@ -141,6 +148,18 @@ export async function editBill(data) {
   }, { isolation: 'READ_COMMITTED' });
 
   if (!result.success) return result;
+  {
+    const removed = [];
+    // รายการที่ลบ/ลดจำนวน (ก่อน → หลัง) สำหรับบันทึกการทำงาน
+    for (const ln of (Array.isArray(data.lines) ? data.lines : [])) {
+      const was = result._before && result._before[Number(ln.line)];
+      if (was && Number(ln.qty) < was.qty) removed.push({ name: was.name, qty: was.qty - Number(ln.qty), price: round2(was.unit * (was.qty - Number(ln.qty))) });
+    }
+    await logActivity({ kind: 'edit_bill', branchId: result._branch, tableNo: result._table, orderNumber, amount: result.newTotal, reason, items: removed,
+      detail: 'ครั้งที่ ' + result.editNo + ' · ฿' + result.oldTotal.toFixed(2) + ' → ฿' + result.newTotal.toFixed(2) + (result.discount ? ' · ส่วนลด ' + result.discount.name + ' ' + result.discount.amount.toFixed(2) : ''),
+      staff: { name: by, uid: String(user.uid) } });
+    delete result._before; delete result._branch; delete result._table;
+  }
   if (result.crmStatus === 'pending') {
     const r = await sendEditNow(orderNumber, result.editNo);
     if (r) result.crmStatus = r.status;

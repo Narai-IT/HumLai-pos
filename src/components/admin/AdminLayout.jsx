@@ -2,15 +2,15 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, UtensilsCrossed, Tag, LogOut, Store, Layers, FileSpreadsheet, Globe, Users, Settings, Package,
-  FlaskConical, BarChart2, Building2, Images, Receipt, Crown, Printer, LayoutGrid, ListChecks, Menu, X
-} from 'lucide-react';
+  FlaskConical, BarChart2, Building2, Images, Receipt, Crown, Printer, LayoutGrid, ListChecks, Menu, X, History } from 'lucide-react';
 import './Admin.css';
 
 // เมนูหลังบ้านจัดเป็นหมวด — admin = เห็นเฉพาะแอดมิน (แคชเชียร์ไม่เห็น) · สิทธิ์ตรงกับ Route ใน App.jsx
 const NAV_GROUPS = [
   { th: 'ภาพรวม', en: 'Overview', items: [
     { to: '/admin', end: true, icon: LayoutDashboard, th: 'แดชบอร์ด', en: 'Dashboard' },
-    { to: '/admin/reports', icon: BarChart2, th: 'รายงาน', en: 'Reports', admin: true }
+    { to: '/admin/reports', icon: BarChart2, th: 'รายงาน', en: 'Reports', admin: true },
+    { to: '/admin/activity', icon: History, th: 'บันทึกการทำงาน', en: 'Activity log', admin: true }
   ] },
   { th: 'เมนูและการขาย', en: 'Menu & sales', items: [
     { to: '/admin/menu', icon: UtensilsCrossed, th: 'จัดการเมนู', en: 'Menu' },

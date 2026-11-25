@@ -813,3 +813,33 @@ GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_BillEdits_Crm' AND object_id = OBJECT_ID('dbo.BillEdits'))
   CREATE INDEX IX_BillEdits_Crm ON dbo.BillEdits (CrmStatus, CrmNextAttempt);
 GO
+
+-- ─────────────────────────────────────────
+-- บันทึกการทำงานหน้าร้าน (หลังบ้าน > บันทึกการทำงาน · api/_lib/activity.js)
+-- Kind: order / kitchen_print / kitchen_print_fail / cancel_item / prebill / pay / edit_bill / void_bill
+-- TsLocal = เวลาไทย · ItemsJson = [{name, qty, price}] · Reason = เหตุผล (ยกเลิกรายการ/แก้ไข/ยกเลิกบิล)
+-- ─────────────────────────────────────────
+IF OBJECT_ID('dbo.ActivityLog', 'U') IS NULL
+CREATE TABLE dbo.ActivityLog (
+  RowId       BIGINT IDENTITY(1,1) PRIMARY KEY,
+  TsLocal     DATETIME2(0)   NOT NULL,
+  At          NVARCHAR(40)   NOT NULL,
+  BranchId    NVARCHAR(60)   NULL,
+  Kind        NVARCHAR(30)   NOT NULL,
+  TableNo     NVARCHAR(50)   NULL,
+  OrderNumber NVARCHAR(60)   NULL,
+  SessionId   NVARCHAR(80)   NULL,
+  ItemsJson   NVARCHAR(MAX)  NULL,
+  Amount      DECIMAL(18,2)  NULL,
+  Detail      NVARCHAR(1000) NULL,
+  Reason      NVARCHAR(300)  NULL,
+  StaffName   NVARCHAR(120)  NULL,
+  StaffUid    NVARCHAR(60)   NULL
+);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ActivityLog_Day' AND object_id = OBJECT_ID('dbo.ActivityLog'))
+  CREATE INDEX IX_ActivityLog_Day ON dbo.ActivityLog (TsLocal, BranchId);
+GO
+IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_ActivityLog_Order' AND object_id = OBJECT_ID('dbo.ActivityLog'))
+  CREATE INDEX IX_ActivityLog_Order ON dbo.ActivityLog (OrderNumber);
+GO
