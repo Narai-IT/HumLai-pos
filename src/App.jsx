@@ -1497,11 +1497,37 @@ function App() {
         itemName: String(item.ItemName),
         reason,
         staff: currentUser?.username || ''
-      }).then(json => { if (json && json.success === false && json.error) throw new Error(json.error); });
+      }).then(json => {
+        if (json && json.success === false && json.error) throw new Error(json.error);
+        // ลบสำเร็จจริง (ไม่ใช่เครื่องอื่นลบไปก่อน) → พิมพ์ใบยกเลิกเข้าครัว/บาร์เครื่องเดียวกับที่รายการนี้เคยออก
+        if (json && json.success) printKitchenCancel(item, reason);
+      });
     } catch (e) {
       console.error('Error deleting table item:', e);
       setSaveAlert({ type: 'error', msg: `⚠️ ลบ "${item.ItemName}" ออกจากโต๊ะ ${item.TableNumber} ในระบบไม่สำเร็จ: ${e.message} — รายการยังอยู่ในบิล ลบอีกครั้ง` });
       setTimeout(() => fetchOrdersFromSheet(), 500);
+    }
+  };
+
+  // ── ใบยกเลิกเข้าครัว: หัวใบ "ยกเลิกรายการ" ตัวใหญ่ + รายการ + เหตุผล + คนยกเลิก + เวลาที่สั่ง ──
+  // Print Server รุ่นเก่าก็ยังพิมพ์ได้ (หัวใบขึ้น "ยกเลิกรายการ" และมีบรรทัดเหตุผลใต้รายการ)
+  const printKitchenCancel = async (item, reason) => {
+    if (getPrinters().length === 0) return;
+    const tbl = String(item.TableNumber || '');
+    const staff = currentUser?.username || '';
+    const order = buildKitchenOrder([item], tbl, 'cancel-' + Date.now(), getThaiTimeISO(), 'ยกเลิกรายการ');
+    order.items = order.items.map(it => ({ ...it, subItems: [...it.subItems, `เหตุผลยกเลิก: ${reason}`] }));
+    order.cancel = { reason, staff, orderedAt: item.Timestamp || null, dining: diningForTable(kioskTables, tbl) };
+    let res;
+    try { res = await printKitchenOrder(order, allMenu); }
+    catch (err) { res = { success: false, error: String(err.message || err) }; }
+    logActivity({ kind: res.success ? 'kitchen_print' : 'kitchen_print_fail', branchId: branchKey, tableNo: tbl, sessionId: String(item.SessionId || ''), staff,
+      items: kitchenItems([item]), detail: 'ใบยกเลิก · ' + (res.success ? `${res.printed}/${res.total} ใบ` : (res.error || 'ไม่ทราบสาเหตุ')) });
+    if (res.success) {
+      setSaveAlert({ type: 'success', msg: `🖨️ ยกเลิก "${item.ItemName}" แล้ว · ส่งใบยกเลิกเข้าครัวแล้ว` });
+      setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
+    } else {
+      setSaveAlert({ type: 'error', msg: `⚠️ ยกเลิก "${item.ItemName}" ในระบบแล้ว แต่พิมพ์ใบยกเลิกเข้าครัวไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'} — แจ้งครัวด้วยตัวเอง` });
     }
   };
 
@@ -1970,6 +1996,8 @@ function App() {
             initialDiscount={checkoutDiscount}
             initialMember={checkoutCrm ? checkoutCrm.member : null}
             initialCouponRef={checkoutCrm ? checkoutCrm.couponRef : null}
+            initialVouchers={checkoutCrm ? checkoutCrm.vouchers || null : null}
+            initialVoucherRef={checkoutCrm ? checkoutCrm.voucherRef || null : null}
             branchId={branchKey}
             users={users}
             currentUser={currentUser}

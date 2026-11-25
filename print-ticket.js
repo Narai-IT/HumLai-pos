@@ -321,7 +321,19 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     printer.println("--------------------------------");
 
     const isKitchen = printerType === 'kitchen';
-    if (isKitchen) {
+    // ใบยกเลิกรายการ (หน้าขายกดยกเลิกรายการที่ส่งครัวแล้ว) — หัวใบตัวใหญ่ให้ครัวเห็นว่าต้องหยุดทำ
+    const cancel = isKitchen && orderData.cancel && typeof orderData.cancel === 'object' ? orderData.cancel : null;
+    if (cancel) {
+      const dining = String(cancel.dining || '').trim() || diningOf({ ...orderData, dining: '' });
+      const tableLine = tableLineOf(orderData, dining);
+      printer.setTextQuadArea(); // สูง+กว้างสองเท่า (เรียก DoubleHeight แล้ว DoubleWidth ตัวหลังจะทับตัวแรก)
+      printer.invert(true);
+      printer.println(' ยกเลิกรายการ ');
+      printer.invert(false);
+      printer.println(tableLine || dining);
+      printer.setTextNormal();
+      printer.println('*** ไม่ต้องทำ / หยุดทำ ***');
+    } else if (isKitchen) {
       // ตัวใหญ่ให้ครัวเห็นทันทีว่าทำให้ใคร: ประเภท + โต๊ะ
       const dining = diningOf(orderData);
       const tableLine = tableLineOf(orderData, dining);
@@ -371,6 +383,10 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
           const amount = money2(item.amount) + (isAbb ? ' V' : '');
           const lines = wrap(`${qty}x ${itemName}`, LINE - widthOf(amount) - 1);
           lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(printable(l), amount) : printable(l)));
+        } else if (cancel) {
+          printer.setTextDoubleHeight();
+          printer.println(printable(`ยกเลิก ${qty}x ${itemName}`));
+          printer.setTextNormal();
         } else {
           printer.println(printable(`${qty}x ${itemName}`));
         }
@@ -439,6 +455,14 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
         }
       }
       if (!qrPrinted) printer.println(isPreBill ? "กรุณาชำระเงินที่เคาน์เตอร์" : (clean(header.footer) || "Thank you!"));
+    } else if (cancel) {
+      const hm = (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d) ? d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }) : ''; };
+      const orderedAt = hm(cancel.orderedAt);
+      if (orderedAt) printer.println(`สั่งเมื่อ: ${orderedAt} น.`);
+      printer.println(`ยกเลิกเมื่อ: ${hm(new Date())} น.`);
+      if (String(cancel.staff || '').trim()) printer.println(printable(`ยกเลิกโดย: ${String(cancel.staff).trim()}`));
+      printer.alignCenter();
+      printer.println("*** ใบยกเลิก ***");
     } else {
       printer.alignCenter();
       printer.println("*** END OF TICKET ***");

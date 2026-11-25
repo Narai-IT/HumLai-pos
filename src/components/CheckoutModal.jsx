@@ -28,7 +28,9 @@ const CheckoutModal = ({
   // ส่วนลดเลือกที่หน้าขาย (ปุ่มสแกนสมาชิก / ใช้ส่วนลด) ส่งมาเป็น initialDiscount · หน้านี้ไม่มีหน้าเลือกส่วนลดแล้ว
   settings = {}, initialDiscount = null, branchId = '', menu = [],
   // สมาชิกที่สแกนไว้แล้วที่หน้าขาย + รหัสการจองคูปองของบิล (คูปองที่ยิงที่หน้าขาย) → ไม่ต้องสแกนซ้ำ
-  initialMember = null, initialCouponRef = null
+  initialMember = null, initialCouponRef = null,
+  // Voucher ที่ใช้ไว้ที่หน้าขาย (ปุ่ม Voucher) + รหัสการจอง → หน้านี้ใช้ต่อ ไม่ต้องยิงซ้ำ (แก้ไข/เพิ่ม/เอาออกที่หน้าขาย)
+  initialVouchers = null, initialVoucherRef = null
 }) => {
   const [paymentStep, setPaymentStep] = useState('summary');
   // รับส่วนลดที่เลือกมาจากหน้าขายเป็นค่าตั้งต้น พนักงานจะได้ไม่ต้องเลือกซ้ำ
@@ -240,8 +242,9 @@ const CheckoutModal = ({
 
   // ── Voucher (ใช้แทนเงิน ไม่ใช่ส่วนลด): ยิง QR / พิมพ์รหัส Voucher กระดาษ หรือสแกน QR Voucher ในบัตรสมาชิก LINE ──
   // ระบบสมาชิกตรวจและจองไว้กับบิลนี้ · ตัดเป็นใช้แล้วตอนบันทึกบิล · ยอดขาดจ่ายเพิ่มด้วยโอน/บัตร · ยอดเกินไม่ทอน
-  const voucherRef = useRef(newCouponRef('vc'));
-  const [vouchers, setVouchers] = useState([]);
+  const voucherRef = useRef(initialVoucherRef || newCouponRef('vc'));
+  const [vouchers, setVouchers] = useState(() => (Array.isArray(initialVouchers) ? initialVouchers : []));
+  const vouchersFromSales = !!initialVoucherRef && Array.isArray(initialVouchers) && initialVouchers.length > 0;
   const [voucherCode, setVoucherCode] = useState('');
   const [voucherBusy, setVoucherBusy] = useState(false);
   const [voucherErr, setVoucherErr] = useState('');
@@ -276,8 +279,9 @@ const CheckoutModal = ({
   const heldVouchers = useRef([]);
   useEffect(() => { heldVouchers.current = vouchers.map(v => v.id); }, [vouchers]);
   useEffect(() => () => {
-    if (!completedRef.current) heldVouchers.current.forEach(id => crmCall('crmVoucherRelease', { voucherId: id, ref: voucherRef.current, branchId }));
-  }, [branchId]);
+    // Voucher ที่มาจากหน้าขาย หน้าขายเป็นเจ้าของการจอง (กลับไปหน้าขายแล้วยังใช้อยู่) → ไม่ปล่อยที่นี่
+    if (!completedRef.current && !initialVoucherRef) heldVouchers.current.forEach(id => crmCall('crmVoucherRelease', { voucherId: id, ref: voucherRef.current, branchId }));
+  }, [branchId, initialVoucherRef]);
   // rest = วิธีจ่ายส่วนที่ขาด ('transfer' | 'card') · ไม่ส่ง = Voucher ครบยอด
   const handleVoucherPay = (rest) => {
     if (!vouchers.length) return;
@@ -577,7 +581,8 @@ const CheckoutModal = ({
               </div>
             )}
             <button
-              onClick={() => setPaymentStep('payment_method')}
+              // มี Voucher จากหน้าขายแล้ว → ไปหน้า Voucher เลย เก็บเฉพาะยอดที่เหลือ
+              onClick={() => setPaymentStep(vouchersFromSales ? 'voucher' : 'payment_method')}
               disabled={(memberOnlyInBill.length > 0 && !member) || !!quotaProblem}
               className="confirm-btn"
               style={{ width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800', ...((memberOnlyInBill.length > 0 && !member) || quotaProblem ? { opacity: 0.45, cursor: 'not-allowed' } : {}) }}
@@ -684,7 +689,12 @@ const CheckoutModal = ({
               <div style={{ fontSize: '2.2rem', fontWeight: '900', color: '#ea580c', lineHeight: 1 }}>฿{grand.toLocaleString()}</div>
             </div>
 
-            <form onSubmit={e => { e.preventDefault(); addVoucher(); }} style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+            {vouchersFromSales && (
+              <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', color: '#5b21b6', borderRadius: '10px', padding: '0.5rem 0.75rem', fontSize: '0.82rem', fontWeight: 600, marginBottom: '0.6rem' }}>
+                {lang === 'th' ? 'Voucher ใส่ไว้ที่หน้าขายแล้ว · จะเพิ่มหรือเอาออก กดย้อนกลับไปที่ปุ่ม Voucher ในหน้าขาย' : 'Vouchers were added on the sales screen · go back to change them'}
+              </div>
+            )}
+            {!vouchersFromSales && <form onSubmit={e => { e.preventDefault(); addVoucher(); }} style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
               <label htmlFor="voucher-code" className="sr-only" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>{lang === 'th' ? 'รหัส Voucher' : 'Voucher code'}</label>
               <input
                 id="voucher-code" value={voucherCode} autoComplete="off" autoFocus
@@ -706,10 +716,10 @@ const CheckoutModal = ({
                 style={{ border: 0, background: '#0f172a', color: '#fff', borderRadius: '8px', padding: '0 16px', fontWeight: 800, opacity: voucherBusy || !voucherCode.trim() ? 0.5 : 1 }}>
                 {voucherBusy ? '…' : (lang === 'th' ? 'เพิ่ม' : 'Add')}
               </button>
-            </form>
-            <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
+            </form>}
+            {!vouchersFromSales && <div style={{ fontSize: '0.78rem', color: '#64748b', marginBottom: '0.75rem' }}>
               {lang === 'th' ? 'Voucher กระดาษ: ยิง QR หรือพิมพ์รหัสบนใบ · Voucher ในบัตรสมาชิก LINE: ให้ลูกค้ากด "ใช้ Voucher" แล้วยิง QR' : 'Paper voucher: scan or type the code · LINE member voucher: customer taps "Use voucher", then scan'}
-            </div>
+            </div>}
             {voucherErr && <div role="alert" style={{ color: '#dc2626', fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.75rem' }}>{voucherErr}</div>}
 
             {vouchers.map(v => (
@@ -719,7 +729,7 @@ const CheckoutModal = ({
                   <div style={{ fontWeight: 800 }}>{v.title} <span style={{ color: '#9d174d' }}>฿{Number(v.value).toLocaleString()}</span></div>
                   <div style={{ fontSize: '0.78rem', color: '#64748b' }}>{v.code}{v.memberName ? ` · ${v.memberName}` : ''}</div>
                 </div>
-                <button type="button" onClick={() => removeVoucher(v)} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700 }}>{lang === 'th' ? 'เอาออก' : 'Remove'}</button>
+                {!vouchersFromSales && <button type="button" onClick={() => removeVoucher(v)} style={{ border: '1px solid #cbd5e1', background: '#fff', borderRadius: '8px', padding: '6px 10px', fontWeight: 700 }}>{lang === 'th' ? 'เอาออก' : 'Remove'}</button>}
               </div>
             ))}
 

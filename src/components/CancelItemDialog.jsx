@@ -37,7 +37,7 @@ export default function CancelItemDialog({ item, onClose, onConfirm }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginTop: '0.6rem', background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 10, padding: '0.5rem 0.7rem', fontSize: '0.82rem' }}>
-          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} /> ส่งครัวไปแล้ว ครัวอาจทำไปแล้ว — แจ้งครัวด้วย
+          <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: 2 }} /> ส่งครัวไปแล้ว — ระบบจะพิมพ์ใบยกเลิกพร้อมเหตุผลเข้าครัวให้เอง (ครัวอาจทำไปแล้ว)
         </div>
         <label style={{ display: 'block', fontWeight: 700, marginTop: '0.8rem', fontSize: '0.9rem' }}>เหตุผล (จำเป็น)</label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', margin: '0.4rem 0' }}>

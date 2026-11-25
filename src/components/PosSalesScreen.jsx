@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RefreshCw, LogOut, Settings, Trash2, Plus, Minus,
-  MoreHorizontal, Globe, Receipt, Printer, Tag, X, UserRound, QrCode
+  MoreHorizontal, Globe, Receipt, Printer, Tag, X, UserRound, QrCode, Ticket
 } from 'lucide-react';
+import VoucherDialog from './VoucherDialog';
 import QrScanner from './QrScanner';
 import { crmEnabled, lookupMember, crmCall, newCouponRef } from '../utils/crm';
 import { isQrCode, useScannerWedge } from '../utils/qrScan';
@@ -289,6 +290,34 @@ const PosSalesScreen = ({
     couponRef.current = newCouponRef('pos');
     setSelectedDiscount(null); setMember(null); setMemberErr(''); setWalletMsg('');
   }, [tableNumber, branchId]);
+  // ── Voucher (ใช้แทนเงิน ไม่ใช่ส่วนลด): ใช้กับบิลของโต๊ะนี้ก่อนพิมพ์ใบแจ้งยอด → QR เฉพาะยอดที่ลูกค้าต้องจ่ายเพิ่ม ──
+  // ระบบสมาชิกตรวจและจองไว้ (voucherRef) · ส่งต่อให้หน้าชำระเงินชุดเดียวกัน ไม่ต้องยิงซ้ำ · ทุกคนที่ชำระเงินได้ใช้ได้
+  const voucherRef = useRef(newCouponRef('vc'));
+  const [vouchers, setVouchers] = useState([]);
+  const [showVoucher, setShowVoucher] = useState(false);
+  const [voucherBusy, setVoucherBusy] = useState(false);
+  const [voucherErr, setVoucherErr] = useState('');
+  const addVoucher = async (code) => {
+    setVoucherBusy(true); setVoucherErr('');
+    const res = await crmCall('crmVoucherCheck', { code, ref: voucherRef.current, branchId });
+    setVoucherBusy(false);
+    if (!res.success) { setVoucherErr(res.error || t('ตรวจ Voucher ไม่สำเร็จ', 'Voucher check failed')); return false; }
+    setVouchers(prev => (prev.some(x => x.id === res.voucher.id) ? prev : [...prev, res.voucher]));
+    return true;
+  };
+  const removeVoucher = (v) => {
+    crmCall('crmVoucherRelease', { voucherId: v.id, ref: voucherRef.current, branchId });
+    setVouchers(prev => prev.filter(x => x.id !== v.id));
+  };
+  // เปลี่ยนโต๊ะ = คนละบิล → ปล่อย Voucher ที่จองไว้กับโต๊ะเก่า (ชำระแล้ว Voucher เป็นใช้แล้ว การปล่อยไม่มีผล)
+  const heldVouchers = useRef([]);
+  useEffect(() => { heldVouchers.current = vouchers.map(v => v.id); }, [vouchers]);
+  useEffect(() => {
+    heldVouchers.current.forEach(id => crmCall('crmVoucherRelease', { voucherId: id, ref: voucherRef.current, branchId }));
+    heldVouchers.current = [];
+    voucherRef.current = newCouponRef('vc');
+    setVouchers([]); setVoucherErr(''); setShowVoucher(false);
+  }, [tableNumber, branchId]);
   // รายการในบิลเปลี่ยน / เปิดหน้าต่างสมาชิก (เช่น กลับจากหน้าชำระเงิน) → คิดคูปองใหม่ให้ยอดตรงเสมอ
   const memberId = member ? member.id : '';
   const walletArgs = useRef({});
@@ -388,6 +417,9 @@ const PosSalesScreen = ({
   const serviceCharge = Math.round(afterDiscount * scRate) / 100;
   const vat = Math.round((afterDiscount + serviceCharge) * vatRate) / 100;
   const grandTotal = afterDiscount + serviceCharge + vat;
+  const voucherTotal = Math.round(vouchers.reduce((a, v) => a + (Number(v.value) || 0), 0) * 100) / 100;
+  // ยอดที่ลูกค้าต้องจ่ายเพิ่มหลังหัก Voucher (เกินยอดไม่ทอน)
+  const amountDue = Math.max(0, Math.round((grandTotal - voucherTotal) * 100) / 100);
 
   // ใบแจ้งยอดให้ลูกค้าตรวจก่อนจ่าย — พิมพ์เฉพาะของที่เข้าบิลแล้ว
   const handlePrintPreBill = () => {
@@ -399,6 +431,12 @@ const PosSalesScreen = ({
     if (discountAmount > 0) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-B ${discountAmount.toLocaleString()}` });
     if (serviceCharge > 0) summary.push({ label: `Service ${settings.serviceCharge.rate}%`, value: `B ${serviceCharge.toLocaleString()}` });
     if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: `B ${vat.toLocaleString()}` });
+    // Voucher: ยอดรวมก่อนหัก + Voucher แต่ละใบ → TOTAL และ QR = ยอดที่ลูกค้าต้องจ่ายเพิ่มเท่านั้น
+    if (vouchers.length) {
+      summary.push({ label: 'ยอดรวม', value: `B ${grandTotal.toLocaleString()}` });
+      vouchers.forEach(v => summary.push({ label: `Voucher ${v.code}`, value: `-B ${Number(v.value).toLocaleString()}` }));
+      if (amountDue <= 0) summary.push({ label: 'ชำระด้วย Voucher ครบแล้ว', value: 'ไม่ต้องจ่ายเพิ่ม' });
+    }
 
     const guests = (() => { try { return localStorage.getItem('customer_count_' + tableNumber) || ''; } catch { return ''; } })();
     onPrintPreBill({
@@ -415,8 +453,8 @@ const PosSalesScreen = ({
         };
       }),
       summary,
-      total: grandTotal.toLocaleString(),
-      totalAmount: grandTotal   // ยอดตัวเลขสำหรับ QR สแกนจ่ายท้ายบิล
+      total: amountDue.toLocaleString(),
+      totalAmount: amountDue   // ยอดตัวเลขสำหรับ QR สแกนจ่ายท้ายบิล (หัก Voucher แล้ว)
     });
   };
 
@@ -434,7 +472,9 @@ const PosSalesScreen = ({
       alert(t('โต๊ะนี้ยังไม่มีรายการอาหารที่ต้องชำระ', 'This table has nothing to pay for yet.'));
       return;
     }
-    onCheckout(sentItems, sentTotal, selectedDiscount, member ? { member, couponRef: couponRef.current } : null);
+    onCheckout(sentItems, sentTotal, selectedDiscount, (member || vouchers.length)
+      ? { member: member || null, couponRef: member ? couponRef.current : null, vouchers, voucherRef: vouchers.length ? voucherRef.current : null }
+      : null);
   };
 
   // สรุปยอดหลังหักส่วนลด (ใช้ทั้งหน้าต่างสมาชิกและหน้าต่างส่วนลด)
@@ -874,15 +914,30 @@ const PosSalesScreen = ({
                   ? `${selectedDiscount.name} -฿${discountAmount.toLocaleString()}`
                   : t('ส่วนลด', 'Discount')}</span>
               </button>
-              <button
-                className="pos2-tool"
-                onClick={handlePrintPreBill}
-                disabled={sentItems.length === 0}
-                title={t('พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนชำระเงิน', 'Print a check bill for the customer')}
-              >
-                <Printer size={14} /> {t('ใบแจ้งยอด', 'Check bill')}
-              </button>
+              {crmOn && (
+                <button
+                  className="pos2-tool"
+                  onClick={() => { setVoucherErr(''); setShowVoucher(true); }}
+                  disabled={sentItems.length === 0}
+                  title={t('ชำระด้วย Voucher — ใบแจ้งยอดจะมี QR เฉพาะยอดที่ต้องจ่ายเพิ่ม', 'Pay with voucher')}
+                  style={{ minWidth: 0, ...(vouchers.length ? { borderColor: '#7c3aed', color: '#6d28d9', background: '#f5f3ff' } : {}) }}
+                >
+                  <Ticket size={14} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                    {vouchers.length ? `-฿${voucherTotal.toLocaleString()}` : 'Voucher'}
+                  </span>
+                </button>
+              )}
             </div>
+            <button
+              className="pos2-tool"
+              onClick={handlePrintPreBill}
+              disabled={sentItems.length === 0}
+              title={t('พิมพ์ใบแจ้งยอดให้ลูกค้าตรวจก่อนชำระเงิน', 'Print a check bill for the customer')}
+              style={{ width: '100%', marginTop: '0.4rem', justifyContent: 'center' }}
+            >
+              <Printer size={14} /> {t('พิมพ์ใบแจ้งยอด', 'Print check bill')}{vouchers.length ? ` (QR ฿${amountDue.toLocaleString()})` : ''}
+            </button>
 
             <div className="pos2-sum">
               <span>{t('ส่งครัวแล้ว', 'Sent')}</span><b>฿{sentTotal.toLocaleString()}</b>
@@ -917,10 +972,21 @@ const PosSalesScreen = ({
                 <b>+฿{vat.toLocaleString()}</b>
               </div>
             )}
+            {vouchers.map(v => (
+              <div key={v.id} className="pos2-sum" style={{ color: '#6d28d9' }}>
+                <span>Voucher {v.code}</span><b style={{ color: '#6d28d9' }}>-฿{Number(v.value).toLocaleString()}</b>
+              </div>
+            ))}
             <div className="pos2-grand">
               <span>{t('สุทธิ', 'Total')}</span>
               <b>฿{grandTotal.toLocaleString()}</b>
             </div>
+            {vouchers.length > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '0.35rem 0.7rem', marginTop: '0.35rem' }}>
+                <span style={{ fontWeight: 800, color: '#9a3412' }}>{t('ลูกค้าต้องจ่ายเพิ่ม', 'Customer pays')}</span>
+                <b style={{ fontSize: '1.3rem', color: amountDue > 0 ? '#ea580c' : '#16a34a' }}>฿{amountDue.toLocaleString()}</b>
+              </div>
+            )}
             <div className="pos2-actions">
               {settledOnly ? (
                 <button className="pos2-close-table" onClick={handleCloseSettled}>
@@ -1015,6 +1081,10 @@ const PosSalesScreen = ({
       )}
 
       {/* ── ส่วนลดของร้าน: ไม่ต้องสแกนสมาชิก ── */}
+      {showVoucher && (
+        <VoucherDialog tableNumber={tableNumber} total={grandTotal} vouchers={vouchers} busy={voucherBusy} error={voucherErr}
+          onAdd={addVoucher} onRemove={removeVoucher} onClose={() => setShowVoucher(false)} />
+      )}
       {showStoreDisc && (
         <div className="pos2-modal-overlay" onClick={() => setShowStoreDisc(false)}>
           <div className="pos2-modal" onClick={(e) => e.stopPropagation()}>
