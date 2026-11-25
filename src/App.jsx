@@ -442,6 +442,8 @@ function App() {
     setReceiptHeader(b ? {
       name: b.name || b.id, address: b.address || '', phone: b.phone || '',
       taxId: b.taxId || '', posId: b.posId || '', footer: b.receiptFooter || '',
+      // ใบกำกับภาษีอย่างย่อ: สำนักงานใหญ่ / สาขาที่ 00001 · ชื่อผู้ประกอบการตาม ภ.พ.20
+      taxBranch: b.taxBranch || '', legalName: b.legalName || '',
       // อัตรา VAT สำหรับแยกยอดในใบกำกับภาษีอย่างย่อ — ใช้ค่าเดียวกับใบกำกับเต็มรูป (ไม่ได้ตั้ง = 7)
       vatRate: Number(posSettings?.vat?.rate) > 0 ? Number(posSettings.vat.rate) : 7,
       ...receiptHeaderStyle(receiptSettings)
@@ -1102,7 +1104,7 @@ function App() {
             subItems: opt ? opt.split(', ').filter(Boolean) : []
           };
         }),
-        summary: [{ label: 'ชำระโดย', value: 'เงินโอน (QR)' }],
+        summary: [{ label: 'ชำระโดย', value: 'เงินโอน (QR)', group: 'pay' }],
         total: money2(total)
       };
       const res = await sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData }).catch(e => ({ success: false, error: e.message }));
@@ -1342,11 +1344,11 @@ function App() {
       // แต้มที่ได้จากบิลนี้ (ระบบสมาชิกตอบทันเวลา) · ไม่ทัน = แต้มเข้าภายหลังและลูกค้าได้ข้อความแจ้งทาง LINE
       if (printInfo.member && Array.isArray(base.summary)) {
         base.summary = [...base.summary, crm && crm.sent
-          ? { label: 'แต้มที่ได้', value: `+${Number(crm.points || 0).toLocaleString()}${crm.balance != null ? ` (คงเหลือ ${Number(crm.balance).toLocaleString()})` : ''}` }
-          : { label: 'แต้ม', value: 'เข้าบัญชีภายหลัง แจ้งทาง LINE' }];
+          ? { label: 'แต้มที่ได้', value: `+${Number(crm.points || 0).toLocaleString()}${crm.balance != null ? ` (คงเหลือ ${Number(crm.balance).toLocaleString()})` : ''}`, group: 'pay' }
+          : { label: 'แต้ม', value: 'เข้าบัญชีภายหลัง แจ้งทาง LINE', group: 'pay' }];
       }
       if (receiptPrinter) {
-        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: { ...base, paid: !!finalNo } })
+        sendPrintJob({ ip: receiptPrinter.ip, printerType: 'receipt', orderData: { ...base, staff: base.staff || currentUser?.username || '', paid: !!finalNo } })
           .then(result => { if (!result.success) console.error('Silent print failed:', result.error); })
           .catch(err => console.error('Silent print failed:', err));
       } else if (printInfo.print && printInfo.buildReceiptHtml) {

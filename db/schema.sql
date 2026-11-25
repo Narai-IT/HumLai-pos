@@ -422,6 +422,14 @@ IF COL_LENGTH('dbo.Branches', 'posId') IS NULL
   ALTER TABLE dbo.Branches ADD posId NVARCHAR(40) NULL;
 GO
 
+-- หัวใบกำกับภาษีอย่างย่อ: สถานประกอบการ (สำนักงานใหญ่ / สาขาที่ 00001) + ชื่อผู้ประกอบการตาม ภ.พ.20 (ถ้าต่างจากชื่อร้าน)
+IF COL_LENGTH('dbo.Branches', 'taxBranch') IS NULL
+  ALTER TABLE dbo.Branches ADD taxBranch NVARCHAR(10) NULL;
+GO
+IF COL_LENGTH('dbo.Branches', 'legalName') IS NULL
+  ALTER TABLE dbo.Branches ADD legalName NVARCHAR(200) NULL;
+GO
+
 -- ─────────────────────────────────────────
 -- แยกข้อมูลขายตามสาขา (เฟส 2)
 -- BranchId = Branches.id ของร้านที่เกิดรายการ — แยกจาก RecordedBy ที่ยังเป็น "ใครบันทึก" แบบเดิม

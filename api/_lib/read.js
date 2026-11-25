@@ -23,6 +23,7 @@ const PROMO_COLS   = cols(['id','name','nameEn','price','origPrice']);
 const USER_COLS    = cols(['id','username','pin','canCheckout','isAdmin','isCashier','branch']);
 const BRANCH_BASE  = ['id','name','billPrefix','phone','address','taxId','receiptFooter','isActive'];
 const BRANCH_COLS  = cols([...BRANCH_BASE, 'posId']);
+const BRANCH_TAX_COLS = cols([...BRANCH_BASE, 'posId', 'taxBranch', 'legalName']);
 // branchId = คอลัมน์ BranchId (SQL ไม่สนตัวพิมพ์เล็ก/ใหญ่ ส่วนชื่อคีย์ที่ได้ตามที่เขียนใน SELECT)
 const PRINTER_COLS = cols(['id','name','ip','type','printMode','branchId','categories']);
 const DISCOUNT_COLS= cols(['id','name','type','value','categories']);
@@ -86,7 +87,8 @@ export const getCategoryRows = () => allRows('Categories', CATEGORY_COLS, mapCat
 
 // ตารางสาขาเพิ่มมาทีหลัง — เครื่องที่ยังไม่ได้รัน sql:init จะยังไม่มีตาราง
 // ต้องไม่ทำให้ getStatic ทั้งก้อนพัง ไม่งั้นหน้าร้านโหลดเมนูไม่ขึ้น
-const getBranches = () => allRows('Branches', BRANCH_COLS, mapBranch)
+const getBranches = () => allRows('Branches', BRANCH_TAX_COLS, mapBranch)
+  .catch(() => allRows('Branches', BRANCH_COLS, mapBranch))
   .catch(() => allRows('Branches', cols(BRANCH_BASE), mapBranch))
   .catch(() => []);
 
