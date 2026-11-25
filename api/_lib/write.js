@@ -6,6 +6,7 @@ import { toText, toNum } from './rows.js';
 import { deductStock } from './stock.js';
 import { branchForWrite, requestedBranch, branchFilter } from './branch.js';
 import { billPayload, queueBill, sendBillNow, flushCrmQueue } from './crm.js';
+import { logActivity, staffOf } from './activity.js';
 
 const ORDER_INSERT_COLS = ['Timestamp','OrderNumber','CustomerName','Address','ItemDetail','DiningOption','Price','TotalAmount','Status','OrderStartTime','CompletionTime','RecordedBy','Quantity','TsLocal','BranchId'];
 const PAYMENT_COLS = ['timestamp','orderNumber','tableNo','paymentMethod','grandTotal','staff','shiftId','splitDetail','BranchId'];
@@ -239,6 +240,9 @@ export async function handleKioskPaidOrder(data) {
   }, { isolation: 'READ_COMMITTED' });
   if (result.success && !result.duplicate) {
     sendBillNow(branchId, result.orderNumber).then(() => flushCrmQueue()).catch(() => {});
+    await logActivity({ kind: 'pay', branchId, tableNo: table, orderNumber: result.orderNumber, sessionId: session, amount: total,
+      detail: method + ' · ลูกค้าสั่งและจ่ายเอง' + (data.memberId ? ' · สมาชิก ' + data.memberId : ''), staff: { name: 'ลูกค้าสั่งเอง' },
+      items: items.map(item => ({ name: (item.food && item.food.name) || '', qty: Number(item.quantity) || 1, price: (Number(item.food && item.food.price) || 0) * (Number(item.quantity) || 1) })) });
   }
 
   // 4) ตัดสต็อกตาม BOM — อยู่นอกทรานแซกชันโดยตั้งใจ บิลกับยอดเงินบันทึกไปแล้ว
@@ -257,7 +261,7 @@ export async function handleKioskPaidOrder(data) {
 }
 
 // ── รายการอาหารรายโต๊ะ ──
-export async function addTableOrder(data) {
+export async function addTableOrder(data, user) {
   const tableNumber = data.tableNumber || '';
   const sessionId   = data.sessionId   || String(Date.now());
   const items       = data.items       || [];
@@ -277,6 +281,9 @@ export async function addTableOrder(data) {
     itemOptionText(item), timestamp, 'pending', recordedBy, branchId
   ]);
   await insertRows('TableOrders', TABLE_COLS, rows);
+  await logActivity({ kind: 'order', branchId, tableNo: tableNumber, sessionId, at: timestamp, staff: await staffOf(user, recordedBy),
+    items: items.map(item => ({ name: (item.food && item.food.name) || '', qty: Number(item.quantity) || 1, price: (Number(item.food && item.food.price) || 0) * (Number(item.quantity) || 1) })),
+    amount: items.reduce((t, item) => t + (Number(item.food && item.food.price) || 0) * (Number(item.quantity) || 1), 0) });
   return { success: true, sessionId };
 }
 
@@ -317,16 +324,24 @@ export async function clearTableOrders(data) {
   return { success: true };
 }
 
-export async function deleteTableOrderItem(data) {
-  const res = await query(
-    `DELETE FROM dbo.TableOrders
-      WHERE RowId = (SELECT TOP (1) RowId FROM dbo.TableOrders
-                      WHERE TableNumber = @t
-                        AND SessionId = @s
-                        AND ISNULL(ItemName, '') = @n${branchFilter(requestedBranch(data))}
-                      ORDER BY RowId DESC)`,
-    { t: String(data.tableNumber || ''), s: String(data.sessionId || ''), n: String(data.itemName || ''), branchId: requestedBranch(data) }
-  );
+// ยกเลิกรายการในโต๊ะ (ยังไม่ชำระ) — ต้องมีเหตุผล · จดลงบันทึกการทำงาน
+export async function deleteTableOrderItem(data, user) {
+  const reason = String(data.reason || '').trim().slice(0, 300);
+  if (reason.length < 2) return { success: false, error: 'กรุณาใส่เหตุผลที่ยกเลิกรายการ (ถ้าหน้าจอไม่มีช่องให้ใส่ ให้รีเฟรชหน้าเว็บ)' };
+  const params = { t: String(data.tableNumber || ''), s: String(data.sessionId || ''), n: String(data.itemName || ''), branchId: requestedBranch(data) };
+  const row = (await query(
+    `SELECT TOP (1) RowId, ItemName, ItemPrice, Quantity, [Timestamp], RecordedBy FROM dbo.TableOrders
+      WHERE TableNumber = @t AND SessionId = @s AND ISNULL(ItemName, '') = @n${branchFilter(requestedBranch(data))}
+      ORDER BY RowId DESC`, params)).recordset[0];
+  if (!row) return { success: false };
+  const res = await query(`DELETE FROM dbo.TableOrders WHERE RowId = @id`, { id: row.RowId });
+  if (res.rowsAffected[0] > 0) {
+    const qty = Number(row.Quantity) || 1;
+    const mins = row.Timestamp ? Math.round((Date.now() - new Date(row.Timestamp).getTime()) / 60000) : null;
+    await logActivity({ kind: 'cancel_item', branchId: requestedBranch(data) || await branchForWrite(data), tableNo: params.t, sessionId: params.s, reason,
+      items: [{ name: row.ItemName, qty, price: (Number(row.ItemPrice) || 0) * qty }], amount: (Number(row.ItemPrice) || 0) * qty,
+      detail: mins != null && mins >= 0 ? 'สั่งไปแล้ว ' + mins + ' นาที' : '', staff: await staffOf(user, data.staff) });
+  }
   return { success: res.rowsAffected[0] > 0 };
 }
 
@@ -371,7 +386,7 @@ export async function moveTableItems(data) {
 
 // ── บิล ──
 // rows = อาเรย์ 13 ช่องเรียงตามหัวตารางเดิม (หน้าบ้านส่งมาแบบนี้ตั้งแต่ยุคชีท)
-export async function insertOrder(data) {
+export async function insertOrder(data, user) {
   const rows = Array.isArray(data.rows) ? data.rows : [];
   // บิลค้างในเครื่องที่ส่งซ้ำจากหน้าเว็บรุ่นเก่าไม่มี branchId → ลงสาขาหลัก
   const branchId = await branchForWrite(data);
@@ -445,6 +460,13 @@ export async function insertOrder(data) {
       if (crm) result.crm = crm;
     }
     flushCrmQueue().catch(() => {});
+    if (data.payment && !result.duplicate) {
+      const p = data.payment;
+      const disc = data.discount && Number(data.discount.amount) > 0 ? ' · ส่วนลด ' + (data.discount.name || '') + ' ' + Number(data.discount.amount).toFixed(2) : '';
+      await logActivity({ kind: 'pay', branchId, tableNo: p.tableNo, orderNumber: result.orderNumber, amount: Number(p.grandTotal) || 0,
+        detail: String(p.paymentMethod || '') + disc + (data.memberId ? ' · สมาชิก ' + data.memberId : ''), staff: await staffOf(user, p.staff),
+        items: rows.filter(Array.isArray).filter(r => toText(r[4]) && !String(r[4]).startsWith('↳')).map(r => ({ name: toText(r[4]), qty: toNum(r[12]) || 1, price: toNum(r[6]) || 0 })) });
+    }
   }
   return result;
 }

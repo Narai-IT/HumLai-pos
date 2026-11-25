@@ -28,7 +28,8 @@ const card = { border: '1px solid #e2e8f0', borderRadius: 12, padding: '0.75rem 
 const badge = (c, bg) => ({ padding: '0.12rem 0.5rem', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700, color: c, background: bg, whiteSpace: 'nowrap' });
 const btn = (bg, c = '#fff', border = bg) => ({ padding: '0.55rem 0.95rem', borderRadius: 10, border: `1.5px solid ${border}`, background: bg, color: c, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.88rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' });
 
-export default function VoidBillPage({ onClose, branchId = '', discounts = [], settings = {}, menu = [], onPrintPreBill }) {
+// canVoid/canDiscount = หัวหน้า/แอดมิน · แคชเชียร์: แก้ไขบิลได้แค่ลบ/ลดรายการ ยกเลิกบิลไม่ได้ ใส่/เปลี่ยนส่วนลดไม่ได้
+export default function VoidBillPage({ onClose, branchId = '', discounts = [], settings = {}, menu = [], onPrintPreBill, canVoid = false, canDiscount = false }) {
   const [tab, setTab] = useState('open');
   const [day, setDay] = useState('');
   const [bills, setBills] = useState([]);
@@ -103,7 +104,7 @@ export default function VoidBillPage({ onClose, branchId = '', discounts = [], s
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
           <Ban size={22} color="#dc2626" />
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '1.15rem', fontWeight: 800 }}>ยกเลิก / แก้ไขบิลที่ชำระแล้ว</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 800 }}>{canVoid ? 'ยกเลิก / แก้ไขบิลที่ชำระแล้ว' : 'แก้ไขบิลที่ชำระแล้ว'}</div>
             <div style={{ fontSize: '0.8rem', color: '#64748b' }}>เฉพาะบิลของวันนี้{day ? ` · ${thaiDay(day)}` : ''}</div>
           </div>
           <button onClick={load} title="โหลดใหม่" style={{ ...btn('#fff', '#334155', '#cbd5e1'), padding: '0.45rem 0.6rem' }}><RefreshCw size={16} className={loading ? 'spin' : ''} /></button>
@@ -180,7 +181,7 @@ export default function VoidBillPage({ onClose, branchId = '', discounts = [], s
                   <Pencil size={15} /> แก้ไข
                 </button>
               )}
-              {!b.cancelled && (
+              {!b.cancelled && canVoid && (
                 <button onClick={() => startVoid(b)} disabled={!!b.taxInvoiceNo}
                   title={b.taxInvoiceNo ? 'ยกเลิกใบกำกับภาษีก่อน' : ''}
                   style={{ ...btn('#fff', b.taxInvoiceNo ? '#94a3b8' : '#dc2626', b.taxInvoiceNo ? '#cbd5e1' : '#dc2626'), cursor: b.taxInvoiceNo ? 'not-allowed' : 'pointer' }}>
@@ -192,7 +193,7 @@ export default function VoidBillPage({ onClose, branchId = '', discounts = [], s
         </div>
       </div>
 
-      {editing && <EditBillModal bill={editing} discounts={discounts} settings={settings} menu={menu} branchId={branchId} onPrintPreBill={onPrintPreBill}
+      {editing && <EditBillModal bill={editing} discounts={discounts} settings={settings} menu={menu} branchId={branchId} onPrintPreBill={onPrintPreBill} canDiscount={canDiscount}
         onClose={() => setEditing(null)} onDone={(r) => { setEditing(null); setDone({ ...r, edited: true, total: r.newTotal }); load(); }} />}
 
       {target && (
@@ -256,7 +257,7 @@ const calcCharges = (subtotal, settings = {}, discountIn = 0) => {
 };
 const money2 = (n) => (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function EditBillModal({ bill, discounts = [], settings = {}, menu = [], branchId = '', onPrintPreBill, onClose, onDone }) {
+function EditBillModal({ bill, discounts = [], settings = {}, menu = [], branchId = '', onPrintPreBill, onClose, onDone, canDiscount = false }) {
   const [rows, setRows] = useState(() => bill.items.map(i => ({ line: i.line, name: i.name, options: i.options || [], unit: (Number(i.price) || 0) / (Number(i.qty) || 1), orig: Number(i.qty) || 1, qty: Number(i.qty) || 1 })));
   const [discountId, setDiscountId] = useState(() => {
     const cur = bill.discount && bill.discount.kind !== 'coupon' ? discounts.find(d => d.name === bill.discount.name) : null;
@@ -331,7 +332,7 @@ function EditBillModal({ bill, discounts = [], settings = {}, menu = [], branchI
           </>
         ) : (<>
         <div style={{ marginTop: '0.6rem', background: '#eff6ff', border: '1px solid #bfdbfe', color: '#1e3a8a', borderRadius: 10, padding: '0.55rem 0.75rem', fontSize: '0.82rem', lineHeight: 1.55 }}>
-          ใช้<b>เลขบิลเดิม {bill.orderNumber}</b> · ลบรายการหรือใส่ส่วนลดได้ · กดบันทึกแล้ว<b>พิมพ์ใบแจ้งยอดใหม่พร้อม QR ยอดใหม่</b>
+          ใช้<b>เลขบิลเดิม {bill.orderNumber}</b> · {canDiscount ? 'ลบรายการหรือใส่ส่วนลดได้' : 'ลบ/ลดรายการได้'} · กดบันทึกแล้ว<b>พิมพ์ใบแจ้งยอดใหม่พร้อม QR ยอดใหม่</b>
           {bill.edits && bill.edits.length ? <div>แก้ไขไปแล้ว {bill.edits.length} ครั้ง</div> : null}
         </div>
 
@@ -366,14 +367,15 @@ function EditBillModal({ bill, discounts = [], settings = {}, menu = [], branchI
         </div>
 
         <label style={{ display: 'block', fontWeight: 700, marginTop: '0.8rem', fontSize: '0.9rem' }}>ส่วนลด <span style={{ fontWeight: 500, color: '#64748b', fontSize: '0.78rem' }}>(ตั้งที่หลังบ้าน &gt; ส่วนลด)</span></label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem' }}>
-          <button style={chip(!discountId)} onClick={() => setDiscountId('')}>ไม่มีส่วนลด</button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.4rem', opacity: canDiscount ? 1 : 0.55 }}>
+          <button style={chip(!discountId)} disabled={!canDiscount} onClick={() => setDiscountId('')}>ไม่มีส่วนลด</button>
           {discounts.map(d => (
-            <button key={d.id} style={chip(String(discountId) === String(d.id))} onClick={() => setDiscountId(String(d.id))}>
+            <button key={d.id} style={chip(String(discountId) === String(d.id))} disabled={!canDiscount} onClick={() => setDiscountId(String(d.id))}>
               {d.name}{d.type === 'percent' && !String(d.name || '').includes('%') ? ` (${d.value}%)` : ''}
             </button>
           ))}
         </div>
+        {!canDiscount && <div style={{ fontSize: '0.78rem', color: '#b45309', marginTop: '0.3rem' }}>🔒 ใส่/เปลี่ยนส่วนลดได้เฉพาะหัวหน้าและแอดมิน · แคชเชียร์แก้ได้แค่ลบ/ลดรายการ</div>}
 
         <div style={{ marginTop: '0.75rem', background: '#f8fafc', borderRadius: 10, padding: '0.6rem 0.8rem', fontSize: '0.88rem', lineHeight: 1.7 }}>
           {line('ยอดบิลเดิม', <span style={{ textDecoration: changed ? 'line-through' : 'none', color: '#64748b' }}>฿{baht(bill.total)}</span>)}

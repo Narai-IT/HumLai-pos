@@ -18,6 +18,7 @@ import { branchForWrite } from './branch.js';
 import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPrintJobs, reportPrintJob } from './printQueue.js';
 import { getVoidableBills, voidBill } from './billVoid.js';
 import { editBill } from './billEdit.js';
+import { logClientActivity, getActivityLog } from './activity.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
 export const BUILD = '2026-11-10-print-queue';
@@ -62,6 +63,8 @@ const POST_ACTIONS = {
   // ยกเลิกบิลที่ชำระแล้ว (เฉพาะวันนี้ + หมายเหตุ) · ผู้จัดการ/แอดมิน · หักแต้มคืนใน CRM (billVoid.js)
   voidBill,
   editBill,
+  // บันทึกการทำงาน: เหตุการณ์ที่เกิดที่หน้าเว็บ (พิมพ์ใบครัว/ใบแจ้งยอด) · หน้าลูกค้าสั่งเองส่งได้โดยไม่ล็อกอิน
+  logActivity: logClientActivity,
   saveOutstandingBills:    write.saveOutstandingBills,
   createPaymentApproval:   write.createPaymentApproval,
   respondPaymentApproval:  write.respondPaymentApproval,
@@ -150,7 +153,7 @@ const POST_ACTIONS = {
 };
 
 // คำสั่งอ่านที่ไม่ได้อยู่ใน read.handleGet (ของเบ็ดเตล็ด/ของที่ใช้ตรวจระบบ)
-async function handleExtraGet(action, params = {}) {
+async function handleExtraGet(action, params = {}, user = null) {
   switch (action) {
     case 'getBOM':            return await getBomRows();
     // รหัสถัดไปสำหรับเมนู/หมวดหมู่ที่กำลังจะสร้าง (HL00001, HL00002, …)
@@ -162,6 +165,8 @@ async function handleExtraGet(action, params = {}) {
     case 'getPrintQueue':     return await getPrintQueue(params);
     case 'getCrmStatus':      return { success: true, ...(await crmStatus()) };
     case 'getVoidableBills':  return await getVoidableBills(params);
+    // ดูได้เฉพาะหัวหน้า/แอดมิน (ตรวจซ้ำแม้ไม่ได้เปิดบังคับล็อกอิน)
+    case 'getActivityLog':    return user && user.role === 'admin' ? await getActivityLog(params) : { success: false, auth: 'forbidden', error: 'รายงานนี้ดูได้เฉพาะหัวหน้าและแอดมิน' };
     case 'getTaxInvoices':    return { success: true, invoices: await listTaxInvoices() };
     case 'getTaxCustomers':   return { success: true, customers: await listTaxCustomers() };
     case 'getStock':          return await getStockLevels(String(params.branch || '').trim());
@@ -210,7 +215,7 @@ export async function route({ method, params = {}, body, ip = '' }) {
     if (action === 'ping') return await ping();
     const fromRead = await handleGet(action, params);
     if (fromRead) return fromRead;
-    const extra = await handleExtraGet(action, params);
+    const extra = await handleExtraGet(action, params, auth.user || null);
     if (extra) return extra;
     return { error: 'Unknown GET action' };
   }
@@ -226,7 +231,8 @@ export async function route({ method, params = {}, body, ip = '' }) {
     const auth = await authorize(action, token, data, null);
     if (!auth.ok) return auth.response;
     if (action === 'voidBill' || action === 'editBill') data._user = auth.user || null;   // ต้องรู้ว่าใครยกเลิก
-    const result = await handler(data);
+    // ผู้ใช้ที่ล็อกอิน (ถ้ามี) — ใช้ลงชื่อในบันทึกการทำงาน
+    const result = await handler(data, auth.user || null);
     if (MENU_ACTIONS.has(action) && result && result.success !== false) syncMenuToCrm().catch(() => {});   // CRM ใช้เลือกของฟรี/เงื่อนไขสินค้าในคูปอง
     if (action === 'saveSettings') clearEnforceCache(); // เปิด/ปิดบังคับล็อกอินมีผลทันที
     return result;

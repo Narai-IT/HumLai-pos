@@ -27,6 +27,7 @@ const ManagePrinters = lazy(() => import('./components/admin/ManagePrinters'));
 const ManageReceipt = lazy(() => import('./components/admin/ManageReceipt'));
 const ManageMemberMenu = lazy(() => import('./components/admin/ManageMemberMenu'));
 const ManageUsers = lazy(() => import('./components/admin/ManageUsers'));
+const ActivityLog = lazy(() => import('./components/admin/ActivityLog'));
 const ManageBranches = lazy(() => import('./components/admin/ManageBranches'));
 const ManageBranchMenu = lazy(() => import('./components/admin/ManageBranchMenu'));
 const ManageSettings = lazy(() => import('./components/admin/ManageSettings'));
@@ -47,6 +48,7 @@ import { receiptHeaderStyle } from './utils/receiptStyle';
 import { print80mm } from './utils/print80mm';
 import { getPrinterByType, getPrinters, mergeServerPrinters, printKitchenOrder, printPreBill } from './utils/printerRouting';
 import { makePayQr } from './utils/payQr';
+import CancelItemDialog from './components/CancelItemDialog';
 import { API_URL, setAuthToken, hasAuthToken, AUTH_REQUIRED_EVENT } from './utils/api';
 
 const MENU_ITEMS = [];
@@ -122,6 +124,12 @@ async function postOrderPayload(payload) {
 // เดิมยิงแบบ no-cors ซึ่งอ่านคำตอบไม่ได้เลย — บันทึกพังก็ไม่มีใครรู้ (ครัวทำอาหารแล้วแต่รายการหายจากโต๊ะ ไม่ถูกคิดเงิน)
 // คืน JSON ที่เซิร์ฟเวอร์ตอบ (success:false แบบไม่มี error = ไม่พบรายการ เช่นเครื่องอื่นลบไปแล้ว ให้ผู้เรียกตัดสินเอง)
 // โยน Error เมื่อส่งไม่ถึง/เซิร์ฟเวอร์ตอบ error · err.retry = ลองซ้ำได้ (เน็ตหลุด / เซิร์ฟเวอร์ล่ม)
+// บันทึกการทำงาน (หลังบ้าน > บันทึกการทำงาน) ของเหตุการณ์ที่เกิดที่หน้าเว็บ — ส่งไม่ได้ก็ช่างมัน ไม่กระทบการขาย
+function logActivity(body) {
+  fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'logActivity', ...body }) }).catch(() => {});
+}
+const kitchenItems = (rows) => (rows || []).filter(r => r && r.ItemName).map(r => ({ name: r.ItemName, qty: Number(r.Quantity) || 1, price: (Number(r.ItemPrice) || 0) * (Number(r.Quantity) || 1) }));
+
 async function postApi(body) {
   let res;
   try {
@@ -1046,12 +1054,15 @@ function App() {
     if (getPrinters().length > 0) {
       printKitchenOrder(buildKitchenOrder(newLocalItems, sentTable, sessionId, timestamp, diningForTable(kioskTables, sentTable)), allMenu)
         .then(res => {
+          logActivity({ kind: res.success ? 'kitchen_print' : 'kitchen_print_fail', branchId: branchKey, tableNo: String(sentTable || ''), sessionId, staff: currentUser?.username || '',
+            items: kitchenItems(newLocalItems), detail: res.success ? `${res.printed ?? ''}/${res.total ?? ''} ใบ` : (res.error || 'ไม่ทราบสาเหตุ') });
           // เงียบตอนสำเร็จ แต่ต้องบอกให้รู้ตอนพิมพ์ไม่ออก ไม่งั้นครัวไม่ได้ใบแล้วไม่มีใครรู้
           if (!res.success) {
             setSaveAlert({ type: 'error', msg: `⚠️ ส่งรายการเข้าบิลแล้ว แต่พิมพ์ใบครัวไม่สำเร็จ: ${res.error || 'ไม่ทราบสาเหตุ'}` });
           }
         })
         .catch(err => {
+          logActivity({ kind: 'kitchen_print_fail', branchId: branchKey, tableNo: String(sentTable || ''), sessionId, staff: currentUser?.username || '', items: kitchenItems(newLocalItems), detail: String(err.message || err) });
           setSaveAlert({ type: 'error', msg: `⚠️ ส่งรายการเข้าบิลแล้ว แต่พิมพ์ใบครัวไม่สำเร็จ: ${err.message || err}` });
         });
     }
@@ -1133,6 +1144,8 @@ function App() {
       buildKitchenOrder(rows, tableNumber, 'reprint-' + Date.now(), getThaiTimeISO(), diningForTable(kioskTables, tableNumber)),
       allMenu
     );
+    logActivity({ kind: res.success ? 'kitchen_print' : 'kitchen_print_fail', branchId: branchKey, tableNo: String(tableNumber || ''), staff: currentUser?.username || '',
+      items: kitchenItems(rows), detail: 'พิมพ์ซ้ำ · ' + (res.success ? `${res.printed}/${res.total} ใบ` : (res.error || 'ไม่ทราบสาเหตุ')) });
     if (res.success) {
       setSaveAlert({ type: 'success', msg: `🖨️ ส่งใบครัวไปที่เครื่องพิมพ์แล้ว (${res.printed}/${res.total} ใบ)` });
       setTimeout(() => setSaveAlert(cur => (cur && cur.type === 'success' ? null : cur)), 4000);
@@ -1167,6 +1180,12 @@ function App() {
     try { payQr = await makePayQr(checkoutSettings, order.totalAmount, getReceiptHeader()?.paper); } catch (e) { console.warn('pay QR skipped:', e); }
     if (!payQr && Number(order.totalAmount) > 0) qrProblem = 'สร้างรูป QR ไม่ได้ — เช็กการตั้งค่า QR ที่ หลังบ้าน > ตั้งค่าร้าน (ถ้าใช้รูป QR คงที่ ลองอัปโหลดรูปใหม่)';
     const res = await printPreBill(payQr ? { ...order, payQr } : order);
+    {
+      const tblMatch = /โต๊ะ\s*(\S+)/.exec(String((order.customerDetails && order.customerDetails.name) || order.orderNumber || ''));
+      logActivity({ kind: 'prebill', branchId: branchKey, tableNo: tblMatch ? tblMatch[1] : '', orderNumber: /^โต๊ะ/.test(String(order.orderNumber || '')) ? '' : order.orderNumber,
+        amount: Number(order.totalAmount) || 0, staff: currentUser?.username || '',
+        detail: (payQr ? 'QR สแกนจ่าย' : 'ไม่มี QR') + (res.success ? '' : ' · พิมพ์ไม่สำเร็จ: ' + (res.error || '')) });
+    }
     if (res.success) {
       if (payQr && res.serverVersion && versionBelow(res.serverVersion, '1.7.0')) {
         qrProblem = `Print Server ยังเป็นเวอร์ชันเก่า (v${res.serverVersion === '0' ? '?' : res.serverVersion}) — รัน update-printer.bat ที่คอมเครื่อง Print Server`;
@@ -1451,7 +1470,10 @@ function App() {
   // =============================================
   // Delete a single item from table orders
   // =============================================
-  const handleDeleteTableItem = async (item) => {
+  // ยกเลิกรายการในโต๊ะ: ต้องใส่เหตุผลก่อน (หน้าต่างถาม) → บันทึกลงบันทึกการทำงาน
+  const [cancelItem, setCancelItem] = useState(null);
+  const handleDeleteTableItem = (item) => setCancelItem(item);
+  const doDeleteTableItem = async (item, reason) => {
     // Optimistic remove
     setTableOrders(prev => {
       const idx = prev.findIndex(o =>
@@ -1472,8 +1494,10 @@ function App() {
         branchId: branchKey,
         tableNumber: String(item.TableNumber),
         sessionId: String(item.SessionId),
-        itemName: String(item.ItemName)
-      });
+        itemName: String(item.ItemName),
+        reason,
+        staff: currentUser?.username || ''
+      }).then(json => { if (json && json.success === false && json.error) throw new Error(json.error); });
     } catch (e) {
       console.error('Error deleting table item:', e);
       setSaveAlert({ type: 'error', msg: `⚠️ ลบ "${item.ItemName}" ออกจากโต๊ะ ${item.TableNumber} ในระบบไม่สำเร็จ: ${e.message} — รายการยังอยู่ในบิล ลบอีกครั้ง` });
@@ -1670,6 +1694,10 @@ function App() {
 
   return (
     <div className="app-container">
+      {cancelItem && (
+        <CancelItemDialog item={cancelItem} onClose={() => setCancelItem(null)}
+          onConfirm={(reason) => { const it = cancelItem; setCancelItem(null); doDeleteTableItem(it, reason); }} />
+      )}
       {saveAlert && (
         <div
           onClick={() => setSaveAlert(null)}
@@ -1847,6 +1875,7 @@ function App() {
           <Route path="categories" element={<ManageCategories />} />
           <Route path="tables" element={<ManageTables branchId={tablesBranch} branches={branches} />} />
           <Route path="users" element={isAdmin ? <ManageUsers /> : <Navigate to="/admin" replace />} />
+          <Route path="activity" element={isAdmin ? <ActivityLog branch={branchKey} /> : <Navigate to="/admin" replace />} />
           <Route path="branches" element={isAdmin ? <ManageBranches /> : <Navigate to="/admin" replace />} />
           <Route path="branch-menu" element={isAdmin ? <ManageBranchMenu branchId={tablesBranch} branches={branches} /> : <Navigate to="/admin" replace />} />
           <Route path="promotions" element={<ManagePromotions />} />
@@ -1895,7 +1924,7 @@ function App() {
 
       {showVoidBillPage && (
         <Suspense fallback={null}>
-          <VoidBillPage branchId={branchKey} discounts={posDiscounts} settings={checkoutSettings} menu={allMenu} onPrintPreBill={handlePrintPreBill} onClose={() => setShowVoidBillPage(false)} />
+          <VoidBillPage branchId={branchKey} discounts={posDiscounts} settings={checkoutSettings} menu={allMenu} onPrintPreBill={handlePrintPreBill} canVoid={isAdmin} canDiscount={isAdmin} onClose={() => setShowVoidBillPage(false)} />
         </Suspense>
       )}
 
