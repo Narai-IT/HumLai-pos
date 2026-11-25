@@ -371,8 +371,17 @@ const CheckoutModal = ({
     if (hasDiscount) summary.push({ label: `ส่วนลด ${selectedDiscount?.name || ''}`.trim(), value: `-${money2(discountAmount)}` });
     if (sc > 0) summary.push({ label: `เซอร์วิสชาร์จ ${settings.serviceCharge.rate}%`, value: money2(sc) });
     if (vat > 0) summary.push({ label: `VAT ${settings.vat.rate}%`, value: money2(vat) });
-    if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
-    if (voucherCodes) summary.push({ label: 'Voucher', value: voucherCodes });
+    // กระดาษกว้าง 32 ตัวอักษร: แยกจ่ายพิมพ์ทีละบรรทัด (ใส่บรรทัดเดียว "แยกจ่าย (Voucher ฿100 + โอน ฿68)" ยาวเกิน เครื่องตัดกลางคำ)
+    if (pd && pendingComplete?.method === 'แยกจ่าย') {
+      summary.push({ label: 'ชำระโดย', value: 'แยกจ่าย' });
+      const alloc = pd.voucher > 0 ? voucherAlloc() : [];
+      alloc.forEach(a => { const v = vouchers.find(x => x.id === a.id); summary.push({ label: `Voucher ${v ? v.code : ''}`.trim(), value: money2(a.amount) }); });
+      Object.entries(pd).filter(([k, v]) => k !== 'voucher' && Number(v) > 0)
+        .forEach(([k, v]) => summary.push({ label: PAY_PART[k] || k, value: money2(v) }));
+    } else {
+      if (paidMethod) summary.push({ label: 'ชำระโดย', value: paidMethod });
+      if (voucherCodes) summary.push({ label: 'Voucher', value: voucherCodes });
+    }
     if (member) summary.push({ label: 'สมาชิก', value: `${member.id}${member.phone ? ' ' + maskPhone(member.phone) : ''}` });
     return {
       id: no,
