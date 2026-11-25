@@ -1970,6 +1970,8 @@ function App() {
             initialDiscount={checkoutDiscount}
             initialMember={checkoutCrm ? checkoutCrm.member : null}
             initialCouponRef={checkoutCrm ? checkoutCrm.couponRef : null}
+            initialVouchers={checkoutCrm ? checkoutCrm.vouchers || null : null}
+            initialVoucherRef={checkoutCrm ? checkoutCrm.voucherRef || null : null}
             branchId={branchKey}
             users={users}
             currentUser={currentUser}
