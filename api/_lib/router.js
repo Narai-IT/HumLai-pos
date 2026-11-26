@@ -20,6 +20,7 @@ import { getVoidableBills, voidBill } from './billVoid.js';
 import { editBill } from './billEdit.js';
 import { logClientActivity, getActivityLog } from './activity.js';
 import { queueIssue, queueList, queueAction, queueBoard, queueStatus } from './queue.js';
+import { queueVoice } from './tts.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
 export const BUILD = '2026-11-10-print-queue';
@@ -70,6 +71,8 @@ const POST_ACTIONS = {
   queueAction,
   queueBoard,
   queueStatus,
+  // เสียงเรียกคิวจาก Google Text-to-Speech (tts.js) · ไม่ตั้งกุญแจ = หน้าเว็บใช้เสียงของเครื่อง
+  queueVoice,
   // บันทึกการทำงาน: เหตุการณ์ที่เกิดที่หน้าเว็บ (พิมพ์ใบครัว/ใบแจ้งยอด) · หน้าลูกค้าสั่งเองส่งได้โดยไม่ล็อกอิน
   logActivity: logClientActivity,
   saveOutstandingBills:    write.saveOutstandingBills,

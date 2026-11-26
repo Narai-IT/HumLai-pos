@@ -80,11 +80,37 @@ const chime = () => new Promise(resolve => {
   } catch { resolve(); }
 });
 
+// ── เลือกเสียงอ่าน ──
+// Windows มีเสียงไทยติดเครื่องตัวเดียวคือ "Microsoft Pattara" (ผู้ชาย)
+// เสียงผู้หญิง: Microsoft Edge มี "Premwadee" (Natural · ต้องต่ออินเทอร์เน็ต) · iPhone/Mac "Kanya" · Android ค่าเริ่มต้นเป็นผู้หญิง
+// เลือกเองได้ที่หน้าคิว/จอเรียกคิว (จำไว้ในเครื่องนั้น) · ไม่ได้เลือก = เสียงผู้หญิงก่อน
+const VOICE_KEY = 'queue_voice';
+const FEMALE = /premwadee|kanya|narisa|achara|niwat-?f|female|woman|ผู้หญิง/i;
+const MALE = /pattara|niwat|male|ผู้ชาย/i;
+export const thaiVoices = () => ((window.speechSynthesis && window.speechSynthesis.getVoices()) || []).filter(v => /^th/i.test(v.lang));
+export const voiceGender = (v) => (v && FEMALE.test(v.name) ? 'female' : v && MALE.test(v.name) ? 'male' : '');
+export const savedVoiceName = () => { try { return localStorage.getItem(VOICE_KEY) || ''; } catch { return ''; } };
+export const saveVoiceName = (name) => { try { if (name) localStorage.setItem(VOICE_KEY, name); else localStorage.removeItem(VOICE_KEY); } catch { /* ไม่จำก็ใช้ค่าเริ่มต้น */ } };
 const thaiVoice = () => {
-  const list = (window.speechSynthesis && window.speechSynthesis.getVoices()) || [];
-  return list.find(v => /^th/i.test(v.lang) && /google/i.test(v.name)) || list.find(v => /^th/i.test(v.lang)) || null;
+  const list = thaiVoices();
+  const saved = savedVoiceName();
+  return (saved && list.find(v => v.name === saved))
+    || list.find(v => FEMALE.test(v.name))
+    || list.find(v => !MALE.test(v.name) && /google/i.test(v.name))
+    || list.find(v => !MALE.test(v.name))
+    || list[0] || null;
 };
 export const thaiVoiceAvailable = () => !!thaiVoice();
+export const currentVoice = () => thaiVoice();
+// รายชื่อเสียงโหลดช้ากว่าหน้าเว็บ (Chrome/Edge) — เรียก cb เมื่อพร้อม/เปลี่ยน · คืนฟังก์ชันยกเลิก
+export const onVoicesChanged = (cb) => {
+  const synth = window.speechSynthesis;
+  if (!synth) return () => {};
+  const h = () => cb(thaiVoices());
+  synth.addEventListener ? synth.addEventListener('voiceschanged', h) : (synth.onvoiceschanged = h);
+  const t = setTimeout(h, 300);
+  return () => { clearTimeout(t); if (synth.removeEventListener) synth.removeEventListener('voiceschanged', h); };
+};
 
 const LETTER = { A: 'เอ', B: 'บี', C: 'ซี' };
 const DIGIT = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
@@ -97,14 +123,45 @@ export const spokenCode = (code) => {
 export const callPhrase = (code, tableNo) =>
   `ขอเชิญคิวหมายเลข ${spokenCode(code)}${tableNo ? ` ที่โต๊ะ ${tableNo}` : ' ที่เคาน์เตอร์'} ค่ะ`;
 
-export async function announceQueue(code, tableNo, { repeat = 2 } = {}) {
+// ── เสียงจาก Google (เครื่อง API สร้างให้ · เสียงผู้หญิงเหมือนกันทุกเครื่อง) ──
+let infoPromise = null;
+export const cloudVoiceInfo = () => {
+  if (!infoPromise) infoPromise = queueApi('queueVoice', { info: true }).catch(() => ({ enabled: false }));
+  return infoPromise;
+};
+const fetchCloudVoice = async (body) => {
+  try {
+    const info = await cloudVoiceInfo();
+    if (!info.enabled) return null;
+    const r = await queueApi('queueVoice', body);
+    return r.audio ? `data:${r.mime || 'audio/mpeg'};base64,${r.audio}` : null;
+  } catch { return null; }
+};
+const playAudio = (src) => new Promise(resolve => {
+  try {
+    const a = new Audio(src);
+    a.onended = resolve; a.onerror = resolve;
+    const p = a.play(); if (p && p.catch) p.catch(resolve);
+    setTimeout(resolve, 12000);
+  } catch { resolve(); }
+});
+
+// id = คิวที่กำลังเรียก (ให้เครื่อง API สร้างเสียง Google) · test = ประโยคทดสอบ · ไม่มีเสียง Google → เสียงของเครื่อง
+export async function announceQueue(code, tableNo, { repeat = 2, id = null, test = false } = {}) {
+  const cloud = (id || test) ? fetchCloudVoice(test ? { test: true } : { id }) : Promise.resolve(null);
   await chime();
+  const src = await cloud;
+  if (src) {
+    for (let i = 0; i < repeat; i++) await playAudio(src);
+    return { spoke: true, cloud: true };
+  }
   const synth = window.speechSynthesis;
   if (!synth) return { spoke: false };
   const voice = thaiVoice();
   const say = () => new Promise(resolve => {
     const u = new SpeechSynthesisUtterance(callPhrase(code, tableNo));
-    u.lang = 'th-TH'; if (voice) u.voice = voice;
+    u.lang = 'th-TH';
+    try { if (voice) u.voice = voice; } catch { /* เสียงที่เลือกใช้ไม่ได้แล้ว → ใช้เสียงไทยค่าเริ่มต้นของเครื่อง */ }
     u.rate = 0.9; u.onend = resolve; u.onerror = resolve;
     synth.speak(u);
     setTimeout(resolve, 9000);

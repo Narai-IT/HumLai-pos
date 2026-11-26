@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { X, Volume2, VolumeX, Printer, Monitor, Check, SkipForward, RotateCcw, Ticket } from 'lucide-react';
+import QueueVoicePicker from './QueueVoicePicker';
 import { QUEUE_KINDS, kindOf, queueApi, printQueueTicket, announceQueue, unlockAudio, thaiVoiceAvailable, minutesSince, queueBoardUrl } from '../utils/queue';
 
 // ── หน้า POS > ปุ่ม "คิว": ออกบัตรคิว · เรียกคิว · จัดโต๊ะ · ข้าม/ยกเลิก ──
@@ -86,7 +87,7 @@ export default function QueuePanel({ branchId, tables = [], onSeat, onClose, sta
     setBusy(true);
     try {
       const res = await queueApi('queueAction', { branchId, id: t.id, op, tableNo, staff });
-      if (op === 'call' && sound) announceQueue(res.ticket.code, res.ticket.tableNo);
+      if (op === 'call' && sound) announceQueue(res.ticket.code, res.ticket.tableNo, { id: res.ticket.id });
       if (op === 'seat') {
         flash('ok', `✓ ${t.code} ได้โต๊ะ ${res.ticket.tableNo || ''} แล้ว`);
         if (res.ticket.tableNo && onSeat) { load(); setBusy(false); onSeat(res.ticket.tableNo, t.guests); return; }
@@ -150,9 +151,10 @@ export default function QueuePanel({ branchId, tables = [], onSeat, onClose, sta
           <button style={btn('#0f172a')} onClick={() => window.open(queueBoardUrl(branchId), 'queue-board')}><Monitor size={16} /> เปิดจอเรียกคิว</button>
           <button style={btn('#fff', '#0f172a', { border: '1px solid #cbd5e1', padding: '0.45rem' })} onClick={onClose} aria-label="ปิด"><X size={20} /></button>
         </div>
-        {sound && typeof window !== 'undefined' && window.speechSynthesis && !thaiVoiceAvailable() && (
-          <div style={{ background: '#fffbeb', color: '#92400e', fontSize: '0.8rem', fontWeight: 700, padding: '0.35rem 1rem' }}>
-            เครื่องนี้ยังไม่มีเสียงอ่านภาษาไทย — ตอนเรียกคิวจะมีแค่เสียงติ๊งต่อง (เพิ่มเสียงไทยได้ที่ Windows: Settings › Time &amp; language › Speech › Add voices › ไทย)
+        {sound && typeof window !== 'undefined' && window.speechSynthesis && (
+          <div style={{ background: thaiVoiceAvailable() ? '#faf5ff' : '#fffbeb', borderBottom: '1px solid #ede9fe', padding: '0.4rem 1rem', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#6d28d9' }}>เสียงเรียกคิว:</span>
+            <QueueVoicePicker />
           </div>
         )}
         <div style={{ flex: 1, overflow: 'auto', display: 'flex', gap: '1rem', padding: '1rem', flexWrap: 'wrap' }}>

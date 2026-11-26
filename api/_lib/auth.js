@@ -133,7 +133,7 @@ export async function login(data) {
 const PUBLIC = new Set(['ping', 'login', 'logActivity', 'getStatic', 'getKitchenQueue', 'kioskPaymentRequest', 'getKioskPayment', 'crmKioskMember',
   'claimPrintJobs', 'reportPrintJob',
   // จอเรียกคิวหน้าร้าน / ลูกค้าสแกน QR บนบัตรคิว — ไม่มีชื่อ/เบอร์ลูกค้าในผลลัพธ์
-  'queueBoard', 'queueStatus',
+  'queueBoard', 'queueStatus', 'queueVoice',
   'memberMenuQuota', 'memberMenuConfig',
   'crmKioskJoinLink', 'crmKioskSendCode', 'crmKioskCheckCode', 'crmKioskWallet', 'crmKioskReserve', 'crmKioskRelease', 'crmKioskRedeem', 'crmKioskCancelRedeem']);
 
