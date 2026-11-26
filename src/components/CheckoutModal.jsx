@@ -24,6 +24,8 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
 
 // ร้านไม่รับบัตรเครดิต/เดบิต — ซ่อนการชำระด้วยบัตร (และแยกจ่ายโอน+บัตร) · เปลี่ยนเป็น true เพื่อเปิดกลับ
 const CARD_ENABLED = false;
+// หน้าแสดง QR ให้ลูกค้าสแกนบนจอพนักงาน — ปิดไว้ ลูกค้าสแกน QR ในใบแจ้งยอดแทน · กด "เงินโอน" = ยืนยันรับเงินแล้ว
+const SHOW_STAFF_QR = false;
 
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
@@ -291,7 +293,7 @@ const CheckoutModal = ({
     if (voucherShort <= 0) { setPendingComplete({ method: 'Voucher', details: { voucher: grand } }); setPaymentStep('success'); return; }
     const details = { voucher: voucherTotal, [rest]: voucherShort };
     setPendingComplete({ method: 'แยกจ่าย', details });
-    if (rest === 'transfer') { setTransferDue(voucherShort); setPaymentStep('transfer'); } else setPaymentStep('success');
+    if (rest === 'transfer' && SHOW_STAFF_QR) { setTransferDue(voucherShort); setPaymentStep('transfer'); } else setPaymentStep('success');
   };
 
   const handleConfirmPayment = (method) => {
@@ -630,7 +632,7 @@ const CheckoutModal = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               {/* เงินโอน */}
               <button
-                onClick={() => { setTransferDue(null); setPaymentStep('transfer'); }}
+                onClick={() => { setTransferDue(null); if (SHOW_STAFF_QR) setPaymentStep('transfer'); else handleConfirmPayment('เงินโอน'); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#eff6ff', border: '2px solid #bfdbfe', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
                 onMouseOver={e => e.currentTarget.style.background = '#dbeafe'}
                 onMouseOut={e => e.currentTarget.style.background = '#eff6ff'}
@@ -640,7 +642,9 @@ const CheckoutModal = ({
                 </div>
                 <div>
                   <div style={{ fontWeight: '800', fontSize: '1.05rem', marginBottom: '2px', color: '#1e40af' }}>{lang === 'th' ? 'เงินโอน / QR Code' : 'Transfer / QR Code'}</div>
-                  <div style={{ color: '#1d4ed8', fontSize: '0.85rem', fontWeight: '600' }}>{lang === 'th' ? 'สแกน QR ที่เคาน์เตอร์' : 'Scan QR at the counter'}</div>
+                  <div style={{ color: '#1d4ed8', fontSize: '0.85rem', fontWeight: '600' }}>{SHOW_STAFF_QR
+                    ? (lang === 'th' ? 'สแกน QR ที่เคาน์เตอร์' : 'Scan QR at the counter')
+                    : (lang === 'th' ? 'ลูกค้าสแกน QR ในใบแจ้งยอด · กดเมื่อได้รับเงินแล้ว' : 'Customer scans the QR on the check bill · tap once received')}</div>
                 </div>
               </button>
 
@@ -781,7 +785,7 @@ const CheckoutModal = ({
                 <p style={{ fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem' }}>{lang === 'th' ? `จ่ายส่วนที่เหลือ ฿${voucherShort.toLocaleString()} ด้วย` : `Pay the remaining ฿${voucherShort.toLocaleString()} by`}</p>
                 <div style={{ display: 'flex', gap: '0.6rem' }}>
                   <button onClick={() => handleVoucherPay('transfer')} className="confirm-btn" style={{ flex: 1, background: '#2563eb', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                    <Smartphone size={18} /> {lang === 'th' ? 'เงินโอน / QR' : 'Transfer / QR'}
+                    <Smartphone size={18} /> {SHOW_STAFF_QR ? (lang === 'th' ? 'เงินโอน / QR' : 'Transfer / QR') : (lang === 'th' ? 'ได้รับเงินโอนแล้ว' : 'Transfer received')}
                   </button>
                   {CARD_ENABLED && <button onClick={() => handleVoucherPay('card')} className="confirm-btn" style={{ flex: 1, background: '#d97706', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                     <CreditCard size={18} /> {lang === 'th' ? 'บัตรเครดิต/เดบิต' : 'Card'}
@@ -1054,6 +1058,11 @@ const CheckoutModal = ({
                 {lang === 'th' ? 'เสร็จสิ้น' : 'Done'}
               </button>
             </div>
+            {/* กดวิธีชำระผิด → ย้อนกลับไปเลือกใหม่ (ยังไม่ได้บันทึกบิล) */}
+            <button type="button" onClick={() => { setPendingComplete(null); setPaymentStep(pendingComplete?.details?.voucher ? 'voucher' : 'payment_method'); }}
+              style={{ marginTop: '0.75rem', background: 'none', border: 'none', color: '#64748b', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+              <ArrowLeft size={16} /> {lang === 'th' ? 'ย้อนกลับ เลือกวิธีชำระใหม่' : 'Back to payment method'}
+            </button>
           </div>
         )}
 
