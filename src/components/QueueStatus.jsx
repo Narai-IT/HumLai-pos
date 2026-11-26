@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { queueApi } from '../utils/queue';
+import { LOGO_WIDE } from '../utils/banner';
 
 // ── ลูกค้าสแกน QR บนบัตรคิว · /queue/status?t=<token> ──
 // ดูว่าเหลืออีกกี่คิว · ถึงคิวแล้วจอเปลี่ยนสีและมือถือสั่น · อัปเดตเองทุก 10 วินาที
@@ -43,7 +44,9 @@ export default function QueueStatus({ token = '', nameOf = () => '' }) {
   return (
     <div style={{ minHeight: '100vh', background: look && status === 'called' ? '#16a34a' : '#f8fafc', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', boxSizing: 'border-box' }}>
       <div style={{ width: '100%', maxWidth: 380, background: '#fff', borderRadius: 22, padding: '1.4rem 1.2rem', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', color: '#0f172a' }}>
-        <div style={{ fontWeight: 800, color: '#475569' }}>{(data && nameOf(data.branchId)) || 'คิวหน้าร้าน'}</div>
+        {/* โลโก้ร้าน (ไฟล์เดียวกับหน้าลูกค้าสั่งเอง) + ชื่อสาขา */}
+        <img src={LOGO_WIDE} alt="ข้าวมันไก่หำไหล" style={{ display: 'block', width: '68%', maxWidth: 230, height: 'auto', margin: '0 auto 0.3rem' }} />
+        <div style={{ fontWeight: 800, color: '#475569', fontSize: '0.92rem' }}>{(data && nameOf(data.branchId)) || 'คิวหน้าร้าน'}</div>
         {err && <div style={{ color: '#b91c1c', fontWeight: 700, marginTop: '1rem' }}>{err}</div>}
         {!t && !err && <div style={{ color: '#64748b', marginTop: '1rem' }}>กำลังโหลด…</div>}
         {t && look && (
