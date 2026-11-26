@@ -22,6 +22,9 @@ const calcCharges = (subtotal, settings = {}, discountAmountIn = 0) => {
   return { subtotal, discountAmount, afterDiscount, sc, vat, grand: afterDiscount + sc + vat };
 };
 
+// ร้านไม่รับบัตรเครดิต/เดบิต — ซ่อนการชำระด้วยบัตร (และแยกจ่ายโอน+บัตร) · เปลี่ยนเป็น true เพื่อเปิดกลับ
+const CARD_ENABLED = false;
+
 const CheckoutModal = ({
   tableOrderItems = [], total = 0, orderNumber, tableNo = '',
   onClose, onComplete, lang = 'th',
@@ -641,8 +644,8 @@ const CheckoutModal = ({
                 </div>
               </button>
 
-              {/* บัตรเครดิต */}
-              <button
+              {/* บัตรเครดิต — ปิดไว้ (ร้านไม่รับบัตร) · เปิดใหม่ได้ที่ CARD_ENABLED */}
+              {CARD_ENABLED && <button
                 onClick={() => setPaymentStep('card')}
                 style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#fffbeb', border: '2px solid #fef3c7', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
                 onMouseOver={e => e.currentTarget.style.background = '#fef3c7'}
@@ -655,7 +658,7 @@ const CheckoutModal = ({
                   <div style={{ fontWeight: '800', fontSize: '1.05rem', marginBottom: '2px', color: '#b45309' }}>{lang === 'th' ? 'บัตรเครดิต / เดบิต' : 'Credit / Debit Card'}</div>
                   <div style={{ color: '#d97706', fontSize: '0.85rem', fontWeight: '600' }}>{lang === 'th' ? 'รูดบัตร EDC ที่เคาน์เตอร์' : 'Swipe card at the counter'}</div>
                 </div>
-              </button>
+              </button>}
 
               {/* Voucher (ใช้แทนเงิน) — ต้องเชื่อมระบบสมาชิก */}
               {crmOn && (
@@ -675,8 +678,8 @@ const CheckoutModal = ({
                 </button>
               )}
 
-              {/* แยกจ่าย */}
-              <button
+              {/* แยกจ่าย (โอน + บัตร) — ไม่รับบัตรแล้วเหลือวิธีเดียว จึงซ่อนด้วย · Voucher + โอน ใช้ปุ่ม Voucher */}
+              {CARD_ENABLED && <button
                 onClick={() => { setSplitTransfer(''); setSplitCard(''); setPaymentStep('split'); }}
                 style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#faf5ff', border: '2px solid #e9d5ff', borderRadius: '14px', padding: '1rem 1.25rem', color: '#0f172a', cursor: 'pointer', textAlign: 'left', transition: 'all 0.18s', fontFamily: 'inherit', width: '100%' }}
                 onMouseOver={e => e.currentTarget.style.background = '#f3e8ff'}
@@ -689,7 +692,7 @@ const CheckoutModal = ({
                   <div style={{ fontWeight: '800', fontSize: '1.05rem', marginBottom: '2px', color: '#6b21a8' }}>{lang === 'th' ? 'แยกจ่าย (หลายวิธี)' : 'Split Payment'}</div>
                   <div style={{ color: '#7e22ce', fontSize: '0.85rem', fontWeight: '600' }}>{lang === 'th' ? 'ระบุจำนวนเงินแต่ละประเภท' : 'Specify amount per method'}</div>
                 </div>
-              </button>
+              </button>}
             </div>
           </>
         )}
@@ -780,9 +783,9 @@ const CheckoutModal = ({
                   <button onClick={() => handleVoucherPay('transfer')} className="confirm-btn" style={{ flex: 1, background: '#2563eb', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                     <Smartphone size={18} /> {lang === 'th' ? 'เงินโอน / QR' : 'Transfer / QR'}
                   </button>
-                  <button onClick={() => handleVoucherPay('card')} className="confirm-btn" style={{ flex: 1, background: '#d97706', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                  {CARD_ENABLED && <button onClick={() => handleVoucherPay('card')} className="confirm-btn" style={{ flex: 1, background: '#d97706', color: '#fff', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                     <CreditCard size={18} /> {lang === 'th' ? 'บัตรเครดิต/เดบิต' : 'Card'}
-                  </button>
+                  </button>}
                 </div>
               </>
             )}
