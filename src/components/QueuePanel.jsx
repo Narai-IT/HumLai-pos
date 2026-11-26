@@ -87,7 +87,7 @@ export default function QueuePanel({ branchId, tables = [], onSeat, onClose, sta
     setBusy(true);
     try {
       const res = await queueApi('queueAction', { branchId, id: t.id, op, tableNo, staff });
-      if (op === 'call' && sound) announceQueue(res.ticket.code, res.ticket.tableNo);
+      if (op === 'call' && sound) announceQueue(res.ticket.code, res.ticket.tableNo, { id: res.ticket.id });
       if (op === 'seat') {
         flash('ok', `✓ ${t.code} ได้โต๊ะ ${res.ticket.tableNo || ''} แล้ว`);
         if (res.ticket.tableNo && onSeat) { load(); setBusy(false); onSeat(res.ticket.tableNo, t.guests); return; }

@@ -123,8 +123,38 @@ export const spokenCode = (code) => {
 export const callPhrase = (code, tableNo) =>
   `ขอเชิญคิวหมายเลข ${spokenCode(code)}${tableNo ? ` ที่โต๊ะ ${tableNo}` : ' ที่เคาน์เตอร์'} ค่ะ`;
 
-export async function announceQueue(code, tableNo, { repeat = 2 } = {}) {
+// ── เสียงจาก Google (เครื่อง API สร้างให้ · เสียงผู้หญิงเหมือนกันทุกเครื่อง) ──
+let infoPromise = null;
+export const cloudVoiceInfo = () => {
+  if (!infoPromise) infoPromise = queueApi('queueVoice', { info: true }).catch(() => ({ enabled: false }));
+  return infoPromise;
+};
+const fetchCloudVoice = async (body) => {
+  try {
+    const info = await cloudVoiceInfo();
+    if (!info.enabled) return null;
+    const r = await queueApi('queueVoice', body);
+    return r.audio ? `data:${r.mime || 'audio/mpeg'};base64,${r.audio}` : null;
+  } catch { return null; }
+};
+const playAudio = (src) => new Promise(resolve => {
+  try {
+    const a = new Audio(src);
+    a.onended = resolve; a.onerror = resolve;
+    const p = a.play(); if (p && p.catch) p.catch(resolve);
+    setTimeout(resolve, 12000);
+  } catch { resolve(); }
+});
+
+// id = คิวที่กำลังเรียก (ให้เครื่อง API สร้างเสียง Google) · test = ประโยคทดสอบ · ไม่มีเสียง Google → เสียงของเครื่อง
+export async function announceQueue(code, tableNo, { repeat = 2, id = null, test = false } = {}) {
+  const cloud = (id || test) ? fetchCloudVoice(test ? { test: true } : { id }) : Promise.resolve(null);
   await chime();
+  const src = await cloud;
+  if (src) {
+    for (let i = 0; i < repeat; i++) await playAudio(src);
+    return { spoke: true, cloud: true };
+  }
   const synth = window.speechSynthesis;
   if (!synth) return { spoke: false };
   const voice = thaiVoice();

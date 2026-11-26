@@ -29,7 +29,7 @@ export default function QueueBoard({ branchId = '', shopName = '' }) {
         const key = c ? `${c.id}:${c.callCount}:${c.calledAt}` : '';
         if (lastKey.current !== null && key && key !== lastKey.current) {
           setFlash(true); setTimeout(() => setFlash(false), 6000);
-          if (soundRef.current) announceQueue(c.code, c.tableNo);
+          if (soundRef.current) announceQueue(c.code, c.tableNo, { id: c.id });
         }
         lastKey.current = key;
       } catch (e) { if (!stop) setErr(e.message); }
