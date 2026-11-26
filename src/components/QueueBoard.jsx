@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Volume2, Maximize } from 'lucide-react';
-import { queueApi, announceQueue, unlockAudio, thaiVoiceAvailable } from '../utils/queue';
+import { queueApi, announceQueue, unlockAudio } from '../utils/queue';
+import QueueVoicePicker from './QueueVoicePicker';
 
 // ── จอเรียกคิวหน้าร้าน (ทีวี/แท็บเล็ต) · /queue/board?b=<สาขา> ──
 // ไม่ต้องล็อกอิน · ดึงข้อมูลทุก 3 วินาที · มีการเรียกใหม่/เรียกซ้ำ → ติ๊งต่อง + อ่านออกเสียง
@@ -94,8 +95,10 @@ export default function QueueBoard({ branchId = '', shopName = '' }) {
           <span style={{ fontSize: '1rem', opacity: 0.8 }}>เบราว์เซอร์ต้องให้แตะจอ 1 ครั้งก่อนจึงเล่นเสียงได้</span>
         </button>
       )}
-      {soundOn && window.speechSynthesis && !thaiVoiceAvailable() && (
-        <div style={{ position: 'fixed', bottom: 8, left: 8, fontSize: '0.8rem', opacity: 0.7 }}>เครื่องนี้ไม่มีเสียงอ่านภาษาไทย — เรียกคิวด้วยเสียงติ๊งต่องอย่างเดียว</div>
+      {soundOn && (
+        <div style={{ position: 'fixed', bottom: 8, left: 8, opacity: 0.55 }} onMouseEnter={e => { e.currentTarget.style.opacity = 1; }} onMouseLeave={e => { e.currentTarget.style.opacity = 0.55; }}>
+          <QueueVoicePicker dark />
+        </div>
       )}
     </div>
   );
