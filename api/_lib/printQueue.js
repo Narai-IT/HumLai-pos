@@ -22,7 +22,7 @@ const HEARTBEAT_EVERY_SEC = 20; // บันทึกเวลาที่ Print
 const MAX_PENDING = 100;        // กันคิวล้น (เช่น Print Server ปิดแล้วมีคนกดพิมพ์รัว ๆ)
 const MAX_PAYLOAD = 256 * 1024;
 const MAX_CLAIM = 5;
-const TYPES = new Set(['receipt', 'kitchen', 'prebill', 'taxinvoice', 'closeday']);
+const TYPES = new Set(['receipt', 'kitchen', 'prebill', 'taxinvoice', 'closeday', 'queue']);
 
 const text = (v, max) => String(v ?? '').trim().slice(0, max);
 

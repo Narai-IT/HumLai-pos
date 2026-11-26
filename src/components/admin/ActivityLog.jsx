@@ -14,9 +14,14 @@ const KIND = {
   prebill: { label: 'พิมพ์ใบแจ้งยอด', color: '#d97706' },
   pay: { label: 'ชำระเงิน', color: '#16a34a' },
   edit_bill: { label: 'แก้ไขบิล', color: '#0369a1' },
-  void_bill: { label: 'ยกเลิกบิล', color: '#b91c1c' }
+  void_bill: { label: 'ยกเลิกบิล', color: '#b91c1c' },
+  queue_issue: { label: 'ออกบัตรคิว', color: '#7c3aed' },
+  queue_call: { label: 'เรียกคิว', color: '#6d28d9' },
+  queue_seat: { label: 'คิวได้โต๊ะ', color: '#16a34a' },
+  queue_skip: { label: 'ข้ามคิว', color: '#d97706' },
+  queue_cancel: { label: 'ยกเลิกคิว', color: '#b91c1c' }
 };
-const FILTERS = [['', 'ทั้งหมด'], ['order', 'สั่งอาหาร'], ['kitchen', 'พิมพ์ใบครัว'], ['cancel_item', 'ยกเลิกรายการ'], ['prebill', 'ใบแจ้งยอด'], ['pay', 'ชำระเงิน'], ['edit_bill', 'แก้ไขบิล'], ['void_bill', 'ยกเลิกบิล']];
+const FILTERS = [['', 'ทั้งหมด'], ['order', 'สั่งอาหาร'], ['kitchen', 'พิมพ์ใบครัว'], ['cancel_item', 'ยกเลิกรายการ'], ['prebill', 'ใบแจ้งยอด'], ['pay', 'ชำระเงิน'], ['edit_bill', 'แก้ไขบิล'], ['void_bill', 'ยกเลิกบิล'], ['queue', 'คิว']];
 
 const todayYmd = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 const hm = (iso) => { try { return new Date(iso).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }); } catch { return ''; } };
@@ -87,7 +92,7 @@ export default function ActivityLog({ branch = '' }) {
 
   const staffList = useMemo(() => [...new Set(events.map(e => e.staff).filter(Boolean))].sort(), [events]);
   const ql = q.trim().toLowerCase();
-  const shown = events.filter(e => (!kind || (kind === 'kitchen' ? e.kind.startsWith('kitchen') : e.kind === kind))
+  const shown = events.filter(e => (!kind || (kind === 'kitchen' || kind === 'queue' ? e.kind.startsWith(kind) : e.kind === kind))
     && (!staff || e.staff === staff)
     && (!ql || [e.tableNo, e.orderNumber, e.reason, e.detail, itemsText(e.items)].some(v => String(v || '').toLowerCase().includes(ql))));
   const groups = useMemo(() => groupEvents(shown), [shown]);

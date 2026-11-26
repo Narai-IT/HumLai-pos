@@ -19,6 +19,7 @@ import { enqueuePrint, getPrintQueue, cancelPrintJob, getPrintAgentKey, claimPri
 import { getVoidableBills, voidBill } from './billVoid.js';
 import { editBill } from './billEdit.js';
 import { logClientActivity, getActivityLog } from './activity.js';
+import { queueIssue, queueList, queueAction, queueBoard, queueStatus } from './queue.js';
 import { issueTaxInvoice, cancelTaxInvoice, reissueTaxInvoice, listTaxInvoices, listTaxCustomers, saveTaxCustomer, deleteTaxCustomer } from './taxInvoice.js';
 
 export const BUILD = '2026-11-10-print-queue';
@@ -63,6 +64,12 @@ const POST_ACTIONS = {
   // ยกเลิกบิลที่ชำระแล้ว (เฉพาะวันนี้ + หมายเหตุ) · ผู้จัดการ/แอดมิน · หักแต้มคืนใน CRM (billVoid.js)
   voidBill,
   editBill,
+  // ระบบคิวหน้าร้าน (queue.js) · queueBoard/queueStatus = จอเรียกคิว/ลูกค้าดูคิว (ไม่ต้องล็อกอิน)
+  queueIssue,
+  queueList,
+  queueAction,
+  queueBoard,
+  queueStatus,
   // บันทึกการทำงาน: เหตุการณ์ที่เกิดที่หน้าเว็บ (พิมพ์ใบครัว/ใบแจ้งยอด) · หน้าลูกค้าสั่งเองส่งได้โดยไม่ล็อกอิน
   logActivity: logClientActivity,
   saveOutstandingBills:    write.saveOutstandingBills,
