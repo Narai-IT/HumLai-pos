@@ -58,6 +58,7 @@ const printable = (text) => String(text ?? '')
   .replace(/↳/g, '-')
   .replace(/•/g, '*')
   .replace(/×/g, 'x')
+  .replace(/·/g, '-')
   .replace(/\p{Extended_Pictographic}\uFE0F?/gu, '');
 // บรรทัดที่สองของหัวใบ: ทานที่ร้าน = "โต๊ะ 5" / ห่อกลับบ้าน-เดลิเวอรี = ชื่อช่อง เช่น "Takehome 1", "Grab"
 const tableLineOf = (orderData, dining) => {
@@ -243,6 +244,49 @@ const printDailyClose = (printer, r) => {
 
 // พิมพ์ 1 ใบ — คืนค่า { success, error } ไม่ throw ออกไป
 // ให้ผู้เรียกตัดสินใจเองว่าจะตอบ HTTP อะไรหรือจะลองใหม่ไหม
+// ── บัตรคิว ──
+// q = { code, kindLabel, guests, ahead, estimateMin, name, issuedAt, qr: { image, url } }
+const printQueueTicket = async (printer, q, header) => {
+  const clean = (v) => String(v || '').trim();
+  let note = '';
+  printer.alignCenter();
+  if (clean(header.name)) printer.println(printable(clean(header.name)));
+  printer.println("--------------------------------");
+  printer.setTextDoubleHeight();
+  printer.println('บัตรคิว / QUEUE');
+  printer.setTextNormal();
+  // เลขคิวใหญ่สุด (สูง/กว้าง 4 เท่า) ให้ลูกค้าเห็นชัดตอนเรียก
+  printer.setTextSize(3, 3);
+  printer.println(printable(clean(q.code)));
+  printer.setTextSize(0, 0);
+  printer.setTextNormal();
+  printer.setTextDoubleHeight();
+  printer.println(printable([clean(q.kindLabel), q.guests ? `${q.guests} ท่าน` : ''].filter(Boolean).join(' · ')));
+  printer.setTextNormal();
+  printer.println("--------------------------------");
+  printer.alignLeft();
+  if (clean(q.name)) printer.println(printable(leftRight('ชื่อ', clean(q.name))));
+  printer.println(leftRight('รอก่อนหน้า', `${Number(q.ahead) || 0} คิว`));
+  const est = Number(q.estimateMin) || 0;
+  printer.println(leftRight('เวลารอโดยประมาณ', est > 0 ? `~${est} นาที` : 'เร็ว ๆ นี้'));
+  const at = q.issuedAt ? new Date(q.issuedAt) : new Date();
+  const when = at.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', timeZone: 'Asia/Bangkok' })
+    + ' ' + at.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
+  printer.println(leftRight('ออกบัตร', when));
+  printer.println("--------------------------------");
+  printer.alignCenter();
+  const qr = q.qr && typeof q.qr === 'object' ? q.qr : null;
+  const m = qr ? /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/.exec(String(qr.image || '')) : null;
+  if (m) {
+    printer.println('สแกนดูสถานะคิวบนมือถือ');
+    try { await printer.printImageBuffer(Buffer.from(m[1], 'base64')); }
+    catch (err) { note = `บัตรคิวไม่มี QR: ${err.message || err}`; }
+  }
+  printer.println('กรุณารอบริเวณหน้าร้าน');
+  printer.println('เรียกแล้วไม่อยู่ จะข้ามไปคิวถัดไป');
+  return note;
+};
+
 export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' }) => {
   if (!ip) return { success: false, stage: 'connect', error: 'ยังไม่ได้ระบุ IP ของเครื่องพิมพ์' };
 
@@ -281,6 +325,16 @@ export const printTicket = async ({ ip, orderData = {}, printerType = 'receipt' 
     }
 
     // รายงานปิดยอดประจำวัน — ไม่เปิดลิ้นชัก
+    // บัตรคิว — ออกเครื่องใบเสร็จ (แคชเชียร์) · ไม่เปิดลิ้นชัก
+    if (printerType === 'queue') {
+      if (!orderData.queue) return { success: false, stage: 'format', error: 'ไม่มีข้อมูลบัตรคิว' };
+      const note = await printQueueTicket(printer, orderData.queue, orderData.header || {});
+      printer.cut();
+      const sent = await send(`Queue ticket ${orderData.queue.code}`);
+      if (note && sent.success) sent.warning = [sent.warning, note].filter(Boolean).join(' · ');
+      return sent;
+    }
+
     if (printerType === 'closeday') {
       if (!orderData.closeDay) return { success: false, stage: 'format', error: 'ไม่มีข้อมูลรายงานปิดยอด' };
       printDailyClose(printer, orderData.closeDay);

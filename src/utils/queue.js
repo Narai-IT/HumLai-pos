@@ -1,0 +1,115 @@
+// ── ระบบคิวหน้าร้าน: เรียก API · พิมพ์บัตรคิว · เสียงเรียกคิว ──
+import QRCode from 'qrcode';
+import { API_URL } from './api';
+import { getPrinters, getPrinterByType } from './printerRouting';
+import { sendPrintJob, getReceiptHeader } from './printServer';
+
+export const QUEUE_KINDS = [
+  { id: 'dine', label: 'ทานที่ร้าน', prefix: 'A', color: '#16a34a', bg: '#dcfce7' },
+  { id: 'takeaway', label: 'ห่อกลับ', prefix: 'B', color: '#c2410c', bg: '#ffedd5' },
+  { id: 'large', label: 'โต๊ะใหญ่', prefix: 'A', color: '#6d28d9', bg: '#ede9fe' }
+];
+export const kindOf = (id) => QUEUE_KINDS.find(k => k.id === id) || QUEUE_KINDS[0];
+
+export const queueApi = async (action, body = {}) => {
+  const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action, ...body }) });
+  const json = await res.json().catch(() => null);
+  if (!json) throw new Error(`เซิร์ฟเวอร์ตอบกลับผิดรูปแบบ (HTTP ${res.status})`);
+  if (json.success === false) throw new Error(json.error || 'ทำรายการไม่สำเร็จ');
+  return json;
+};
+
+// ลิงก์หน้าดูสถานะคิวของลูกค้า (QR บนบัตร) และจอเรียกคิว
+export const queueStatusUrl = (token) => `${window.location.origin}/queue/status?t=${encodeURIComponent(token)}`;
+export const queueBoardUrl = (branchId) => `${window.location.origin}/queue/board${branchId ? `?b=${encodeURIComponent(branchId)}` : ''}`;
+
+export const minutesSince = (iso, now = Date.now()) => {
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) ? Math.max(0, Math.floor((now - t) / 60000)) : 0;
+};
+
+// ── พิมพ์บัตรคิว: เครื่องพิมพ์ใบเสร็จ (แคชเชียร์) ──
+export async function printQueueTicket({ ticket, ahead, estimateMin }) {
+  const printers = getPrinters();
+  const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+  if (!printer) return { success: false, error: 'ยังไม่ได้ตั้งค่าเครื่องพิมพ์ใบเสร็จ — ไปที่ หลังบ้าน > เครื่องพิมพ์' };
+  const header = getReceiptHeader() || {};
+  let qr = null;
+  try {
+    const url = queueStatusUrl(ticket.token);
+    const image = await QRCode.toDataURL(url, { width: Number(header.paper) === 58 ? 200 : 240, margin: 2, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
+    qr = { image, url };
+  } catch { /* พิมพ์บัตรได้แม้ไม่มี QR */ }
+  return sendPrintJob({
+    ip: printer.ip,
+    printerType: 'queue',
+    orderData: {
+      header,
+      queue: { code: ticket.code, kindLabel: ticket.kindLabel, guests: ticket.guests, name: ticket.name, ahead, estimateMin, issuedAt: ticket.createdAt, qr }
+    }
+  });
+}
+
+// ── เสียงเรียกคิว ──
+// ติ๊งต่อง (WebAudio) แล้วอ่านออกเสียงภาษาไทยด้วยเสียงของเครื่อง (Web Speech)
+// เครื่องที่ไม่มีเสียงภาษาไทย → มีแค่ติ๊งต่อง (thaiVoiceAvailable บอกหน้าจอให้แจ้งพนักงาน)
+let audioCtx = null;
+export const unlockAudio = () => {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    // iOS/Chrome: ต้องเริ่มพูดครั้งแรกจากการแตะของผู้ใช้
+    if (window.speechSynthesis) window.speechSynthesis.getVoices();
+  } catch { /* ไม่มีเสียงก็ยังเรียกคิวบนจอได้ */ }
+};
+
+const chime = () => new Promise(resolve => {
+  try {
+    unlockAudio();
+    if (!audioCtx) return resolve();
+    const t0 = audioCtx.currentTime + 0.02;
+    [[880, 0], [659, 0.45]].forEach(([freq, at]) => {
+      const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t0 + at);
+      g.gain.exponentialRampToValueAtTime(0.5, t0 + at + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + at + 0.8);
+      o.connect(g).connect(audioCtx.destination); o.start(t0 + at); o.stop(t0 + at + 0.85);
+    });
+    setTimeout(resolve, 1300);
+  } catch { resolve(); }
+});
+
+const thaiVoice = () => {
+  const list = (window.speechSynthesis && window.speechSynthesis.getVoices()) || [];
+  return list.find(v => /^th/i.test(v.lang) && /google/i.test(v.name)) || list.find(v => /^th/i.test(v.lang)) || null;
+};
+export const thaiVoiceAvailable = () => !!thaiVoice();
+
+const LETTER = { A: 'เอ', B: 'บี', C: 'ซี' };
+const DIGIT = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า'];
+// "A014" → "เอ หนึ่ง สี่" (อ่านทีละตัว ไม่อ่านศูนย์นำหน้า) — ลูกค้าเทียบกับบัตรได้ง่าย
+export const spokenCode = (code) => {
+  const m = /^([A-Z])0*(\d+)$/.exec(String(code || '').toUpperCase());
+  if (!m) return String(code || '');
+  return `${LETTER[m[1]] || m[1]} ${m[2].split('').map(d => DIGIT[Number(d)]).join(' ')}`;
+};
+export const callPhrase = (code, tableNo) =>
+  `ขอเชิญคิวหมายเลข ${spokenCode(code)}${tableNo ? ` ที่โต๊ะ ${tableNo}` : ' ที่เคาน์เตอร์'} ค่ะ`;
+
+export async function announceQueue(code, tableNo, { repeat = 2 } = {}) {
+  await chime();
+  const synth = window.speechSynthesis;
+  if (!synth) return { spoke: false };
+  const voice = thaiVoice();
+  const say = () => new Promise(resolve => {
+    const u = new SpeechSynthesisUtterance(callPhrase(code, tableNo));
+    u.lang = 'th-TH'; if (voice) u.voice = voice;
+    u.rate = 0.9; u.onend = resolve; u.onerror = resolve;
+    synth.speak(u);
+    setTimeout(resolve, 9000);
+  });
+  synth.cancel();
+  for (let i = 0; i < repeat; i++) await say();
+  return { spoke: !!voice };
+}

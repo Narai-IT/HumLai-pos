@@ -13,7 +13,12 @@ export const KINDS = {
   prebill: 'พิมพ์ใบแจ้งยอด',
   pay: 'ชำระเงิน',
   edit_bill: 'แก้ไขบิล',
-  void_bill: 'ยกเลิกบิล'
+  void_bill: 'ยกเลิกบิล',
+  queue_issue: 'ออกบัตรคิว',
+  queue_call: 'เรียกคิว',
+  queue_seat: 'คิวได้โต๊ะ',
+  queue_skip: 'ข้ามคิว',
+  queue_cancel: 'ยกเลิกคิว'
 };
 // เหตุการณ์ที่เกิดที่หน้าเว็บ (เซิร์ฟเวอร์ไม่เห็นเอง) ให้หน้าเว็บส่งมาบันทึก
 export const CLIENT_KINDS = new Set(['kitchen_print', 'kitchen_print_fail', 'prebill']);

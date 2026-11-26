@@ -422,6 +422,34 @@ IF COL_LENGTH('dbo.Branches', 'posId') IS NULL
   ALTER TABLE dbo.Branches ADD posId NVARCHAR(40) NULL;
 GO
 
+-- ระบบคิวหน้าร้าน (api/_lib/queue.js) — เลขคิวเริ่มใหม่ทุกวัน แยกสาขา
+IF OBJECT_ID('dbo.QueueTickets', 'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.QueueTickets (
+    RowId      INT IDENTITY(1,1) PRIMARY KEY,
+    BranchId   NVARCHAR(60)  NOT NULL,
+    BizDate    NVARCHAR(10)  NOT NULL,
+    Prefix     NVARCHAR(2)   NOT NULL,
+    Seq        INT           NOT NULL,
+    Code       NVARCHAR(10)  NOT NULL,
+    Kind       NVARCHAR(20)  NOT NULL,
+    Guests     INT           NULL,
+    CustName   NVARCHAR(80)  NULL,
+    Phone      NVARCHAR(20)  NULL,
+    [Status]   NVARCHAR(12)  NOT NULL DEFAULT 'waiting',
+    Token      NVARCHAR(24)  NOT NULL,
+    TableNo    NVARCHAR(30)  NULL,
+    CallCount  INT           NOT NULL DEFAULT 0,
+    CreatedAt  DATETIME2(0)  NOT NULL DEFAULT SYSUTCDATETIME(),
+    CalledAt   DATETIME2(0)  NULL,
+    DoneAt     DATETIME2(0)  NULL,
+    StaffName  NVARCHAR(120) NULL
+  );
+  CREATE INDEX IX_QueueTickets_Day ON dbo.QueueTickets (BranchId, BizDate, [Status]);
+  CREATE UNIQUE INDEX IX_QueueTickets_Token ON dbo.QueueTickets (Token);
+END;
+GO
+
 -- หัวใบกำกับภาษีอย่างย่อ: สถานประกอบการ (สำนักงานใหญ่ / สาขาที่ 00001) + ชื่อผู้ประกอบการตาม ภ.พ.20 (ถ้าต่างจากชื่อร้าน)
 IF COL_LENGTH('dbo.Branches', 'taxBranch') IS NULL
   ALTER TABLE dbo.Branches ADD taxBranch NVARCHAR(10) NULL;

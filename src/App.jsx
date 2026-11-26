@@ -1,6 +1,8 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import BundleOrderWizard from './components/BundleOrderWizard';
+import QueueBoard from './components/QueueBoard';
+import QueueStatus from './components/QueueStatus';
 import PosSalesScreen from './components/PosSalesScreen';
 import PaymentApprovalListener from './components/PaymentApprovalListener';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
@@ -1697,6 +1699,17 @@ function App() {
     console.error('Error saving kiosk order:', lastError);
     return { success: false, error: lastError };
   };
+
+  // ── ระบบคิว: จอเรียกคิว (/queue/board?b=) และหน้าลูกค้าดูคิว (/queue/status?t=) — ไม่ต้องล็อกอิน ──
+  if (location.pathname.startsWith('/queue/')) {
+    const qs = new URLSearchParams(location.search);
+    const branchName = (id) => { const b = branches.find(x => String(x.id) === String(id)); return b ? (b.name || b.id) : ''; };
+    if (location.pathname.startsWith('/queue/board')) {
+      const qb = (qs.get('b') || deviceBranch || '').trim();
+      return <QueueBoard branchId={qb} shopName={branchName(qb)} />;
+    }
+    return <QueueStatus token={(qs.get('t') || '').trim()} nameOf={branchName} />;
+  }
 
   // มีหลายสาขาแต่เครื่องนี้ยังไม่ได้เลือกสาขา → กลับไปหน้าแรกให้เลือกก่อน
   const activeBranchList = branches.filter(b => b.isActive !== false);

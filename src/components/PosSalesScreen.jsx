@@ -4,6 +4,8 @@ import {
   MoreHorizontal, Globe, Receipt, Printer, Tag, X, UserRound, QrCode, Ticket
 } from 'lucide-react';
 import VoucherDialog from './VoucherDialog';
+import QueuePanel from './QueuePanel';
+import { queueApi } from '../utils/queue';
 import QrScanner from './QrScanner';
 import { crmEnabled, lookupMember, crmCall, newCouponRef } from '../utils/crm';
 import { isQrCode, useScannerWedge } from '../utils/qrScan';
@@ -111,6 +113,31 @@ const PosSalesScreen = ({
     if (customerType !== tier) setCustomerType(tier);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableNumber, configuredTables]);
+
+  // ── ระบบคิวหน้าร้าน: ปุ่ม "คิว" บนแถบบน + จำนวนคิวที่รอ ──
+  const [showQueue, setShowQueue] = useState(false);
+  const [queueWaiting, setQueueWaiting] = useState(0);
+  useEffect(() => {
+    if (showQueue) return undefined; // หน้าคิวเปิดอยู่ดึงเองถี่กว่า
+    let stop = false;
+    const poll = () => queueApi('queueList', { branchId }).then(r => { if (!stop) setQueueWaiting((r.stats && r.stats.waiting) || 0); }).catch(() => {});
+    poll();
+    const id = setInterval(poll, 20000);
+    return () => { stop = true; clearInterval(id); };
+  }, [branchId, showQueue]);
+  // โต๊ะที่จัดให้คิวได้ = โต๊ะทานที่ร้าน (+ VIP) พร้อมสถานะว่าง/มีคน
+  const queueTables = useMemo(() => [...(zones.DineIn || []), ...(zones.VIP || [])].map(name => ({ name, free: tableState(name).status === 'free' })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [zones, tableOrders]);
+  const seatFromQueue = (name, guests) => {
+    if (!sameTable(name, tableNumber) && cart.length > 0 && !window.confirm(t(
+      'ยังมีรายการในตะกร้าที่ยังไม่ได้ส่ง ถ้าเปลี่ยนโต๊ะรายการจะถูกล้าง ต้องการเปลี่ยนหรือไม่?',
+      'The cart still has unsent items. Switching tables clears them. Continue?'
+    ))) return;
+    try { if (guests) localStorage.setItem('customer_count_' + name, String(guests)); } catch { /* ไม่จำจำนวนคนก็เปิดโต๊ะได้ */ }
+    setShowQueue(false);
+    openTable(name, tierOfTable(name));
+  };
 
   // รายการในบิลที่ถูกแตะ เพื่อเลือกว่าจะพิมพ์ซ้ำหรือยกเลิก
   const [actionItem, setActionItem] = useState(null);
@@ -538,6 +565,11 @@ const PosSalesScreen = ({
           {/* หน้ารายละเอียดบิล เหลือไว้สำหรับงานที่ทำในแผงขวาไม่ได้ — ย้ายโต๊ะ / รวมโต๊ะ / แยกบิล */}
           <button className="pos2-btn" onClick={onOpenBill} disabled={!tableNumber}>
             <Receipt size={15} /> {t('ย้าย/รวมโต๊ะ', 'Move/Merge')}
+          </button>
+          <button className="pos2-btn" onClick={() => setShowQueue(true)}
+            style={{ background: '#7c3aed', color: '#fff', borderColor: '#7c3aed' }}>
+            <Ticket size={15} /> {t('คิว', 'Queue')}
+            {queueWaiting > 0 && <span style={{ background: '#ef4444', color: '#fff', borderRadius: 999, padding: '0 7px', fontSize: '0.75rem', marginLeft: 4 }}>{queueWaiting}</span>}
           </button>
           {(isAdmin || isCashier) && (
             <button className="pos2-btn" onClick={onOpenAdmin}>
@@ -1082,6 +1114,11 @@ const PosSalesScreen = ({
         </div>
       )}
 
+      {/* ── ระบบคิวหน้าร้าน ── */}
+      {showQueue && (
+        <QueuePanel branchId={branchId} tables={queueTables} onSeat={seatFromQueue}
+          staff={currentUser?.username || ''} onClose={() => setShowQueue(false)} />
+      )}
       {/* ── ส่วนลดของร้าน: ไม่ต้องสแกนสมาชิก ── */}
       {showVoucher && (
         <VoucherDialog tableNumber={tableNumber} total={grandTotal} vouchers={vouchers} busy={voucherBusy} error={voucherErr}
