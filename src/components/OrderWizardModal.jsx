@@ -71,7 +71,9 @@ const MAX_POPUP_DEPTH = 3;
 // เพราะช่องทางถูกกำหนดจากหัวตะกร้าและปุ่มห่อกลับอยู่แล้ว
 const isChannelPrice = (name) => isChannelPriceName(name);
 
-const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false, initialState = null, confirmLabel = null, customerView = false }) => {
+const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = [], categories = [], basePrice = 0, askDining = true, depth = 0, ancestorIds = [], hasPriceForCustomerType = () => true, noteOptions = [], allowCustomNote = false, initialState = null, confirmLabel = null, customerView = false, bundleInfo = null, onBack = null, bundleNotice = null }) => {
+  // bundleInfo = { parent, index, total } → ป๊อปอัพของเมนูพ่วงในชุด (ราคาเมนูรวมในชุดแล้ว คิดเฉพาะตัวเลือกที่มีราคา)
+  // onBack = ปุ่มย้อนกลับตอนอยู่ขั้นแรก (กลับไปป๊อปอัพใบก่อนในชุด) · bundleNotice = ชื่อเมนูพ่วงที่จะให้เลือกต่อ
   // customerView = หน้าลูกค้าสั่งเอง (QR): การ์ดตัวเลือกมีรูปเมนู และไม่โชว์ป้าย "ฟรี ฿0"
   // initialState = ตัวเลือกเดิมที่เคยเลือกไว้ (จาก onConfirm ครั้งก่อน) — ใช้ตอนลูกค้ากด "แก้ไขตัวเลือก" ในตะกร้า
   // เปิดมาแล้วเห็นที่เลือกไว้ครบ แก้เฉพาะจุดแล้วกดถัดไปจนจบได้เลย
@@ -97,7 +99,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
   const allPriceOptions = getPriceOptions(food);
   // ราคาที่ให้เลือกในขั้นตอน "เลือกราคา/ขนาด" = ตัดราคาช่องทางขาย (Takehome/Deli) ออก
   const priceOptions = allPriceOptions.filter(o => !isChannelPrice(o.name));
-  const hasMultiplePrices = priceOptions.length > 1;
+  // เมนูพ่วงในชุด: ราคาเมนูรวมในชุดแล้ว ไม่ถามราคา/ขนาด
+  const hasMultiplePrices = !bundleInfo && priceOptions.length > 1;
   // ราคาห่อกลับบ้านของเมนูนี้ (ถ้าตั้งไว้) — ใช้ตอนลูกค้าเลือกห่อกลับ
   const takehomePrice = allPriceOptions.find(o => TAKEHOME_ALIASES.includes(norm(o.name)));
 
@@ -308,7 +311,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
 
   // ขั้นตอนหมายเหตุ — โผล่เมื่อเมนูนี้เปิดไว้ และร้านมีอะไรให้เลือกหรือให้พิมพ์เองได้
   // ป๊อปอัพซ้อน (depth > 0) ไม่ถาม เพราะรายการข้างในเป็นตัวเลือกของจานหลักอีกที
-  const noteStepUsable = depth === 0
+  // เมนูพ่วงในชุดก็ไม่ถาม (หมายเหตุใส่ที่เมนูหลักของชุด) — กันขั้นตอนยาวเกิน
+  const noteStepUsable = depth === 0 && !bundleInfo
     && itemAsksNotes(categoryConfig)
     && (noteOptions.length > 0 || allowCustomNote);
 
@@ -634,6 +638,18 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             <X size={24} color="#0f172a" />
           </button>
         </div>
+        {bundleInfo && (
+          <div style={{ margin: '0 1.25rem 0.25rem', background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#065f46', borderRadius: '12px', padding: '0.55rem 0.8rem', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.78rem', fontWeight: 700 }}>🎁 {lang === 'th' ? `เมนูในชุด "${bundleInfo.parent}"` : `Included in "${bundleInfo.parent}"`}</div>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
+                {lang === 'th' ? food.name : (food.nameEn || food.name)}
+                <span style={{ fontSize: '0.8rem', color: '#16a34a', marginLeft: '0.4rem' }}>{lang === 'th' ? 'รวมในชุด' : 'included'}</span>
+              </div>
+            </div>
+            <span style={{ flexShrink: 0, background: '#10b981', color: '#fff', borderRadius: '999px', padding: '0.1rem 0.6rem', fontSize: '0.8rem', fontWeight: 800 }}>{bundleInfo.index}/{bundleInfo.total}</span>
+          </div>
+        )}
 
         <div className="wizard-body">
           {step === 'price' && (
@@ -755,6 +771,14 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
             );
           })()}
 
+          {bundleNotice && bundleNotice.length > 0 && isLastStep && (
+            <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: '12px', padding: '0.6rem 0.8rem', fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.75rem' }}>
+              🎁 {lang === 'th'
+                ? `ในชุดนี้มีอีก ${bundleNotice.length} เมนูให้เลือกตัวเลือกต่อ: ${bundleNotice.join(' · ')}`
+                : `${bundleNotice.length} set item(s) to choose next: ${bundleNotice.join(' · ')}`}
+            </div>
+          )}
+
           {step === 7 && (
             <div className="wizard-step">
               <h3 className="step-title" style={{ color: '#0f172a', fontWeight: '800' }}>{lang === 'th' ? 'การรับประทาน' : 'Dining Option'}</h3>
@@ -794,8 +818,8 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
         </div>
 
         <div className="wizard-footer" style={{ borderTop: '1px solid #e2e8f0', background: '#f8fafc' }}>
-          {!isFirstStep ? (
-            <button className="nav-btn prev" onClick={handlePrev} style={{ color: '#0f172a', background: '#ffffff', border: '1px solid #cbd5e1', fontWeight: '700' }}>
+          {(!isFirstStep || onBack) ? (
+            <button className="nav-btn prev" onClick={isFirstStep ? onBack : handlePrev} style={{ color: '#0f172a', background: '#ffffff', border: '1px solid #cbd5e1', fontWeight: '700' }}>
               <ArrowLeft size={20} /> {lang === 'th' ? 'ย้อนกลับ' : 'Back'}
             </button>
           ) : <div></div>}
@@ -806,13 +830,17 @@ const OrderWizardModal = ({ food, onClose, onConfirm, lang = 'th', liveMenu = []
                 // ขั้นไม่บังคับที่ยังไม่เลือกอะไร = ปุ่มบอกชัดว่ากดแล้วคือข้าม
                 const cfg = stepConfigs[step];
                 const skipping = cfg && cfg.minSelect === 0 && cfg.items.length > 0 && totalQty(stepQtyMaps[step]) === 0;
-                if (lang === 'th') return skipping ? `ข้าม ไปต่อ (฿${currentTotal()})` : `ถัดไป (฿${currentTotal()})`;
-                return skipping ? `Skip (฿${currentTotal()})` : `Next (฿${currentTotal()})`;
+                // เมนูพ่วง: โชว์เฉพาะยอดที่เพิ่มจากชุด (ตัวเลือกที่มีราคา)
+                const amt = bundleInfo ? (currentTotal() > 0 ? ` (+฿${currentTotal()})` : '') : ` (฿${currentTotal()})`;
+                if (lang === 'th') return skipping ? `ข้าม ไปต่อ${amt}` : `ถัดไป${amt}`;
+                return skipping ? `Skip${amt}` : `Next${amt}`;
               })()} <ArrowRight size={20} />
             </button>
           ) : (
             <button className="nav-btn confirm" onClick={handleSubmit} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#ffffff', fontWeight: '800' }}>
-              {confirmLabel
+              {bundleInfo
+                ? `${confirmLabel || (lang === 'th' ? 'ยืนยัน' : 'Confirm')}${currentTotal() > 0 ? ` (+฿${currentTotal()})` : ''}`
+                : confirmLabel
                 ? `${confirmLabel} (฿${currentTotal()})`
                 : (lang === 'th' ? `ยืนยันและเพิ่ม (฿${currentTotal()})` : `Confirm & Add (฿${currentTotal()})`)} <Check size={20} />
             </button>

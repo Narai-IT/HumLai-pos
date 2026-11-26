@@ -1,6 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, Navigate, useLocation } from 'react-router-dom';
-import OrderWizardModal from './components/OrderWizardModal';
+import BundleOrderWizard from './components/BundleOrderWizard';
 import PosSalesScreen from './components/PosSalesScreen';
 import PaymentApprovalListener from './components/PaymentApprovalListener';
 import ChunkErrorBoundary from './components/ChunkErrorBoundary';
@@ -39,7 +39,7 @@ const OutstandingBills = lazy(() => import('./components/OutstandingBills'));
 const LiquorStorage = lazy(() => import('./components/LiquorStorage'));
 const WasteRecord = lazy(() => import('./components/WasteRecord'));
 const CustomerKiosk = lazy(() => import('./components/CustomerKiosk'));
-import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining, resolveNoteConfig } from './utils/popupConfig';
+import { resolvePopupSource, flattenPopupConfig, getPriceOptions, categoryDining, resolveNoteConfig, bundledWithPopups } from './utils/popupConfig';
 import { priceForSaleType, readTablesConfig } from './utils/salePricing';
 import { categoryVisibleFor } from './utils/categoryVisibility';
 import './index.css';
@@ -793,7 +793,9 @@ function App() {
     // (หมวดเครื่องดื่มตั้ง hasDining = false ไว้ จึงข้ามคำถามนี้ไปเหมือนเดิม)
     const needsDining = askDining && cfg.hasDining !== false;
 
-    if (hasPopups || needsDining) {
+    // เมนูพ่วงที่มีป๊อปอัพของตัวเอง → เปิดป๊อปอัพให้เลือกต่อ (เมนูหลักไม่มีขั้นตอนก็ผ่านไปเอง)
+    const bundleNeedsPopup = bundledWithPopups(food, liveMenu, cats).length > 0;
+    if (hasPopups || needsDining || bundleNeedsPopup) {
       setSelectedFood(food);
     } else {
       // ไม่มี popup → เพิ่มลงตะกร้าทันทีตามราคาของ "ประเภทลูกค้า/ช่องทาง" ที่เลือกไว้ที่หัวโต๊ะ (ปกติ / Takehome / Deli)
@@ -836,7 +838,7 @@ function App() {
     }];
   };
 
-  const handleConfirmOrder = (rawFood, orderDetails) => {
+  const handleConfirmOrder = (rawFood, orderDetails, _wizardState, bundles = {}) => {
     // ราคาฐานมาจากราคาที่เลือกจาก popup (ถ้าเลือกไว้) หรือจาก "ประเภทลูกค้า" (fallback = ราคาปกติ)
     const chosen = orderDetails?.selectedPrice || resolvePrice(rawFood);
     const baseFood = chosen
@@ -844,12 +846,14 @@ function App() {
       : rawFood;
     // เมนูที่เพิ่มอัตโนมัติเมื่อสั่ง (Bundled Items) = เมนูจริงที่แถมไปกับจานนี้
     // ลงตะกร้าเป็นรายการของตัวเองราคา ฿0 ครัวจะได้เห็นเป็นคนละรายการ และวิ่งไปเครื่องพิมพ์ของเมนูนั้นเอง
+    // เมนูพ่วงที่มีป๊อปอัพ: ตัวเลือกที่เลือกไว้ (bundles[ลำดับ]) ห้อยใต้เมนูนั้น · ตัวเลือกที่มีราคาคิดเงินเพิ่ม
     const bundledFoods = [];
     if (baseFood.bundledItems && baseFood.bundledItems.length > 0) {
-      baseFood.bundledItems.forEach(bundledId => {
+      baseFood.bundledItems.forEach((bundledId, idx) => {
         const bundledFood = liveMenu.find(m => String(m.id) === String(bundledId));
         if (bundledFood) {
-          bundledFoods.push({ ...bundledFood, price: 0, priceName: '', isBundled: true });
+          const picked = bundles && bundles[idx] && bundles[idx].details;
+          bundledFoods.push({ food: { ...bundledFood, price: 0, priceName: '', isBundled: true }, details: picked || null });
         }
       });
     }
@@ -878,13 +882,24 @@ function App() {
     });
 
     // เมนูแถม — รายการของตัวเองราคา ฿0 (ซ้ำ id เดิมหลายครั้ง = จำนวนหลายชิ้น จะถูกรวมเป็นจำนวนให้เอง)
-    bundledFoods.forEach(bundledFood => {
+    bundledFoods.forEach(({ food: bundledFood, details }) => {
       newCart = mergeIntoCart(newCart, {
         food: bundledFood,
-        popups: [],
+        popups: (details && details.allPopups) || [],
+        note: (details && details.note) || '',
         customerName: orderCustomerName,
         dining: orderDetails.dining,
         fromPopupOf: baseFood.name
+      });
+      // ป๊อปอัพของเมนูพ่วงที่ตั้งให้แยกรายการ → รายการของตัวเอง (คิดราคาตามปกติ)
+      ((details && details.separateItems) || []).forEach(row => {
+        newCart = mergeIntoCart(newCart, {
+          food: row.food,
+          popups: row.options || [],
+          customerName: orderCustomerName,
+          dining: orderDetails.dining,
+          fromPopupOf: bundledFood.name
+        });
       });
     });
 
@@ -1923,7 +1938,7 @@ function App() {
       </ChunkErrorBoundary>
 
       {selectedFood && (
-        <OrderWizardModal
+        <BundleOrderWizard
           food={selectedFood}
           lang={lang}
           liveMenu={allMenu.length > 0 ? allMenu : liveMenu}
