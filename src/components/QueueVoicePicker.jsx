@@ -54,7 +54,7 @@ export default function QueueVoicePicker({ dark = false }) {
       {testBtn}
       {onlyMale && (
         <span style={{ color: sub, fontSize: '0.78rem', fontWeight: 700, flexBasis: '100%' }}>
-          เครื่องนี้มีแต่เสียงผู้ชาย — ใส่กุญแจ Google (GOOGLE_TTS_KEY) ที่เครื่อง API จะได้เสียงผู้หญิงทุกเครื่อง หรือเปิดหน้านี้ด้วย Microsoft Edge
+          เครื่องนี้มีแต่เสียงผู้ชาย — เปิดหน้านี้ด้วย Microsoft Edge จะมีเสียงผู้หญิง "Premwadee" ให้เลือก (ต้องต่ออินเทอร์เน็ต)
         </span>
       )}
     </div>
