@@ -127,3 +127,18 @@ export const resolveNoteConfig = (settings) => {
 
 // เมนูนี้ถามหมายเหตุไหม — ไม่เคยตั้งค่า = ถาม (เมนูเดิมทั้งหมดจึงได้ใช้ทันทีโดยไม่ต้องไล่เปิดทีละอัน)
 export const itemAsksNotes = (cfg) => !!cfg && cfg.hasNotes !== false;
+
+// ── เมนูพ่วง (Bundled Items) ที่มีป๊อปอัพของตัวเอง ──
+// สั่งเมนูชุด → เปิดป๊อปอัพของเมนูพ่วงต่อทีละใบ (ใบละชิ้น: พ่วง 2 ชิ้นเลือกแยกกันได้)
+// คืน [{ food, index }] ตามลำดับที่ตั้งไว้ · index = ลำดับใน bundledItems (ใช้จับคู่ผลที่เลือกกลับ)
+export const bundledWithPopups = (food, menu = [], categories = []) => {
+  const ids = Array.isArray(food && food.bundledItems) ? food.bundledItems : [];
+  const out = [];
+  ids.forEach((id, index) => {
+    const item = menu.find(m => String(m.id) === String(id));
+    if (!item) return;
+    const cfg = resolvePopupSource(item, categories);
+    if (POPUP_NUMS.some(n => cfg[`hasPopup${n}`] === true)) out.push({ food: item, index });
+  });
+  return out;
+};

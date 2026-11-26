@@ -3,11 +3,11 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { ShoppingBag, CheckCircle, Globe, Plus, Minus, X, ChevronRight, ChevronLeft, Utensils, Menu, Download, ZoomIn, Pencil, Trash2, ShoppingCart } from 'lucide-react';
 import QRCode from 'qrcode';
 import { generatePromptPayPayload, generateDynamicQRFromRaw } from '../utils/promptpay';
-import OrderWizardModal from './OrderWizardModal';
+import BundleOrderWizard from './BundleOrderWizard';
 import MenuImage from './MenuImage';
 import { menuImageCandidates } from '../utils/menuImage';
 import { categoryVisibleFor, menuVisibleFor } from '../utils/categoryVisibility';
-import { resolveNoteConfig, getPriceOptions } from '../utils/popupConfig';
+import { resolveNoteConfig, getPriceOptions, bundledWithPopups } from '../utils/popupConfig';
 import { priceForSaleType } from '../utils/salePricing';
 import { crmEnabled, lookupMember, crmCall, newCouponRef } from '../utils/crm';
 import KioskBanner from './KioskBanner';
@@ -640,20 +640,35 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
   // เมนูที่เพิ่มอัตโนมัติเมื่อสั่ง (Bundled Items) = เมนูจริงที่แถมไปกับจานนี้
   // ลงตะกร้าเป็นรายการของตัวเองราคา ฿0 เหมือนฝั่งพนักงานสั่ง ครัวจะได้เห็นเป็นคนละรายการ
-  const bundledRowsFor = (food, dining, groupId) => {
+  // bundles = ตัวเลือกของเมนูพ่วงที่มีป๊อปอัพ ({ [ลำดับ]: { details } }) — ตัวเลือกที่มีราคาคิดเงินเพิ่ม
+  const bundledRowsFor = (food, dining, groupId, bundles = {}) => {
     const ids = Array.isArray(food.bundledItems) ? food.bundledItems : [];
     const rows = [];
     ids.forEach((bundledId, idx) => {
       const bundledFood = rawMenu.find(m => String(m.id) === String(bundledId));
       if (!bundledFood) return;
+      const details = bundles && bundles[idx] && bundles[idx].details;
       rows.push({
         cartId: Date.now() + Math.random() + idx,
         food: { ...bundledFood, price: 0, priceName: '', isBundled: true },
         quantity: 1,
-        allPopups: [],
+        allPopups: (details && details.allPopups) || [],
+        note: (details && details.note) || '',
         dining,
         fromPopupOf: food.name,
         ...(groupId ? { groupId } : {})
+      });
+      // ป๊อปอัพของเมนูพ่วงที่ตั้งให้แยกรายการ → รายการของตัวเองในชุดเดียวกัน
+      ((details && details.separateItems) || []).forEach((row, j) => {
+        rows.push({
+          cartId: Date.now() + Math.random() + idx + (j + 1) / 100,
+          food: row.food,
+          quantity: 1,
+          allPopups: row.options || [],
+          dining,
+          fromPopupOf: bundledFood.name,
+          ...(groupId ? { groupId } : {})
+        });
       });
     });
     return rows;
@@ -721,7 +736,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     // เมนูเฉพาะสมาชิก: ยังไม่ล็อกอิน → เปิดหน้าต่างล็อกอินสมาชิกก่อน (ล็อกอินเสร็จแล้วสั่งต่อให้เลย)
     if (isMemberOnly(food) && !memberLoggedIn) { setGateMsg(''); setGateFood(food); return; }
     // Check if food has popups/options configured
-    if (food.hasPopup1 || food.hasPopup2 || food.hasPopup3 || food.hasPopup4 || food.hasPopup5 || food.hasPopup6 || (food.priceOptions && food.priceOptions.length > 1)) {
+    // เมนูพ่วงที่มีป๊อปอัพของตัวเอง → เปิดป๊อปอัพให้เลือกต่อด้วย
+    if (food.hasPopup1 || food.hasPopup2 || food.hasPopup3 || food.hasPopup4 || food.hasPopup5 || food.hasPopup6 || (food.priceOptions && food.priceOptions.length > 1)
+      || bundledWithPopups(food, liveMenu, categories).length > 0) {
       setSelectedFood(food);
     } else {
       handleAddToCartDirect(food);
@@ -787,7 +804,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   // รายการจากป๊อปอัพหนึ่งครั้ง = จานหลัก + รายการที่แยกบรรทัด + ของแถม ผูกกันด้วย groupId
   // จานหลักเก็บตัวเลือกดิบ (wizardState) ไว้ เปิดแก้ไขในตะกร้าได้ภายหลัง
   // ไม่รวมบรรทัดกับรายการอื่น เพื่อให้แก้ไข/ลบทั้งชุดได้ถูกตัว
-  const buildWizardRows = (rawFood, orderDetails, wizardState) => {
+  const buildWizardRows = (rawFood, orderDetails, wizardState, bundles = {}) => {
     const chosenPrice = orderDetails?.selectedPrice;
     const baseFood = chosenPrice ? { ...rawFood, price: Number(chosenPrice.price) || 0, priceName: chosenPrice.name } : rawFood;
     // ประเภทมาจากที่ลูกค้าเลือกที่จอแรกเท่านั้น — ป๊อปอัพของหมวดที่ปิดคำถามการรับประทานไว้
@@ -804,7 +821,9 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       dining,
       groupId,
       sourceFoodId: rawFood.id,
-      wizardState: wizardState || null
+      wizardState: wizardState || null,
+      // ตัวเลือกเมนูพ่วงที่เลือกไว้ — เปิด "แก้ไขตัวเลือก" แล้วเห็นของเดิม
+      bundleState: bundles && Object.keys(bundles).length ? bundles : null
     }];
 
     // ป๊อปอัพที่ตั้งให้ "แยกเป็นรายการต่างหาก" — ลงตะกร้าเป็นรายการของตัวเอง
@@ -821,7 +840,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       });
     });
 
-    return [...rows, ...bundledRowsFor(baseFood, dining, groupId)];
+    return [...rows, ...bundledRowsFor(baseFood, dining, groupId, bundles)];
   };
 
   // จานหลัก (สั่งผ่านป๊อปอัพ) กับรายการพ่วง/ของแถมของมัน = 1 ชุด แสดงในการ์ดเดียวกันในตะกร้า
@@ -842,8 +861,8 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
     return rest;
   };
 
-  const handleConfirmWizardOrder = (rawFood, orderDetails, wizardState) => {
-    const rows = buildWizardRows(rawFood, orderDetails, wizardState);
+  const handleConfirmWizardOrder = (rawFood, orderDetails, wizardState, bundles = {}) => {
+    const rows = buildWizardRows(rawFood, orderDetails, wizardState, bundles);
     if (editingRow) setCart(prev => replaceGroup(prev, editingRow, rows));
     else setCart(prev => [...prev, ...rows]);
     setSelectedFood(null);
@@ -867,7 +886,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
   };
 
   // แก้ตัวเลือกได้เฉพาะจานที่สั่งผ่านป๊อปอัพ (มีขั้นตอนให้เลือก) และเมนูยังขายอยู่
-  const editSourceFor = (row) => (row && row.wizardState && row.wizardState.stepCount > 0
+  const editSourceFor = (row) => (row && row.wizardState && (row.wizardState.stepCount > 0 || row.bundleState)
     ? liveMenu.find(m => String(m.id) === String(row.sourceFoodId)) || null
     : null);
 
@@ -2351,7 +2370,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
 
       {/* ─── Order Wizard Option Modal ─── */}
       {selectedFood && (
-        <OrderWizardModal
+        <BundleOrderWizard
           food={selectedFood}
           lang={lang}
           liveMenu={liveMenu}
@@ -2437,7 +2456,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
       {editingRow && editSourceFor(editingRow) && (() => {
         const source = editSourceFor(editingRow);
         return (
-          <OrderWizardModal
+          <BundleOrderWizard
             key={editingRow.cartId}
             food={source}
             lang={lang}
@@ -2450,6 +2469,7 @@ const CustomerKiosk = ({ liveMenu: rawMenu = [], categories = [], settings = {},
             allowCustomNote={kioskNoteConfig.allowCustom}
             customerView
             initialState={editingRow.wizardState}
+            initialBundles={editingRow.bundleState}
             confirmLabel={th ? 'บันทึกการแก้ไข' : 'Save changes'}
             onClose={() => setEditingRow(null)}
             onConfirm={handleConfirmWizardOrder}
