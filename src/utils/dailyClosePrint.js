@@ -1,6 +1,6 @@
 // ── พิมพ์รายงานปิดยอดประจำวันออกเครื่องพิมพ์ใบเสร็จ (กระดาษม้วน) ──
 // รูปแบบใบอยู่ที่ print-ticket.js (printerType 'closeday') — เครื่องนี้ยังไม่ได้ตั้งเครื่องพิมพ์ ค่อยใช้หน้าต่างพิมพ์ของเบราว์เซอร์แทน
-import { getPrinters, getPrinterByType } from './printerRouting';
+import { getPrinters, getReceiptPrinter } from './printerRouting';
 import { sendPrintJob } from './printServer';
 import { print80mm } from './print80mm';
 
@@ -80,7 +80,7 @@ export const dailyCloseHtml = (r) => {
 // คืน { success, error }
 export const printDailyClose = async (report) => {
   const printers = getPrinters();
-  const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+  const printer = getReceiptPrinter(printers);
   if (!printer || !printer.ip) {
     print80mm(dailyCloseHtml(report));
     return { success: true };

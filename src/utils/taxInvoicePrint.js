@@ -1,6 +1,6 @@
 // ── พิมพ์ใบกำกับภาษีเต็มรูปออกเครื่องพิมพ์ใบเสร็จ (กระดาษม้วน) ผ่าน Print Server ──
 // รูปแบบใบอยู่ที่ print-ticket.js (printerType 'taxinvoice') — หน้าเว็บส่งข้อมูลใบ + ยอดเป็นตัวอักษรไป
-import { getPrinters, getPrinterByType } from './printerRouting';
+import { getPrinters, getReceiptPrinter } from './printerRouting';
 import { sendPrintJob } from './printServer';
 
 
@@ -38,7 +38,7 @@ export const bahtText = (amount) => {
 // คืน { success, error } — ใช้เครื่องประเภทใบเสร็จของเครื่องนี้ ไม่มีก็ใช้เครื่องแรกที่มี IP
 export const printTaxInvoice = async (inv, { copy = false } = {}) => {
   const printers = getPrinters();
-  const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+  const printer = getReceiptPrinter(printers);
   if (!printer || !printer.ip) {
     return { success: false, error: 'ยังไม่ได้ตั้งเครื่องพิมพ์ใบเสร็จในเครื่องนี้ — ไปที่ หลังบ้าน > ปริ้นเตอร์' };
   }

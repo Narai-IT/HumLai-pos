@@ -67,11 +67,20 @@ export const getPrinterById = (id, printers = getPrinters()) => {
   return printers.find(p => String(p.id) === String(id) && p.ip) || null;
 };
 
-// เครื่องสำรองสำหรับใบครัว: ครัว → บาร์ → เครื่องแรกที่มี IP
+// เครื่องสำรอง = เครื่องแรกที่มี IP ยกเว้นเครื่องบัตรคิว (เครื่องหน้าร้านสำหรับลูกค้า ไม่ให้ใบครัว/ใบเสร็จไปออก)
+export const firstGeneralPrinter = (printers = getPrinters()) => printers.find(p => p.ip && p.type !== 'queue') || null;
+
+// เครื่องสำหรับใบเสร็จ/ใบแจ้งยอด/ใบกำกับภาษี/ปิดยอด: เครื่องใบเสร็จ → เครื่องแรก (ไม่ใช่เครื่องบัตรคิว)
+export const getReceiptPrinter = (printers = getPrinters()) => getPrinterByType('receipt', printers) || firstGeneralPrinter(printers);
+
+// บัตรคิว: เครื่องประเภท "บัตรคิว" ถ้าตั้งไว้ → ไม่มีก็ออกเครื่องใบเสร็จ (แคชเชียร์)
+export const getQueuePrinter = (printers = getPrinters()) => getPrinterByType('queue', printers) || getReceiptPrinter(printers);
+
+// เครื่องสำรองสำหรับใบครัว: ครัว → บาร์ → เครื่องแรกที่มี IP (ไม่ใช่เครื่องบัตรคิว)
 const fallbackKitchenPrinter = (printers) =>
   getPrinterByType('kitchen', printers) ||
   getPrinterByType('bar', printers) ||
-  printers.find(p => p.ip) ||
+  firstGeneralPrinter(printers) ||
   null;
 
 // หมวดที่เครื่องพิมพ์เลือกไว้ ([] = ไม่จำกัด พิมพ์ได้ทุกหมวด)
@@ -178,7 +187,7 @@ export const printKitchenOrder = async (order, allMenu = []) => {
 // ─────────────────────────────────────────────
 export const printPreBill = async (order) => {
   const printers = getPrinters();
-  const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+  const printer = getReceiptPrinter(printers);
   if (!printer) {
     return { success: false, error: 'ยังไม่ได้ตั้งค่าเครื่องพิมพ์ใบเสร็จ — ไปที่ จัดการหลังบ้าน > ตั้งค่าเครื่องพิมพ์' };
   }

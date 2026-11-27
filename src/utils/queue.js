@@ -1,7 +1,7 @@
 // ── ระบบคิวหน้าร้าน: เรียก API · พิมพ์บัตรคิว · เสียงเรียกคิว ──
 import QRCode from 'qrcode';
 import { API_URL } from './api';
-import { getPrinters, getPrinterByType } from './printerRouting';
+import { getQueuePrinter } from './printerRouting';
 import { sendPrintJob, getReceiptHeader } from './printServer';
 
 export const QUEUE_KINDS = [
@@ -30,8 +30,8 @@ export const minutesSince = (iso, now = Date.now()) => {
 
 // ── พิมพ์บัตรคิว: เครื่องพิมพ์ใบเสร็จ (แคชเชียร์) ──
 export async function printQueueTicket({ ticket, ahead, estimateMin }) {
-  const printers = getPrinters();
-  const printer = getPrinterByType('receipt', printers) || printers.find(p => p.ip) || null;
+  // เครื่องบัตรคิว (หลังบ้าน > เครื่องพิมพ์ ประเภท "บัตรคิว") · ไม่ได้ตั้ง = เครื่องใบเสร็จแคชเชียร์
+  const printer = getQueuePrinter();
   if (!printer) return { success: false, error: 'ยังไม่ได้ตั้งค่าเครื่องพิมพ์ใบเสร็จ — ไปที่ หลังบ้าน > เครื่องพิมพ์' };
   const header = getReceiptHeader() || {};
   let qr = null;
