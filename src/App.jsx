@@ -2006,6 +2006,8 @@ function App() {
             branch={branch}
             users={users}
             userName={currentUser?.username || ''}
+            // โต๊ะที่ยังไม่ชำระเงิน — หน้าพิมพ์ใบปิดยอดเตือนว่ายอดยังไม่ครบ
+            openTables={[...new Set(tableOrders.filter(o => o.Status !== 'paid' && o.TableNumber).map(o => String(o.TableNumber)))]}
             onClose={() => setShowSalesSummaryModal(false)}
           />
         </Suspense>

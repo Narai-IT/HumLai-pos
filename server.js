@@ -7,7 +7,7 @@ import { registerAutoPrint } from './auto-print.js';
 import { registerPrintQueue } from './print-queue.js';
 
 const SERVER_NAME = 'humlai-print-server';
-const SERVER_VERSION = '1.9.0';
+const SERVER_VERSION = '1.10.0';
 // ความสามารถที่ Print Server ตัวนี้มี — หน้าเว็บใช้เช็คว่าเครื่องนี้รันโค้ดเวอร์ชันใหม่พอไหม
 // (เครื่องที่ยังรันตัวเก่าจะไม่มี features กลับมา หน้าเว็บจะได้บอกให้อัปเดตแทนที่จะฟ้อง 404 เฉย ๆ)
 const SERVER_FEATURES = ['autoPrint', 'privateNetwork', 'taxInvoice', 'printerStatus', 'printSteps', 'printQueue', 'payQr'];

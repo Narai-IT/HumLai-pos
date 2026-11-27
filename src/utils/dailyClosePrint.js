@@ -60,19 +60,23 @@ export const dailyCloseHtml = (r) => {
     ${line(`ภาษีมูลค่าเพิ่ม ${r.vatRate}%`, money2(r.vat))}
     <div class="hr"></div>
     <div class="b">ช่องทางชำระเงิน</div>
-    ${line('เงินสด', money2(r.cash))}
+    ${Number(r.cash) ? line('เงินสด', money2(r.cash)) : ''}
     ${line('เงินโอน / QR', money2(r.transfer))}
-    ${line('บัตรเครดิต', money2(r.card))}
+    ${Number(r.card) ? line('บัตรเครดิต', money2(r.card)) : ''}
     ${Number(r.voucher) ? line('Voucher', money2(r.voucher)) : ''}
     <div class="hr"></div>
+    ${Array.isArray(r.discounts) && r.discounts.length ? `<div class="b">การใช้ส่วนลด</div>
+    ${r.discounts.map(d => line(`${d.count}x ${d.name}`, money2(d.amount))).join('')}
+    ${line(`รวมส่วนลด ${r.discountBills || 0} บิล`, money2(r.discountTotal ?? r.discount))}
+    <div class="hr"></div>` : ''}
     <div class="b">เลขที่ใบกำกับภาษีอย่างย่อ</div>
     ${(r.ranges && r.ranges.length ? r.ranges : [{ first: '-', last: '-' }]).map(g => line('ใบแรก', g.first) + line('ใบสุดท้าย', g.last)).join('')}
     <div class="hr"></div>
     ${line(`บิลยกเลิก ${r.cancelCount} บิล`, money2(r.cancelTotal))}
     <div class="hr"></div>
-    <div class="b">ยอดขายตามเมนู</div>
+    ${r.showMenu !== false ? `<div class="b">ยอดขายตามเมนู</div>
     ${(r.menu || []).map(m => line(`${m.qty}x ${m.name}`, money2(m.revenue))).join('')}
-    <div class="hr"></div>
+    <div class="hr"></div>` : ''}
     <div style="margin-top:14px">ผู้ตรวจนับเงิน ________________</div>
   `;
 };
