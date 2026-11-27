@@ -588,6 +588,9 @@ const PosSalesScreen = ({
                 </button>
                 <button onClick={() => { setMoreOpen(false); onOpenSummary('daily'); }}>📊 {t('สรุปยอดขายวันนี้', 'Today sales')}</button>
                 <button onClick={() => { setMoreOpen(false); onOpenSummary('range'); }}>📅 {t('สรุปยอดขายระหว่างวัน', 'Sales by range')}</button>
+                {(isAdmin || isCashier) && (
+                  <button onClick={() => { setMoreOpen(false); onOpenSummary('closeday'); }}>🖨️ {t('พิมพ์ใบปิดยอดวันนี้', 'Print daily close')}</button>
+                )}
                 {(isAdmin || isCashier) && onOpenTaxInvoice && (
                   <button onClick={() => { setMoreOpen(false); onOpenTaxInvoice(); }}>🧾 {t('ใบกำกับภาษี', 'Tax invoice')}</button>
                 )}

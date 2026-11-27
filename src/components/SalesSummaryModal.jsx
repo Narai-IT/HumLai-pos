@@ -64,11 +64,13 @@ const parseSplitDetail = (sd) => {
 const rowBranch = (r) => String(r.BranchId || (r.RecordedBy === 'Self-Order' ? '' : r.RecordedBy) || '').trim();
 const sameBranch = (r, b) => rowBranch(r).toLowerCase() === String(b || '').trim().toLowerCase();
 
-const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], categories = [], isAdmin = false, branch = '', users = [], userName = '', onClose }) => {
+const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], categories = [], isAdmin = false, branch = '', users = [], userName = '', openTables = [], onClose }) => {
+  // initialMode 'closeday' = หน้าต่างย่อ "พิมพ์ใบปิดยอดวันนี้" (เมนูเพิ่มเติม) — ใช้ยอดชุดเดียวกับหน้าสรุปยอดขาย
+  const closeDayOnly = initialMode === 'closeday';
   const todayStr = getThaiTodayStr();
 
   // ฟิลเตอร์สาขา: admin เลือกได้ทุกสาขา (ค่าว่าง = ทุกสาขา), สาขาทั่วไปล็อกเฉพาะของตัวเอง
-  const [branchFilter, setBranchFilter] = useState(isAdmin ? '' : branch);
+  const [branchFilter, setBranchFilter] = useState(isAdmin && !closeDayOnly ? '' : branch);
   
   // Date States
   const [from, setFrom] = useState(() => {
@@ -814,6 +816,31 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
 
   // ── รายงานปิดยอดประจำวัน (พิมพ์ออกเครื่องใบเสร็จ) — ใช้ยอดชุดเดียวกับที่แสดงบนจอ ──
   const [closePrintStatus, setClosePrintStatus] = useState('');
+  // การใช้ส่วนลดในช่วงวันที่ (รายงานส่วนลด) — ใส่ในใบปิดยอด · โหลดไม่ได้ = ใบปิดยอดไม่มีหัวข้อนี้
+  const [discountRows, setDiscountRows] = useState(null);
+  const [printDiscounts, setPrintDiscounts] = useState(true);
+  const [printMenu, setPrintMenu] = useState(true);
+  useEffect(() => {
+    if (!data) return undefined;
+    let stop = false;
+    fetch(`${API_URL}?action=getDiscountReport&from=${from}&to=${to}${branchFilter ? `&branch=${encodeURIComponent(branchFilter)}` : ''}`)
+      .then(r => r.json()).then(j => { if (!stop) setDiscountRows(j && j.success ? (j.rows || []) : null); })
+      .catch(() => { if (!stop) setDiscountRows(null); });
+    return () => { stop = true; };
+  }, [data, from, to, branchFilter]);
+  // แยกตามชื่อส่วนลด/คูปอง: คูปองสมาชิกนับทีละใบ · ส่วนลดร้านนับตามชื่อ · ไม่นับบิลที่ยกเลิก
+  const discountSummary = useMemo(() => {
+    if (!discountRows) return null;
+    const map = new Map();
+    const add = (name, amount) => { const k = name || 'ส่วนลด'; const g = map.get(k) || { name: k, count: 0, amount: 0 }; g.count += 1; g.amount += Number(amount) || 0; map.set(k, g); };
+    const rows = discountRows.filter(r => !r.cancelled);
+    rows.forEach(r => {
+      if (Array.isArray(r.coupons) && r.coupons.length) r.coupons.forEach(c => add(c.title, c.amount));
+      else add(r.name, r.amount);
+    });
+    const list = [...map.values()].map(g => ({ ...g, amount: Math.round(g.amount * 100) / 100 })).sort((a, b) => b.amount - a.amount);
+    return { list, bills: rows.length, total: Math.round(list.reduce((a, g) => a + g.amount, 0) * 100) / 100 };
+  }, [discountRows]);
   const buildDailyClose = () => {
     const h = getReceiptHeader() || {};
     // ส่วนลด / ค่าบริการที่บวกตอนชำระ = ยอดบิล − ราคารายการ (วิธีเดียวกับบรรทัดปรับยอดในใบกำกับภาษี)
@@ -835,7 +862,7 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
       posId: h.posId || '',
       dateLabel: from === to ? formatDateThai(from) : `${formatDateThai(from)} - ${formatDateThai(to)}`,
       branchLabel: branchFilter || 'ทุกสาขา',
-      printedAt: new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      printedAt: new Date().toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' }),
       printedBy: userName,
       billCount: totalBills,
       total: totalSales,
@@ -849,7 +876,11 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
       ranges,
       cancelCount: cancelled.size,
       cancelTotal: [...cancelled.values()].reduce((s, v) => s + v, 0),
-      menu: menuRows.filter(r => !r.isSubItem).map(r => ({ name: r.name, qty: r.qty, revenue: r.revenue }))
+      menu: menuRows.filter(r => !r.isSubItem).map(r => ({ name: r.name, qty: r.qty, revenue: r.revenue })),
+      showMenu: printMenu,
+      // การใช้ส่วนลด (Print Server 1.10.0 ขึ้นไป · รุ่นเก่าไม่พิมพ์หัวข้อนี้)
+      ...(printDiscounts && discountSummary && discountSummary.list.length
+        ? { discounts: discountSummary.list, discountBills: discountSummary.bills, discountTotal: discountSummary.total } : {})
     };
   };
   const handlePrintDailyClose = async () => {
@@ -868,6 +899,75 @@ const SalesSummaryModal = ({ lang = 'th', initialMode = 'daily', allMenu = [], c
       return '—';
     }
   };
+
+  // ── หน้าต่างย่อ: พิมพ์ใบปิดยอดวันนี้ (เมนูเพิ่มเติม) ──
+  if (closeDayOnly) {
+    const money = (n) => `฿${(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const r = data ? buildDailyClose() : null;
+    const range = r && r.ranges && r.ranges[0];
+    const menuMain = menuRows.filter(m => !m.isSubItem);
+    const pick = (d) => { if (!d) return; setFrom(d); setTo(d); loadReport(d, d); };
+    const cell = (k, v) => <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><span style={{ color: '#475569' }}>{k}</span><b>{v}</b></div>;
+    const box = { border: '1.5px solid #cbd5e1', borderRadius: 10, padding: '0.5rem 0.6rem', fontWeight: 700, fontFamily: 'inherit', fontSize: '0.95rem', width: '100%', boxSizing: 'border-box', background: '#fff', color: '#0f172a' };
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '1rem' }} onClick={onClose}>
+        <div role="dialog" aria-label="พิมพ์ใบปิดยอดประจำวัน" onClick={e => e.stopPropagation()} style={{ background: '#fff', color: '#0f172a', borderRadius: 16, width: '100%', maxWidth: 560, padding: '1rem 1.1rem', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', maxHeight: '92vh', overflow: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Printer size={22} /><b style={{ fontSize: '1.15rem' }}>{lang === 'th' ? 'พิมพ์ใบปิดยอดประจำวัน' : 'Print daily close'}</b>
+            <button onClick={onClose} aria-label="ปิด" style={{ marginLeft: 'auto', border: 'none', background: 'none', cursor: 'pointer', color: '#64748b' }}><X size={22} /></button>
+          </div>
+          <div style={{ color: '#64748b', fontSize: '0.85rem', fontWeight: 600 }}>ตรวจยอดก่อนพิมพ์ · พิมพ์ออกเครื่องใบเสร็จ (แคชเชียร์)</div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            <label style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>วันที่ขาย
+              <input type="date" value={from} max={todayStr} onChange={e => pick(e.target.value)} style={{ ...box, marginTop: 4 }} />
+            </label>
+            <label style={{ flex: 1, fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>สาขา
+              {isAdmin ? (
+                <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} style={{ ...box, marginTop: 4 }}>
+                  <option value="">ทุกสาขา</option>
+                  {branchOptions.map(b => <option key={b} value={b}>{b}</option>)}
+                </select>
+              ) : <div style={{ ...box, marginTop: 4 }}>{branchFilter || '-'}</div>}
+            </label>
+          </div>
+          {loading && <div style={{ marginTop: 14, color: '#64748b', fontWeight: 700 }}>กำลังโหลดยอด…</div>}
+          {error && <div style={{ marginTop: 14, color: '#b91c1c', fontWeight: 700 }}>❌ {error}</div>}
+          {r && !loading && (
+            <div style={{ background: '#f8fafc', borderRadius: 12, padding: '0.7rem 0.8rem', marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 18px', fontSize: '0.92rem' }}>
+              {cell('จำนวนบิล', r.billCount)}
+              {cell('ยอดขายรวม', money(r.total))}
+              {cell('เงินโอน / QR', money(r.transfer))}
+              {cell('Voucher', money(r.voucher))}
+              {Number(r.cash) > 0 && cell('เงินสด', money(r.cash))}
+              {Number(r.card) > 0 && cell('บัตรเครดิต', money(r.card))}
+              {cell(discountSummary ? `ส่วนลด (${discountSummary.bills} บิล · ${discountSummary.list.length} แบบ)` : 'ส่วนลด', money(r.discount))}
+              {cell('บิลยกเลิก', `${r.cancelCount} บิล`)}
+              {cell('บิลแรก – สุดท้าย', range ? `${range.first} – ${String(range.last).replace(/^.*-#/, '#')}` : '-')}
+              {cell('รายการเมนู', `${menuMain.length} เมนู · ${menuMain.reduce((a, m) => a + m.qty, 0)} จาน`)}
+            </div>
+          )}
+          {from === todayStr && openTables.length > 0 && (
+            <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', color: '#9a3412', borderRadius: 10, padding: '0.5rem 0.7rem', fontSize: '0.85rem', fontWeight: 700, marginTop: 10 }}>
+              ⚠️ ยังมีโต๊ะที่ยังไม่ชำระเงิน {openTables.length} โต๊ะ ({openTables.slice(0, 8).map(t => `โต๊ะ ${t}`).join(', ')}{openTables.length > 8 ? ' …' : ''}) — ยอดของโต๊ะเหล่านี้ยังไม่อยู่ในใบปิดยอด
+            </div>
+          )}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontWeight: 700, fontSize: '0.9rem', color: '#334155' }}>
+            <input type="checkbox" checked={printDiscounts} onChange={e => setPrintDiscounts(e.target.checked)} /> พิมพ์การใช้ส่วนลด (แยกตามชื่อส่วนลด/คูปอง)
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, fontWeight: 700, fontSize: '0.9rem', color: '#334155' }}>
+            <input type="checkbox" checked={printMenu} onChange={e => setPrintMenu(e.target.checked)} /> พิมพ์รายการเมนูที่ขายได้ (ยอดขายตามเมนู)
+          </label>
+          {closePrintStatus && <div role="status" style={{ marginTop: 10, fontWeight: 700, color: closePrintStatus.startsWith('❌') ? '#b91c1c' : '#166534' }}>{closePrintStatus}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button onClick={onClose} style={{ flex: 0.5, padding: '0.75rem', borderRadius: 12, border: 'none', background: '#f1f5f9', color: '#334155', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer' }}>ปิด</button>
+            <button onClick={handlePrintDailyClose} disabled={!r || loading} style={{ flex: 1, padding: '0.75rem', borderRadius: 12, border: 'none', background: '#0f172a', color: '#fff', fontWeight: 800, fontFamily: 'inherit', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, opacity: !r || loading ? 0.5 : 1 }}>
+              <Printer size={18} /> พิมพ์ใบปิดยอด
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const cardStyle = {
     background: '#16162a',

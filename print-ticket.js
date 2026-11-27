@@ -219,11 +219,23 @@ const printDailyClose = (printer, r) => {
   row(`ภาษีมูลค่าเพิ่ม ${r.vatRate}%`, money2(r.vat));
   rule();
   printer.println('ช่องทางชำระเงิน');
-  row('เงินสด', money2(r.cash));
+  // ร้านรับโอน/QR เป็นหลัก — เงินสด/บัตรพิมพ์เฉพาะวันที่มียอด ใบจะได้ไม่ยาวเกิน
+  if (Number(r.cash)) row('เงินสด', money2(r.cash));
   row('เงินโอน / QR', money2(r.transfer));
-  row('บัตรเครดิต', money2(r.card));
+  if (Number(r.card)) row('บัตรเครดิต', money2(r.card));
   if (Number(r.voucher)) row('Voucher', money2(r.voucher));
   rule();
+  // การใช้ส่วนลด: ส่วนลดร้าน / คูปองสมาชิก แยกตามชื่อ · จำนวนครั้ง + ยอด
+  if (Array.isArray(r.discounts) && r.discounts.length) {
+    printer.println('การใช้ส่วนลด');
+    r.discounts.forEach(d => {
+      const amount = money2(d.amount);
+      const lines = wrap(printable(`${d.count}x ${d.name}`), LINE - widthOf(amount) - 1);
+      lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+    });
+    row(`รวมส่วนลด ${r.discountBills || 0} บิล`, money2(r.discountTotal ?? r.discount));
+    rule();
+  }
   printer.println('เลขที่ใบกำกับภาษีอย่างย่อ');
   // แยกตามตัวนำหน้าเลขบิล — รายงานทุกสาขามีหลายชุด
   const ranges = Array.isArray(r.ranges) && r.ranges.length ? r.ranges : [{ first: r.firstBill || '-', last: r.lastBill || '-' }];
@@ -231,13 +243,15 @@ const printDailyClose = (printer, r) => {
   rule();
   row(`บิลยกเลิก ${r.cancelCount || 0} บิล`, money2(r.cancelTotal));
   rule();
-  printer.println('ยอดขายตามเมนู');
-  (r.menu || []).forEach(m => {
-    const amount = money2(m.revenue);
-    const lines = wrap(`${m.qty}x ${m.name}`, LINE - widthOf(amount) - 1);
-    lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
-  });
-  rule();
+  if (r.showMenu !== false) {
+    printer.println('ยอดขายตามเมนู');
+    (r.menu || []).forEach(m => {
+      const amount = money2(m.revenue);
+      const lines = wrap(`${m.qty}x ${m.name}`, LINE - widthOf(amount) - 1);
+      lines.forEach((l, i) => printer.println(i === lines.length - 1 ? leftRight(l, amount) : l));
+    });
+    rule();
+  }
   printer.println('');
   printer.println('ผู้ตรวจนับเงิน ________________');
 };
