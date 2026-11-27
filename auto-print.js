@@ -173,7 +173,7 @@ const printersWithIp = () => (config.printers || []).filter(p => p && p.ip);
 const printerByType = (type) => printersWithIp().find(p => p.type === type) || null;
 
 const fallbackKitchenPrinter = () =>
-  printerByType('kitchen') || printerByType('bar') || printersWithIp()[0] || null;
+  printerByType('kitchen') || printerByType('bar') || printersWithIp().find(p => p.type !== 'queue') || null;
 
 const printerCategories = (p) => (Array.isArray(p && p.categories) ? p.categories : []).map(String).filter(Boolean);
 

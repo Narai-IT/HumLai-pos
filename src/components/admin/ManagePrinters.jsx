@@ -25,6 +25,7 @@ const PRINTER_TYPES = [
   { value: 'kitchen', label: 'ครัว (Kitchen)' },
   { value: 'bar', label: 'บาร์ (Bar)' },
   { value: 'receipt', label: 'ใบเสร็จ (Receipt)' },
+  { value: 'queue', label: 'บัตรคิว (Queue ticket)' },
   { value: 'other', label: 'อื่นๆ (Other)' },
 ];
 
@@ -306,12 +307,14 @@ const ManagePrinters = ({ branchId = '', branches = [] }) => {
     const result = await sendPrintJob({
       silent: true, // หน้านี้แสดงขั้นตอนใต้ปุ่มเองแล้ว ไม่ต้องขึ้นกล่องมุมจอซ้ำ
       ip: printer.ip,
-      printerType: printer.type === 'receipt' ? 'receipt' : 'kitchen',
-      orderData: {
-        orderNumber: 'TEST-001',
-        total: 0,
-        items: [{ name: `ทดสอบ: ${printer.name || printer.ip}`, quantity: 1, isFlattened: true }]
-      }
+      printerType: printer.type === 'receipt' ? 'receipt' : printer.type === 'queue' ? 'queue' : 'kitchen',
+      orderData: printer.type === 'queue'
+        ? { queue: { code: 'A000', kindLabel: `ทดสอบ: ${printer.name || printer.ip}`, guests: 2, ahead: 0, estimateMin: 0, issuedAt: new Date().toISOString() } }
+        : {
+          orderNumber: 'TEST-001',
+          total: 0,
+          items: [{ name: `ทดสอบ: ${printer.name || printer.ip}`, quantity: 1, isFlattened: true }]
+        }
     });
     setTestStatus(prev => ({
       ...prev,
